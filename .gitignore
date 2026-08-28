@@ -1,0 +1,29 @@
+# --- Environnement ---------------------------------------------------------
+.env
+.env.local
+.env.*.local
+
+# --- Back-end (PHP) --------------------------------------------------------
+back/vendor/
+back/composer.lock
+back/storage/logs/*.log
+
+# --- Front-end (Node) ------------------------------------------------------
+# Sans ancrage : couvre aussi un node_modules créé par erreur à la racine.
+node_modules/
+front/dist/
+front/.vite/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Docker ----------------------------------------------------------------
+docker/**/data/
+
+# --- IDE / OS --------------------------------------------------------------
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+.env.production

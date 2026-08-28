@@ -1,0 +1,117 @@
+# ============================================================================
+#  Déploiement
+#
+#    docker compose -f docker-compose.prod.yml --env-file .env.production \
+#           up -d --build
+#
+#  Écarts assumés avec la stack de développement :
+#   - le code (PHP et client compilé) est EMBARQUÉ dans les images : aucun
+#     bind mount, donc rien à monter ni à synchroniser sur le serveur ;
+#   - PostgreSQL n'est plus publié sur l'hôte ;
+#   - aucun jeu de données de démonstration (DB_SEED=none.sql) ;
+#   - front et API sur la même origine : plus de CORS, cookie SameSite=Strict ;
+#   - ni Vite, ni Adminer, ni Mailpit — un vrai SMTP est attendu.
+#
+#  ⚠ Ce fichier expose du HTTP en clair : placez-le derrière un terminaison
+#    TLS (reverse proxy, Traefik, Caddy, ALB…). Sans HTTPS, le cookie de
+#    session marqué « Secure » ne sera pas transmis par le navigateur.
+# ============================================================================
+
+# Nom de projet DISTINCT de celui de développement (déduit du nom du dossier).
+# Sans lui, Compose considère les deux fichiers comme décrivant le même projet
+# et « réconcilie » les services : démarrer la production dans ce dossier
+# arrêterait et recréerait les conteneurs de développement.
+name: saas-prod
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: saas_db_prod
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB est obligatoire}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER est obligatoire}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD est obligatoire}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      APP_ENV: production
+      # Barrière n°1 : aucun compte de démonstration.
+      # Barrière n°2 : seeds/dev.sql refuse lui-même de s'exécuter si
+      # APP_ENV=production (cf. le garde-fou en tête du fichier).
+      DB_SEED: none.sql
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./back/database/init:/docker-entrypoint-initdb.d:ro
+      - ./back/database/seeds:/seeds:ro
+    # Volontairement NON publié : la base n'est joignable que depuis le réseau
+    # interne Docker.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - saas_net
+
+  php:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile.prod
+    container_name: saas_php_prod
+    restart: always
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      # Doit faire au moins 32 caractères — refusé au démarrage sinon.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET est obligatoire}
+      JWT_ISSUER: ${JWT_ISSUER:-saas-api}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-900}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-1209600}
+      # Même origine : la liste blanche CORS ne sert que si un client tiers
+      # est autorisé un jour.
+      CORS_ALLOWED_ORIGIN: ${APP_URL:?APP_URL est obligatoire}
+      APP_FRONTEND_URL: ${APP_URL}
+      COOKIE_SECURE: "true"
+      COOKIE_SAMESITE: ${COOKIE_SAMESITE:-Strict}
+      MAIL_HOST: ${MAIL_HOST:?MAIL_HOST est obligatoire}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-tls}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:?MAIL_FROM_ADDRESS est obligatoire}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-SaaS App}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - saas_net
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/front/Dockerfile
+      args:
+        # Chemin relatif : le client appelle l'API sur sa propre origine.
+        VITE_API_BASE_URL: /api
+    container_name: saas_web_prod
+    restart: always
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      - php
+    networks:
+      - saas_net
+
+volumes:
+  db_data:
+    name: saas_db_data_prod
+
+networks:
+  saas_net:
+    name: saas_net_prod
+    driver: bridge

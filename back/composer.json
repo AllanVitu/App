@@ -1,0 +1,21 @@
+{
+    "name": "saas/api",
+    "description": "API REST du SaaS Starter — PHP 8.3, PDO/PostgreSQL, JWT",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2",
+        "ext-pdo": "*",
+        "ext-pdo_pgsql": "*",
+        "ext-json": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}

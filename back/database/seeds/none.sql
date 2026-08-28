@@ -1,0 +1,2 @@
+-- Aucun jeu de données de démonstration (profil de déploiement).
+-- Ce fichier volontairement vide remplace seeds/dev.sql lorsque DB_SEED=none.sql.
