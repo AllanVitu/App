@@ -1,10 +1,34 @@
-import { expect } from '@playwright/test'
+import { expect, test as base } from '@playwright/test'
 
 /** Compte créé par le jeu de données de développement. */
 export const DEMO = {
   email: 'demo@saas.local',
   password: 'Password123!',
 }
+
+/**
+ * Test outillé pour l'application.
+ *
+ * Chaque test démarre avec un profil vierge : l'écran d'entrée sonore
+ * s'afficherait et masquerait toute l'interface. On répond « sans le son »
+ * avant le premier rendu — un test n'a rien à faire d'un fond sonore, et
+ * l'écran lui-même est couvert par son propre test.
+ */
+export const test = base.extend({
+  page: async ({ page }, use) => {
+    await page.addInitScript(() => {
+      try {
+        window.localStorage.setItem('sound', 'off')
+      } catch {
+        /* stockage indisponible : l'écran s'affichera, le test le dira */
+      }
+    })
+
+    await use(page)
+  },
+})
+
+export { expect }
 
 /**
  * Ouvre une session via l'interface, pas par un raccourci API : le parcours

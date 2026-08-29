@@ -11,6 +11,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppIcon from '@/components/AppIcon.vue'
+import SoundToggle from '@/components/SoundToggle.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -108,6 +109,7 @@ async function logout() {
 
     <div class="mx-1 hidden h-4 w-px bg-line sm:block" />
 
+    <SoundToggle />
     <ThemeToggle />
 
     <!-- Menu du compte -->

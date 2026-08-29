@@ -1,6 +1,4 @@
-import { expect, test } from '@playwright/test'
-
-import { DEMO, login } from './support.js'
+import { DEMO, expect, login, test } from './support.js'
 
 /**
  * Session et protection des routes.
@@ -41,9 +39,9 @@ test.describe('authentification', () => {
 
     // Les modules viennent de la base : le module 4 n'existe pas, et le menu
     // ne doit donc pas l'inventer.
-    await expect(nav.getByRole('link', { name: /module 1/i })).toBeVisible()
-    await expect(nav.getByRole('link', { name: /module 5/i })).toBeVisible()
-    await expect(nav.getByRole('link', { name: /module 4/i })).toHaveCount(0)
+    await expect(nav.getByRole('link', { name: /backend/i })).toBeVisible()
+    await expect(nav.getByRole('link', { name: /design/i })).toBeVisible()
+    await expect(nav.getByRole('link', { name: /inexistant/i })).toHaveCount(0)
   })
 
   test('les dates relatives sont calculées', async ({ page }) => {
@@ -98,13 +96,13 @@ test.describe('préférences', () => {
     await page.goto('/parametres')
 
     await page.getByRole('button', { name: 'Sombre', exact: true }).click()
-    await expect(page.locator('html')).toHaveClass(/dark/)
+    await expect(page.locator('html')).not.toHaveClass(/light/)
 
     // Appliqué avant le premier rendu au rechargement : pas de flash clair.
     await page.reload()
-    await expect(page.locator('html')).toHaveClass(/dark/)
+    await expect(page.locator('html')).not.toHaveClass(/light/)
 
     await page.getByRole('button', { name: 'Clair', exact: true }).click()
-    await expect(page.locator('html')).not.toHaveClass(/dark/)
+    await expect(page.locator('html')).toHaveClass(/light/)
   })
 })

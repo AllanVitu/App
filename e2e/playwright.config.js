@@ -21,8 +21,15 @@ export default defineConfig({
   // En intégration continue, un test qui ne passe qu'une fois sur deux est
   // un test qui ment : `retries: 0` force à corriger la cause.
   retries: 0,
-  timeout: 30_000,
-  expect: { timeout: 10_000 },
+
+  // 60 s, et non les 30 s par défaut. Un test qui se connecte paie bcrypt au
+  // coût 12 (~0,6 s de vérification, volontairement), puis enchaîne trois
+  // allers-retours API. Sous Docker Desktop pour Windows, l'ensemble frôlait
+  // la limite : les échecs observés étaient des dépassements de délai, pas
+  // des régressions. Le délai est donc ajusté à l'environnement réel — la
+  // latence, elle, a été traitée à sa source (cf. docker/php/php.ini).
+  timeout: 60_000,
+  expect: { timeout: 15_000 },
 
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : [['list']],
 

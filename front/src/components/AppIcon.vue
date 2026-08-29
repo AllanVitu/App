@@ -71,6 +71,35 @@ const ICONS = {
   'chevron-down': ['m6 9 6 6 6-6'],
   'arrow-right': ['M5 12h14', 'm12 5 7 7-7 7'],
   shield: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
+
+  // --- Modules -------------------------------------------------------------
+  // Formes génériques et non figuratives : elles disent la fonction, pas la
+  // marque. Reprendre le logo d'un service tiers dans une interface qui n'y
+  // est pas connectée laisserait croire à une intégration.
+  database: [
+    'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3z',
+    'M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6',
+    'M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
+  ],
+  rocket: [
+    'M12 2.5c3 2 5 5.6 5 9.5l-2.6 2.6H9.6L7 12c0-3.9 2-7.5 5-9.5z',
+    'M9.6 14.6 8 19l2.6-1.2M14.4 14.6 16 19l-2.6-1.2',
+    'M12 9.5v.01',
+  ],
+  'list-check': [
+    'M9 6h11',
+    'M9 12h11',
+    'M9 18h11',
+    'm3 6 1.4 1.4L7 4.8',
+    'M3.5 12h1.6',
+    'M3.5 18h1.6',
+  ],
+  bug: [
+    'M8 7a4 4 0 0 1 8 0',
+    'M6 9h12v5a6 6 0 0 1-12 0z',
+    'M6 11H3M21 11h-3M5 6 3.5 4.5M19 6l1.5-1.5M5.5 17 3.5 19M18.5 17l2 2',
+  ],
+  shapes: ['M12 3l4.5 7.5h-9z', 'M4 14h6v6H4z', 'M17 14a3 3 0 1 0 0 6 3 3 0 0 0 0-6z'],
 }
 
 // Un module dont l'icône n'est pas connue reste affichable.

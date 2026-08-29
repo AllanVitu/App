@@ -9,6 +9,7 @@
 import { onBeforeUnmount, useId, watch } from 'vue'
 
 import { gsap, motionDuration } from '@/animations/gsap'
+import { play } from '@/services/sound'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -52,6 +53,8 @@ onBeforeUnmount(() => {
  * que l'interface hésite.
  */
 function onEnter(element, done) {
+  play('open')
+
   gsap
     .timeline({ onComplete: done })
     .from(element.querySelector('[data-backdrop]'), {
@@ -72,6 +75,8 @@ function onEnter(element, done) {
 }
 
 function onLeave(element, done) {
+  play('close')
+
   gsap
     .timeline({ onComplete: done })
     .to(element.querySelector('[data-panel]'), {

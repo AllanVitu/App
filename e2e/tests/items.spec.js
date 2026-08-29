@@ -1,6 +1,4 @@
-import { expect, test } from '@playwright/test'
-
-import { createItem, deleteItem, login } from './support.js'
+import { createItem, deleteItem, expect, login, test } from './support.js'
 
 /**
  * Cycle complet d'un élément de module, depuis l'interface.
@@ -14,7 +12,7 @@ test.describe('éléments de module', () => {
   })
 
   test('création, modification puis suppression', async ({ page }) => {
-    const titre = await createItem(page, 'module-2', { status: 'active' })
+    const titre = await createItem(page, 'deploiement', { status: 'active' })
 
     const ligne = page.locator('li').filter({ hasText: titre })
     await expect(ligne.getByText('actif')).toBeVisible()
@@ -35,7 +33,7 @@ test.describe('éléments de module', () => {
   })
 
   test('un titre vidé est refusé par le serveur', async ({ page }) => {
-    const titre = await createItem(page, 'module-3')
+    const titre = await createItem(page, 'tickets')
 
     await page.locator('li').filter({ hasText: titre }).getByRole('button', { name: /^modifier/i }).click()
 
@@ -52,23 +50,23 @@ test.describe('éléments de module', () => {
   })
 
   test('la recherche filtre la liste', async ({ page }) => {
-    const titre = await createItem(page, 'module-1')
+    const titre = await createItem(page, 'backend')
 
     await page.getByPlaceholder(/rechercher/i).fill(titre.slice(0, 12))
     await expect(page.getByText(titre, { exact: true })).toBeVisible()
-    await expect(page.getByText('Première fiche', { exact: true })).toBeHidden()
+    await expect(page.getByText('Schéma des utilisateurs', { exact: true })).toBeHidden()
 
     await page.getByPlaceholder(/rechercher/i).fill('zzzzzzzz')
     await expect(page.getByText(/aucun résultat/i)).toBeVisible()
 
     await page.getByRole('button', { name: 'Réinitialiser', exact: true }).click()
-    await expect(page.getByText('Première fiche', { exact: true })).toBeVisible()
+    await expect(page.getByText('Schéma des utilisateurs', { exact: true })).toBeVisible()
 
     await deleteItem(page, titre)
   })
 
   test('le filtre par statut restreint la liste', async ({ page }) => {
-    const titre = await createItem(page, 'module-1', { status: 'active' })
+    const titre = await createItem(page, 'backend', { status: 'active' })
 
     await page.getByLabel(/filtrer par statut/i).selectOption('draft')
     await expect(page.getByText(titre, { exact: true })).toBeHidden()
@@ -81,11 +79,11 @@ test.describe('éléments de module', () => {
 
   test('le compteur du menu suit les créations', async ({ page }) => {
     const nav = page.getByRole('navigation', { name: /navigation principale/i })
-    const lien = nav.getByRole('link', { name: /module 5/i })
+    const lien = nav.getByRole('link', { name: /design/i })
 
     const avant = Number((await lien.textContent())?.match(/(\d+)\s*$/)?.[1] ?? 0)
 
-    const titre = await createItem(page, 'module-5')
+    const titre = await createItem(page, 'design')
     await expect(lien).toContainText(String(avant + 1))
 
     await deleteItem(page, titre)

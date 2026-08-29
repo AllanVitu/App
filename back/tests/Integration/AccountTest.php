@@ -39,6 +39,7 @@ final class AccountTest extends ApiTestCase
             'full_name' => 'Jean Dupont',
             'email'     => 'jean@test.local',
             'password'  => 'Motdepasse1',
+            'terms_accepted' => true,
         ]);
 
         $this->assertSame(201, $response['status']);

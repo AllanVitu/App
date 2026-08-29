@@ -38,13 +38,13 @@ const VARIANTS = {
 }
 
 const SIZES = {
-  sm: 'px-2.5 py-1 text-[0.75rem] gap-1.5',
-  md: 'px-3.5 py-1.5 text-[0.8rem] gap-2',
-  lg: 'px-4 py-2.5 text-sm gap-2',
+  sm: 'gap-1.5 px-3 py-1 text-[0.78rem]',
+  md: 'gap-2 px-4 py-2 text-[0.85rem]',
+  lg: 'gap-2 px-5 py-2.5 text-[0.9rem]',
 }
 
 const classes = computed(() => [
-  'inline-flex items-center justify-center font-medium tracking-wide transition-colors',
+  'inline-flex items-center justify-center rounded-pill font-medium transition-colors',
   'disabled:cursor-not-allowed disabled:opacity-50',
   VARIANTS[props.variant],
   SIZES[props.size],

@@ -10,27 +10,30 @@
          développement, et en déploiement le repli SPA lui renvoie index.html,
          donc du HTML là où une image est attendue. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="theme-color" content="#243dec" />
+    <meta name="theme-color" content="#0a0a0a" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&display=swap"
       rel="stylesheet"
     />
 
     <script>
-      // Applique le thème AVANT le premier rendu : sans cela, un utilisateur
-      // en mode sombre verrait un flash blanc au chargement de la page.
+      // Applique le thème AVANT le premier rendu : sans cela, la page
+      // apparaîtrait une fraction de seconde dans le mauvais thème.
+      //
+      // Le sombre étant la référence de cette direction visuelle, c'est la
+      // classe « light » qui bascule — l'inverse de l'usage courant.
       ;(function () {
         try {
           const stored = localStorage.getItem('theme') || 'system'
-          const dark =
-            stored === 'dark' ||
-            (stored === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-          document.documentElement.classList.toggle('dark', dark)
+          const light =
+            stored === 'light' ||
+            (stored === 'system' && window.matchMedia('(prefers-color-scheme: light)').matches)
+          document.documentElement.classList.toggle('light', light)
         } catch (e) {
-          /* localStorage indisponible (navigation privée) : thème clair par défaut */
+          /* stockage indisponible : le thème sombre par défaut s'applique */
         }
       })()
     </script>

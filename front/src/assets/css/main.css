@@ -1,71 +1,72 @@
 @import 'tailwindcss';
 
-/* ---------------------------------------------------------------------------
-   Mode sombre piloté par une classe sur <html>
-   Tailwind v4 se base par défaut sur la préférence système ; ici l'utilisateur
-   doit pouvoir forcer clair/sombre depuis la page Paramètres.
---------------------------------------------------------------------------- */
-@custom-variant dark (&:where(.dark, .dark *));
-
 /* ===========================================================================
-   Direction visuelle : poste de travail
+   Direction visuelle : studio
    ---------------------------------------------------------------------------
-   Une seule famille typographique (Source Code Pro), un fond papier chaud,
-   des panneaux délimités par des filets et des angles vifs. La hiérarchie
-   passe par la graisse et l'échelle, pas par la couleur — la couleur est
-   réservée au sens (statut d'un élément, danger).
+   Noir profond, encre presque blanche, formes molles — pastilles, angles très
+   arrondis, cercles. Une seule famille variable porte toute la hiérarchie par
+   sa graisse. La couleur ne sert qu'au sens : vert pour l'actif, ambre pour
+   l'archivé, corail pour le danger.
 
-   Les valeurs vivent dans des variables « --c-* » redéfinies par thème ;
-   @theme les expose ensuite à Tailwind, ce qui rend « bg-panel », « text-ink »
-   ou « border-line » automatiquement sensibles au thème.
+   Le sombre est le thème PRINCIPAL — c'est lui qui est dessiné, le clair en
+   est la transposition. D'où l'inversion par rapport à l'usage : « :root »
+   porte le sombre, et c'est la classe « light » qui bascule.
+
+   Les valeurs vivent dans des variables « --c-* » ; @theme les expose à
+   Tailwind, ce qui rend « bg-panel », « text-ink » ou « border-line »
+   automatiquement sensibles au thème.
+
+   Note : aucune variante « dark: » n'est déclarée, parce qu'aucune n'est
+   utilisée — les jetons suffisent. En ajouter une créerait un second moyen
+   de dire la même chose.
 =========================================================================== */
 
+/* --- Sombre : la référence ------------------------------------------------ */
 :root {
-  /* Surfaces */
-  --c-paper: #eceae4; /* fond général */
-  --c-panel: #f6f5f1; /* panneaux, cartes */
-  --c-raised: #ffffff; /* champs de saisie, survol */
+  --c-paper: #0a0a0a; /* fond général */
+  --c-panel: #141414; /* panneaux, cartes */
+  --c-raised: #1e1e1e; /* champs, survol */
 
-  /* Encre */
-  --c-ink: #0a0a0a;
-  --c-ink-2: #4a4844; /* texte secondaire */
-  --c-ink-3: #8a8781; /* libellés, métadonnées */
+  --c-ink: #fafafa;
+  --c-ink-2: #a1a1a1; /* texte secondaire */
+  --c-ink-3: #6a6a6a; /* libellés, métadonnées */
 
-  /* Filets */
-  --c-line: #cfccc3;
-  --c-line-2: #b3afa4; /* filet appuyé */
+  --c-line: #262626;
+  --c-line-2: #3a3a3a;
 
-  /* Sémantique — teintes terreuses, lisibles sur papier sans crier */
-  --c-moss: #3f6b3f; /* actif, succès */
-  --c-moss-bg: #e4ebe2;
-  --c-ochre: #8a6522; /* archivé, attention */
-  --c-ochre-bg: #f2eada;
-  --c-brick: #8f3a2a; /* danger, refus */
-  --c-brick-bg: #f6e5e0;
+  /* Sémantique — désaturée pour tenir sur du noir sans éblouir */
+  --c-moss: #7ee2a8;
+  --c-moss-bg: #14251c;
+  --c-ochre: #e8c17a;
+  --c-ochre-bg: #26200f;
+  --c-brick: #ff8a7a;
+  --c-brick-bg: #2a1512;
+
+  /* Rondeurs : le trait distinctif de cette direction */
+  --r-pill: 999px;
+  --r-card: 20px;
+  --r-field: 12px;
 }
 
-/* Thème sombre.
-   Pas de bloc @media ici, volontairement : index.html résout la préférence
-   système AVANT le premier rendu et pose la classe « dark », et le store la
-   remet à jour quand le système change. La classe est donc la seule source
-   de vérité — ajouter une requête média créerait un second avis, qui
-   contredirait le choix explicite « clair » d'un utilisateur sous système
-   sombre. */
-.dark {
-  --c-paper: #121110;
-  --c-panel: #1a1917;
-  --c-raised: #232220;
-  --c-ink: #eae7df;
-  --c-ink-2: #a8a399;
-  --c-ink-3: #726d64;
-  --c-line: #35332e;
-  --c-line-2: #4b483f;
-  --c-moss: #8fb98f;
-  --c-moss-bg: #1c2a1c;
-  --c-ochre: #cda45f;
-  --c-ochre-bg: #2c2415;
-  --c-brick: #d18570;
-  --c-brick-bg: #2f1c17;
+/* --- Clair : la transposition --------------------------------------------- */
+.light {
+  --c-paper: #f2f2f0;
+  --c-panel: #fafafa;
+  --c-raised: #ffffff;
+
+  --c-ink: #0a0a0a;
+  --c-ink-2: #525252;
+  --c-ink-3: #8a8a8a;
+
+  --c-line: #e2e2e0;
+  --c-line-2: #cccccc;
+
+  --c-moss: #1f7a4a;
+  --c-moss-bg: #e3f2e9;
+  --c-ochre: #8a6420;
+  --c-ochre-bg: #f6eeda;
+  --c-brick: #b3402c;
+  --c-brick-bg: #fbe8e4;
 }
 
 @theme {
@@ -85,9 +86,13 @@
   --color-brick: var(--c-brick);
   --color-brick-bg: var(--c-brick-bg);
 
-  /* Une seule famille : la personnalité de l'interface tient dans ce choix. */
-  --font-sans: 'Source Code Pro', ui-monospace, 'Cascadia Code', Consolas, monospace;
-  --font-mono: 'Source Code Pro', ui-monospace, 'Cascadia Code', Consolas, monospace;
+  --radius-pill: var(--r-pill);
+  --radius-card: var(--r-card);
+  --radius-field: var(--r-field);
+
+  /* Grotesque variable : une seule famille, toutes les graisses. */
+  --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
 }
 
 /* ---------------------------------------------------------------------------
@@ -101,25 +106,26 @@
   body {
     background: var(--c-paper);
     color: var(--c-ink);
-    font-family: 'Source Code Pro', ui-monospace, 'Cascadia Code', Consolas, monospace;
-    font-size: 14px;
-    line-height: 1.6;
+    font-family: 'Instrument Sans', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
   }
 
-  /* Le monospace est dense : les titres respirent par l'interlettrage
-     négatif plutôt que par une seconde famille. */
+  /* Interlettrage serré : ce qui donne au grotesque variable son allure de
+     studio plutôt que de tableau de bord d'entreprise. */
   h1,
   h2,
   h3 {
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
     text-wrap: balance;
+    font-weight: 600;
   }
 
-  /* Anneau de focus net, sans arrondi : cohérent avec le reste. */
   :focus-visible {
     outline: 2px solid var(--c-ink);
-    outline-offset: 2px;
+    outline-offset: 3px;
+    border-radius: var(--r-field);
   }
 
   ::selection {
@@ -127,7 +133,6 @@
     color: var(--c-paper);
   }
 
-  /* Champs natifs : la date et les listes déroulantes doivent suivre le thème. */
   select,
   input,
   textarea,
@@ -136,12 +141,9 @@
     font-size: inherit;
   }
 
-  input[type='date']::-webkit-calendar-picker-indicator {
-    filter: var(--picker-filter, none);
-  }
-
-  .dark input[type='date']::-webkit-calendar-picker-indicator {
-    filter: invert(1) opacity(0.6);
+  /* Le sélecteur de date natif est illisible sur fond sombre. */
+  :root:not(.light) input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(1) opacity(0.55);
   }
 }
 
@@ -149,38 +151,37 @@
    Composants
 --------------------------------------------------------------------------- */
 @layer components {
-  /* Panneau : un rectangle, un filet. Aucune ombre — le relief viendrait
-     contredire l'idée de surface imprimée. */
+  /* Panneau : coins très arrondis, filet discret, aucune ombre — sur du noir
+     une ombre ne se voit pas, c'est le filet qui sépare les plans. */
   .panel {
-    @apply border border-line bg-panel;
+    @apply rounded-card border border-line bg-panel;
   }
 
   .card {
-    @apply border border-line bg-panel;
+    @apply rounded-card border border-line bg-panel;
   }
 
-  /* Libellé de section, en petites capitales espacées. */
   .label-caps {
-    @apply text-[0.68rem] uppercase tracking-[0.16em] text-ink-3;
+    @apply text-[0.7rem] uppercase tracking-[0.14em] text-ink-3;
   }
 
   .label-field {
-    @apply mb-1.5 block text-[0.72rem] uppercase tracking-[0.12em] text-ink-3;
+    @apply mb-2 block text-[0.75rem] tracking-wide text-ink-2;
   }
 
   .input-field {
-    @apply w-full border border-line bg-raised px-3 py-2 text-sm text-ink
-           placeholder:text-ink-3 transition-colors
-           focus:border-ink focus:outline-none
+    @apply w-full rounded-field border border-line bg-raised px-3.5 py-2.5 text-[0.9rem] text-ink
+           transition-colors placeholder:text-ink-3
+           focus:border-ink-3 focus:outline-none
            disabled:cursor-not-allowed disabled:bg-panel disabled:text-ink-3;
   }
 
-  /* Puce de statut : rectangle fin, jamais arrondi. */
+  /* Pastille : entièrement arrondie, contrairement aux panneaux. */
   .chip {
-    @apply inline-flex items-center gap-1.5 border px-2 py-0.5 text-[0.7rem] tracking-wide;
+    @apply inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-0.5 text-[0.72rem];
   }
 
-  /* Le curseur clignotant reprend le signe distinctif d'un terminal. */
+  /* Curseur clignotant, hérité de l'écran d'entrée. */
   .caret::after {
     content: '_';
     animation: caret 1.1s steps(1) infinite;
@@ -196,6 +197,27 @@
       opacity: 0;
     }
   }
+
+  /* Bandeau défilant : occupe une bande étroite sans jamais demander qu'on
+     la lise. Le masque évite que le texte ne soit coupé net aux bords. */
+  .marquee {
+    @apply flex w-full select-none overflow-hidden;
+    mask-image: linear-gradient(90deg, transparent, black 6%, black 94%, transparent);
+  }
+
+  .marquee > * {
+    @apply flex shrink-0 items-center gap-8 whitespace-nowrap;
+    animation: marquee 34s linear infinite;
+  }
+
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-100%);
+    }
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -204,13 +226,13 @@
 .fade-enter-active,
 .fade-leave-active {
   transition:
-    opacity 0.15s ease,
-    transform 0.15s ease;
+    opacity 0.18s ease,
+    transform 0.18s ease;
 }
 
 .fade-enter-from {
   opacity: 0;
-  transform: translateY(6px);
+  transform: translateY(8px);
 }
 
 .fade-leave-to {
@@ -223,7 +245,8 @@
     transition: none;
   }
 
-  .caret::after {
+  .caret::after,
+  .marquee > * {
     animation: none;
   }
 }

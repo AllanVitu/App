@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Config\Terms;
 use App\Core\HttpException;
 use App\Core\Request;
 use App\Core\Response;
@@ -66,6 +67,16 @@ final class AuthController
             $validator->addError('password_confirmation', 'La confirmation ne correspond pas au mot de passe.');
         }
 
+        // Le consentement est vérifié côté serveur, pas seulement par la case
+        // à cocher du formulaire : une requête forgée doit se heurter au même
+        // refus, sinon la trace en base ne prouve rien.
+        if (!$validator->boolean('terms_accepted')) {
+            $validator->addError(
+                'terms_accepted',
+                'Vous devez accepter les conditions générales pour créer un compte.',
+            );
+        }
+
         $validator->check();
 
         /** @var string $email */
@@ -79,6 +90,7 @@ final class AuthController
             $email,
             password_hash($password, PASSWORD_BCRYPT, ['cost' => self::BCRYPT_COST]),
             $fullName,
+            Terms::CURRENT_VERSION,
         );
 
         $this->users->touchLastLogin($user['id']);

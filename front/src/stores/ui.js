@@ -1,8 +1,10 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
+import * as sound from '@/services/sound'
+
 /**
- * État d'interface transverse : thème, menu latéral et notifications.
+ * État d'interface transverse : thème, son, menu latéral et notifications.
  * Volontairement séparé du store d'authentification, qui ne concerne que
  * la session.
  */
@@ -28,15 +30,18 @@ export const useUiStore = defineStore('ui', () => {
 
   /**
    * Applique le thème à <html>. Le même calcul est fait dans index.html
-   * avant le rendu, pour éviter un flash clair au chargement.
+   * avant le rendu, pour éviter un flash au chargement.
+   *
+   * C'est la classe « light » qui bascule, pas « dark » : le sombre est le
+   * thème de référence de cette direction visuelle, donc l'état par défaut.
    */
   function applyTheme(next = theme.value) {
     theme.value = THEMES.includes(next) ? next : 'system'
 
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    const dark = theme.value === 'dark' || (theme.value === 'system' && prefersDark)
+    const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches
+    const light = theme.value === 'light' || (theme.value === 'system' && prefersLight)
 
-    document.documentElement.classList.toggle('dark', dark)
+    document.documentElement.classList.toggle('light', light)
 
     try {
       localStorage.setItem('theme', theme.value)
@@ -49,9 +54,49 @@ export const useUiStore = defineStore('ui', () => {
    * Suit les changements de préférence système tant que le thème est « system ».
    */
   function watchSystemTheme() {
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
       if (theme.value === 'system') applyTheme('system')
     })
+  }
+
+  // ---------------------------------------------------------------------------
+  // Son
+  //
+  // L'état vit ici pour que l'interface puisse y réagir ; la synthèse et la
+  // lecture restent dans services/sound.js. Le store ne fait que le miroir.
+  // ---------------------------------------------------------------------------
+  const soundOn = ref(false)
+
+  /** true tant que l'utilisateur n'a jamais répondu : déclenche l'écran d'entrée. */
+  const soundUndecided = ref(sound.storedPreference() === null)
+
+  function setSound(value) {
+    soundOn.value = sound.setEnabled(value)
+    soundUndecided.value = false
+
+    // La nappe d'ambiance suit le réglage, sans autre déclencheur.
+    if (soundOn.value) {
+      sound.startAmbient()
+    } else {
+      sound.stopAmbient()
+    }
+
+    return soundOn.value
+  }
+
+  function toggleSound() {
+    return setSound(!soundOn.value)
+  }
+
+  /** Applique le choix déjà mémorisé, sans rien demander. */
+  function restoreSound() {
+    const stored = sound.storedPreference()
+
+    if (stored === true) {
+      // Le navigateur refusera de démarrer l'audio avant un geste : la nappe
+      // se lancera au premier clic, via bindInterfaceSounds.
+      soundOn.value = sound.setEnabled(true, { persist: false })
+    }
   }
 
   function toggleSidebar(value) {
@@ -67,6 +112,10 @@ export const useUiStore = defineStore('ui', () => {
     const id = ++toastId
     toasts.value.push({ id, message, type })
 
+    // Le son double le message, il ne le remplace pas : couper le son ne
+    // fait rien perdre de l'information.
+    sound.play(type === 'error' ? 'error' : type === 'info' ? 'notify' : 'success')
+
     setTimeout(() => dismiss(id), duration)
 
     return id
@@ -81,8 +130,13 @@ export const useUiStore = defineStore('ui', () => {
     themes: THEMES,
     sidebarOpen,
     toasts,
+    soundOn,
+    soundUndecided,
     applyTheme,
     watchSystemTheme,
+    setSound,
+    toggleSound,
+    restoreSound,
     toggleSidebar,
     notify,
     dismiss,

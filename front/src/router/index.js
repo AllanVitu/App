@@ -94,6 +94,15 @@ const routes = [
   },
 
   {
+    // Hors layout et sans garde : on ne peut pas demander d'accepter un texte
+    // qu'il faudrait un compte pour lire.
+    path: '/conditions',
+    name: 'terms',
+    component: () => import('@/views/TermsView.vue'),
+    meta: { title: 'Conditions générales' },
+  },
+
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/views/NotFoundView.vue'),

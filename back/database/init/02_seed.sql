@@ -1,25 +1,66 @@
 -- ============================================================================
---  SaaS Starter — Données de démarrage
+--  SaaS Starter — Catalogue des modules
 --
 --  Joué juste après 01_schema.sql, à la création du volume PostgreSQL.
---  Contient le strict nécessaire au fonctionnement de l'application :
---  le catalogue des modules. (Le compte de démonstration est dans 03_seed_dev.sql.)
+--  Contient le strict nécessaire au fonctionnement de l'application.
+--  (Le compte de démonstration vit dans database/seeds/, hors de ce dossier.)
+--
+--  Chaque module correspond à un outil de la chaîne de développement. Le
+--  contenu reste générique (titre, statut, échéance, charge utile JSONB) :
+--  ce sont des espaces de suivi, pas des intégrations connectées à ces
+--  services.
+--
+--  La navigation du front est construite à partir de cette table : renommer
+--  un module ou en ajouter un ne demande aucune modification de code.
 -- ============================================================================
 
 BEGIN;
 
--- ---------------------------------------------------------------------------
--- Catalogue des modules
---
--- Le numéro 4 est volontairement absent : la navigation du front est
--- construite à partir de cette table, pas d'une boucle sur 1..n.
--- Renommer un module = un simple UPDATE, sans toucher au code.
--- ---------------------------------------------------------------------------
+-- Le catalogue précédent était générique (« Module 1 » à « Module 5 »).
+-- On le remplace : les slugs changent, les anciennes lignes n'ont plus de
+-- correspondance et disparaissent avec leurs éléments (ON DELETE CASCADE).
+DELETE FROM modules WHERE slug IN ('module-1', 'module-2', 'module-3', 'module-5');
+
 INSERT INTO modules (slug, name, description, icon, position) VALUES
-    ('module-1', 'Module 1', 'Premier module métier — à personnaliser.',   'layout-grid', 10),
-    ('module-2', 'Module 2', 'Deuxième module métier — à personnaliser.',  'chart-bar',   20),
-    ('module-3', 'Module 3', 'Troisième module métier — à personnaliser.', 'folder',      30),
-    ('module-5', 'Module 5', 'Cinquième module métier — à personnaliser.', 'sparkles',    50)
-ON CONFLICT (slug) DO NOTHING;
+    (
+        'backend',
+        'Backend',
+        'Base PostgreSQL, authentification, stockage et API temps réel — de quoi prototyper un back complet sans l''écrire.',
+        'database',
+        10
+    ),
+    (
+        'deploiement',
+        'Déploiement',
+        'Mises en production liées à Git, avec une URL de prévisualisation par branche. Pas de chaîne d''intégration à maintenir soi-même.',
+        'rocket',
+        20
+    ),
+    (
+        'tickets',
+        'Tickets',
+        'Suivi rapide, pensé pour le clavier et les petites équipes. Un statut par projet, là où une liste de contrôle en note libre finit par dériver.',
+        'list-check',
+        30
+    ),
+    (
+        'supervision',
+        'Supervision',
+        'Erreurs de production avec pile d''appels et rejeu de session : le diagnostic arrive avant le signalement.',
+        'bug',
+        40
+    ),
+    (
+        'design',
+        'Design',
+        'Maquettes et prototypes avant d''écrire la moindre ligne — itérer sur un système de composants coûte moins cher en amont.',
+        'shapes',
+        50
+    )
+ON CONFLICT (slug) DO UPDATE
+    SET name        = EXCLUDED.name,
+        description = EXCLUDED.description,
+        icon        = EXCLUDED.icon,
+        position    = EXCLUDED.position;
 
 COMMIT;

@@ -41,13 +41,21 @@ BEGIN
 END
 $guard$;
 
-INSERT INTO users (email, password_hash, full_name, role, email_verified_at)
+INSERT INTO users (
+    email, password_hash, full_name, role, email_verified_at,
+    terms_accepted_at, terms_accepted_version
+)
 VALUES (
     'demo@saas.local',
     '$2y$12$VOlgNc0A3bI9WJ4LifsbDuocgK7.5kbuwe3d3/OQgnEg.gmu/F76G',
     'Utilisateur Démo',
     'admin',
-    NOW()
+    NOW(),
+    -- Le compte de démonstration a « accepté » : sans cela, il serait
+    -- redirigé vers l'écran de consentement à chaque connexion, y compris
+    -- pendant les tests de bout en bout.
+    NOW(),
+    '1.0'
 )
 ON CONFLICT (email) DO NOTHING;
 
@@ -65,11 +73,12 @@ SELECT
     v.data::jsonb,
     v.position
 FROM (VALUES
-    ('module-1', 'Première fiche',        'Exemple d''enregistrement du module 1.', 'active',   '{"priority":"high","tags":["demo"]}',   10),
-    ('module-1', 'Deuxième fiche',        'Brouillon en attente de validation.',    'draft',    '{"priority":"low"}',                    20),
-    ('module-2', 'Rapport mensuel',       'Synthèse générée pour la démonstration.','active',   '{"period":"2026-08","format":"pdf"}',   10),
-    ('module-3', 'Dossier client',        'Élément archivé, visible en filtre.',    'archived', '{"client":"ACME"}',                     10),
-    ('module-5', 'Tâche automatisée',     'Exécution planifiée chaque lundi.',      'active',   '{"cron":"0 9 * * 1","enabled":true}',   10)
+    ('backend',     'Schéma des utilisateurs',   'Table, contraintes et politiques d''accès.',      'active',   '{"priority":"high","tags":["schema"]}', 10),
+    ('backend',     'Stockage des pièces jointes', 'Compartiment à créer, quotas à définir.',       'draft',    '{"priority":"low"}',                    20),
+    ('deploiement', 'Environnement de préproduction', 'Une URL par branche, variables à câbler.',   'active',   '{"branch":"main"}',                     10),
+    ('tickets',     'Refonte de la navigation',  'Découpé en trois lots, premier lot livré.',       'active',   '{"priority":"medium"}',                 10),
+    ('supervision', 'Alerte sur les 500',        'Seuil trop bas : trop de notifications.',         'archived', '{"threshold":5}',                       10),
+    ('design',      'Système de composants',     'Boutons et champs harmonisés, reste les tableaux.', 'active', '{"priority":"high"}',                   10)
 ) AS v(module_slug, title, description, status, data, position)
 JOIN modules m ON m.slug = v.module_slug
 CROSS JOIN (SELECT id FROM users WHERE email = 'demo@saas.local') AS u

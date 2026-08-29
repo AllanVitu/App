@@ -79,16 +79,26 @@ $pdo = new PDO(
 
 // Le schéma appliqué est CELUI DE PRODUCTION : un test qui tournerait sur un
 // schéma reconstruit à la main ne garantirait rien sur le schéma déployé.
-// 03_seed.sh est ignoré : c'est un script shell, et son jeu de démonstration
-// n'a pas sa place dans des tests qui créent leurs propres données.
-foreach (['01_schema.sql', '02_seed.sql', '04_auth_tokens.sql'] as $file) {
-    $sql = file_get_contents(__DIR__ . '/../database/init/' . $file);
+//
+// Les fichiers sont DÉCOUVERTS, pas énumérés : une liste codée en dur oublie
+// silencieusement la migration suivante, et les tests échouent alors sur une
+// colonne inconnue plutôt que sur ce qu'ils vérifient. (C'est exactement ce
+// qui s'est produit lors de l'ajout de 05_terms.sql.)
+//
+// Seuls les .sql sont pris : 03_seed.sh est un script shell, et son jeu de
+// démonstration n'a pas sa place dans des tests qui créent leurs données.
+$schemaFiles = glob(__DIR__ . '/../database/init/*.sql');
 
-    if ($sql === false) {
-        fwrite(STDERR, "Fichier de schéma introuvable : {$file}\n");
+if ($schemaFiles === false || $schemaFiles === []) {
+    fwrite(STDERR, "Aucun fichier de schéma trouvé dans database/init/\n");
 
-        exit(1);
-    }
+    exit(1);
+}
 
-    $pdo->exec($sql);
+// L'ordre alphabétique est celui qu'applique aussi l'entrypoint PostgreSQL :
+// c'est le préfixe numérique des fichiers qui porte la séquence.
+sort($schemaFiles);
+
+foreach ($schemaFiles as $file) {
+    $pdo->exec((string) file_get_contents($file));
 }

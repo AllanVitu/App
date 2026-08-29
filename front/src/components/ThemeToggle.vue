@@ -63,8 +63,9 @@ function toggle() {
 
 onMounted(() => {
   // L'état de départ vient du DOM : le thème est appliqué par le script
-  // inline d'index.html, avant même le montage de Vue.
-  isDark.value = document.documentElement.classList.contains('dark')
+  // inline d'index.html, avant même le montage de Vue. Le sombre étant le
+  // défaut, c'est l'ABSENCE de « light » qui le signale.
+  isDark.value = !document.documentElement.classList.contains('light')
   paint(false)
 })
 </script>
@@ -72,7 +73,7 @@ onMounted(() => {
 <template>
   <button
     type="button"
-    class="p-1.5 text-ink-2 transition-colors hover:text-ink"
+    class="rounded-pill p-2 text-ink-2 transition-colors hover:bg-raised hover:text-ink"
     :aria-label="isDark ? 'Passer au thème clair' : 'Passer au thème sombre'"
     :aria-pressed="isDark"
     @click="toggle"

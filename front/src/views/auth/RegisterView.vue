@@ -25,6 +25,9 @@ const form = reactive({
   email: '',
   password: '',
   password_confirmation: '',
+  // Le serveur refuse toute inscription sans consentement : la case n'est
+  // pas une formalité d'affichage, elle fait partie du contrat d'API.
+  terms_accepted: false,
 })
 
 const errors = ref({})
@@ -168,6 +171,31 @@ async function submit() {
         required
         :error="errors.password_confirmation"
       />
+
+      <div data-anim="field">
+        <label class="flex cursor-pointer items-start gap-2.5">
+          <input
+            v-model="form.terms_accepted"
+            type="checkbox"
+            class="mt-0.5 size-4 shrink-0 accent-ink"
+            :aria-invalid="Boolean(errors.terms_accepted)"
+          />
+          <span class="text-[0.8rem] leading-snug text-ink-2">
+            J'accepte les
+            <RouterLink
+              :to="{ name: 'terms' }"
+              class="font-medium text-ink underline underline-offset-2"
+            >
+              conditions générales
+            </RouterLink>
+            et la conservation des données décrites.
+          </span>
+        </label>
+
+        <p v-if="errors.terms_accepted" class="mt-1.5 text-[0.72rem] text-brick">
+          {{ errors.terms_accepted }}
+        </p>
+      </div>
 
       <BaseButton data-anim="field" type="submit" :loading="loading" block size="lg">
         Créer mon compte

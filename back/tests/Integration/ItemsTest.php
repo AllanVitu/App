@@ -24,7 +24,7 @@ final class ItemsTest extends ApiTestCase
 
         $creation = $this->call(
             'POST',
-            '/api/modules/module-1/items',
+            '/api/modules/backend/items',
             [
                 'title'       => 'Première fiche',
                 'description' => 'Une description',
@@ -54,7 +54,7 @@ final class ItemsTest extends ApiTestCase
 
         $item = $this->call(
             'POST',
-            '/api/modules/module-1/items',
+            '/api/modules/backend/items',
             ['title' => 'Document confidentiel'],
             $this->bearer($alice['token']),
         )['body']['data'];
@@ -77,7 +77,7 @@ final class ItemsTest extends ApiTestCase
         $this->assertSame(404, $suppression['status']);
 
         // Et la liste de Bob reste vide.
-        $liste = $this->call('GET', '/api/modules/module-1/items', headers: $this->bearer($bob['token']));
+        $liste = $this->call('GET', '/api/modules/backend/items', headers: $this->bearer($bob['token']));
         $this->assertSame([], $liste['body']['data']);
 
         // L'élément d'Alice est intact.
@@ -94,7 +94,7 @@ final class ItemsTest extends ApiTestCase
 
         $item = $this->call(
             'POST',
-            '/api/modules/module-1/items',
+            '/api/modules/backend/items',
             ['title' => 'Titre initial', 'status' => 'active', 'data' => ['priority' => 'low']],
             $this->bearer($session['token']),
         )['body']['data'];
@@ -119,7 +119,7 @@ final class ItemsTest extends ApiTestCase
 
         $item = $this->call(
             'POST',
-            '/api/modules/module-1/items',
+            '/api/modules/backend/items',
             ['title' => 'Titre initial'],
             $this->bearer($session['token']),
         )['body']['data'];
@@ -144,7 +144,7 @@ final class ItemsTest extends ApiTestCase
 
         $item = $this->call(
             'POST',
-            '/api/modules/module-1/items',
+            '/api/modules/backend/items',
             ['title' => 'À supprimer'],
             $this->bearer($session['token']),
         )['body']['data'];
@@ -175,14 +175,14 @@ final class ItemsTest extends ApiTestCase
         $headers = $this->bearer($session['token']);
 
         foreach ([['Rapport mensuel', 'active'], ['Brouillon interne', 'draft']] as [$title, $status]) {
-            $this->call('POST', '/api/modules/module-1/items', compact('title', 'status'), $headers);
+            $this->call('POST', '/api/modules/backend/items', compact('title', 'status'), $headers);
         }
 
-        $recherche = $this->call('GET', '/api/modules/module-1/items', headers: $headers, query: ['search' => 'rapport']);
+        $recherche = $this->call('GET', '/api/modules/backend/items', headers: $headers, query: ['search' => 'rapport']);
         $this->assertCount(1, $recherche['body']['data']);
         $this->assertSame('Rapport mensuel', $recherche['body']['data'][0]['title']);
 
-        $filtre = $this->call('GET', '/api/modules/module-1/items', headers: $headers, query: ['status' => 'draft']);
+        $filtre = $this->call('GET', '/api/modules/backend/items', headers: $headers, query: ['status' => 'draft']);
         $this->assertCount(1, $filtre['body']['data']);
         $this->assertSame('Brouillon interne', $filtre['body']['data'][0]['title']);
     }
@@ -193,11 +193,11 @@ final class ItemsTest extends ApiTestCase
         $session = $this->register();
         $headers = $this->bearer($session['token']);
 
-        $this->call('POST', '/api/modules/module-1/items', ['title' => 'Marge 100%'], $headers);
-        $this->call('POST', '/api/modules/module-1/items', ['title' => 'Sans pourcentage'], $headers);
+        $this->call('POST', '/api/modules/backend/items', ['title' => 'Marge 100%'], $headers);
+        $this->call('POST', '/api/modules/backend/items', ['title' => 'Sans pourcentage'], $headers);
 
         // « % » est un joker SQL : mal échappé, il ramènerait toute la liste.
-        $reponse = $this->call('GET', '/api/modules/module-1/items', headers: $headers, query: ['search' => '100%']);
+        $reponse = $this->call('GET', '/api/modules/backend/items', headers: $headers, query: ['search' => '100%']);
 
         $this->assertCount(1, $reponse['body']['data']);
     }
@@ -209,12 +209,12 @@ final class ItemsTest extends ApiTestCase
         $headers = $this->bearer($session['token']);
 
         for ($i = 1; $i <= 5; $i++) {
-            $this->call('POST', '/api/modules/module-1/items', ['title' => "Élément {$i}"], $headers);
+            $this->call('POST', '/api/modules/backend/items', ['title' => "Élément {$i}"], $headers);
         }
 
         $reponse = $this->call(
             'GET',
-            '/api/modules/module-1/items',
+            '/api/modules/backend/items',
             headers: $headers,
             query: ['per_page' => '2', 'page' => '1'],
         );
@@ -253,13 +253,13 @@ final class ItemsTest extends ApiTestCase
         $session = $this->register();
         $headers = $this->bearer($session['token']);
 
-        $this->call('POST', '/api/modules/module-1/items', ['title' => 'Une fiche'], $headers);
+        $this->call('POST', '/api/modules/backend/items', ['title' => 'Une fiche'], $headers);
 
         // ORDER BY ne peut pas être paramétré : la valeur est comparée à une
         // liste blanche et toute autre valeur retombe sur le tri par défaut.
         $reponse = $this->call(
             'GET',
-            '/api/modules/module-1/items',
+            '/api/modules/backend/items',
             headers: $headers,
             query: ['sort' => 'title; DROP TABLE users; --'],
         );

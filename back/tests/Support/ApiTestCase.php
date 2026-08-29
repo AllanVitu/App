@@ -89,9 +89,12 @@ abstract class ApiTestCase extends TestCase
         string $name = 'Utilisateur Test',
     ): array {
         $response = $this->call('POST', '/api/auth/register', [
-            'full_name' => $name,
-            'email'     => $email,
-            'password'  => $password,
+            'full_name'      => $name,
+            'email'          => $email,
+            'password'       => $password,
+            // Le consentement fait partie du contrat d'inscription : un
+            // compte ne peut plus être créé sans lui.
+            'terms_accepted' => true,
         ]);
 
         $this->assertSame(201, $response['status'], 'inscription impossible');
@@ -118,7 +121,7 @@ abstract class ApiTestCase extends TestCase
      */
     protected function moduleSlug(): string
     {
-        return 'module-1';
+        return 'backend';
     }
 
     /**

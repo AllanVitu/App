@@ -21,6 +21,7 @@ final class AuthTest extends ApiTestCase
             'full_name' => 'Jean Dupont',
             'email'     => 'jean@test.local',
             'password'  => 'Motdepasse1',
+            'terms_accepted' => true,
         ]);
 
         $this->assertSame(201, $response['status']);
@@ -34,7 +35,7 @@ final class AuthTest extends ApiTestCase
             'SELECT count(*) FROM user_modules WHERE user_id = :id',
         );
         $modules->execute(['id' => $userId]);
-        $this->assertSame(4, (int) $modules->fetchColumn(), 'modules non attribués');
+        $this->assertSame(5, (int) $modules->fetchColumn(), 'modules non attribués');
 
         $settings = Database::connection()->prepare(
             'SELECT count(*) FROM user_settings WHERE user_id = :id',
@@ -50,10 +51,44 @@ final class AuthTest extends ApiTestCase
             'full_name' => 'Jean Dupont',
             'email'     => 'jean@test.local',
             'password'  => 'Motdepasse1',
+            'terms_accepted' => true,
         ]);
 
         $this->assertArrayNotHasKey('password_hash', $response['body']['data']['user']);
         $this->assertStringNotContainsString('Motdepasse1', json_encode($response['body']));
+    }
+
+    #[Test]
+    public function une_inscription_sans_consentement_est_refusee(): void
+    {
+        $response = $this->call('POST', '/api/auth/register', [
+            'full_name' => 'Jean Dupont',
+            'email'     => 'jean@test.local',
+            'password'  => 'Motdepasse1',
+            // terms_accepted volontairement absent
+        ]);
+
+        $this->assertSame(422, $response['status']);
+        $this->assertArrayHasKey('terms_accepted', $response['body']['errors']);
+
+        // Et rien n'a été créé : un refus de consentement ne doit pas laisser
+        // de compte orphelin derrière lui.
+        $this->assertFalse((new \App\Models\UserRepository())->emailExists('jean@test.local'));
+    }
+
+    #[Test]
+    public function le_consentement_est_horodate_et_versionne(): void
+    {
+        $session = $this->register('jean@test.local');
+
+        $moi = $this->call('GET', '/api/auth/me', headers: $this->bearer($session['token']));
+        $user = $moi['body']['data']['user'];
+
+        $this->assertNotNull($user['terms_accepted_at']);
+
+        // Sans le numéro de version, la trace dirait seulement que
+        // l'utilisateur a accepté « quelque chose ».
+        $this->assertSame(\App\Config\Terms::CURRENT_VERSION, $user['terms_version']);
     }
 
     #[Test]
@@ -65,6 +100,7 @@ final class AuthTest extends ApiTestCase
             'full_name' => 'Autre Personne',
             'email'     => 'jean@test.local',
             'password'  => 'Motdepasse1',
+            'terms_accepted' => true,
         ]);
 
         $this->assertSame(409, $response['status']);
@@ -81,6 +117,7 @@ final class AuthTest extends ApiTestCase
             'full_name' => 'Jean Majuscule',
             'email'     => 'Jean@Test.Local',
             'password'  => 'Motdepasse1',
+            'terms_accepted' => true,
         ]);
 
         $this->assertSame(409, $response['status']);
