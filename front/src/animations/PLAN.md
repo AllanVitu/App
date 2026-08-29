@@ -44,7 +44,7 @@ d'une vue, ses ScrollTriggers, Draggables et timelines sont révoqués.
 | **CustomBounce** | `VerifyEmailView`, `ResetPasswordView` | Rebond de la pastille de succès |
 | **DrawSVGPlugin** | Pastilles de succès | La coche se **trace** au lieu d'apparaître : marque la fin d'un parcours |
 | **MorphSVGPlugin** | `AppTopbar` | Le soleil se transforme en lune : la bascule de thème devient un objet unique, pas deux icônes qui se remplacent |
-| **SplitText** | `AuthLayout`, `DashboardView` | Titres révélés mot à mot, en cascade |
+| **SplitText** | `AuthLayout` | Titre du panneau de présentation révélé mot à mot |
 | **ScrambleTextPlugin** | `DashboardView` | Le prénom se stabilise à l'arrivée — signale que la donnée vient d'être chargée |
 | **Flip** | `ModuleView` | **Le plus utile de tous** : au changement de filtre, les lignes conservées glissent vers leur nouvelle position au lieu de sauter. On suit ce qui reste |
 | **Draggable + InertiaPlugin** | `AppSidebar` (mobile) | Le tiroir se ferme au glissement, avec inertie : geste tactile attendu |
@@ -52,7 +52,7 @@ d'une vue, ses ScrollTriggers, Draggables et timelines sont révoqués.
 | **ScrollTrigger** | `ModuleView` | Les lignes au-delà du pli se révèlent à l'approche, sans animer ce qui est déjà visible |
 | **ScrollToPlugin** | `ModuleView` | Retour en haut de liste animé au changement de page |
 | **Physics2DPlugin** | `VerifyEmailView` | Gerbe de particules à la confirmation d'adresse — le seul moment franchement festif de l'application |
-| **RoughEase / SlowMo / ExpoScaleEase** | Ponctuel | `RoughEase` sur le grain d'erreur, `SlowMo` sur les compteurs du tableau de bord |
+| **SlowMo** (EasePack) | `DashboardView` | Les compteurs défilent vite sur les valeurs intermédiaires et s'attardent sur le chiffre final, seul réellement lisible |
 | **GSDevTools / MotionPathHelper** | Développement uniquement | Chargés dynamiquement si `import.meta.env.DEV`. `window.GSDevTools.create()` en console |
 
 ## Plugins enregistrés mais volontairement inemployés

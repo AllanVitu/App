@@ -6,6 +6,12 @@
     <meta name="description" content="Application SaaS — tableau de bord et modules métier." />
     <title>SaaS App</title>
 
+    <!-- Sans icône déclarée, le navigateur réclame /favicon.ico : 404 en
+         développement, et en déploiement le repli SPA lui renvoie index.html,
+         donc du HTML là où une image est attendue. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#243dec" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

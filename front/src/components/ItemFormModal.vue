@@ -7,6 +7,7 @@
  */
 import { reactive, ref, watch } from 'vue'
 
+import { gsap, prefersReducedMotion } from '@/animations/gsap'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
@@ -43,6 +44,24 @@ const form = reactive({
 })
 
 const isEditing = ref(false)
+const formEl = ref(null)
+
+/**
+ * Le serveur a refusé la saisie : le formulaire se secoue.
+ *
+ * Dans une modale, le message d'erreur apparaît sous un champ, parfois hors
+ * du champ de vision. La secousse signale le refus quel que soit l'endroit
+ * où se porte le regard.
+ */
+watch(
+  () => props.errors,
+  (errors) => {
+    if (!formEl.value || prefersReducedMotion()) return
+    if (!errors || Object.keys(errors).length === 0) return
+
+    gsap.fromTo(formEl.value, { x: -8 }, { x: 0, duration: 0.6, ease: 'appShake' })
+  },
+)
 
 /**
  * Réinitialise le formulaire à chaque ouverture : sans cela, la modale
@@ -83,7 +102,7 @@ function submit() {
     :title="isEditing ? 'Modifier l\'élément' : 'Nouvel élément'"
     @close="emit('close')"
   >
-    <form id="item-form" class="space-y-4" novalidate @submit.prevent="submit">
+    <form id="item-form" ref="formEl" class="space-y-4" novalidate @submit.prevent="submit">
       <BaseInput
         v-model="form.title"
         label="Titre"

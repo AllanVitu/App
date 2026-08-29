@@ -8,9 +8,11 @@
 import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { gsap } from '@/animations/gsap'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
+import { useGsap } from '@/composables/useGsap'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 
@@ -28,6 +30,28 @@ const form = reactive({
 const errors = ref({})
 const globalError = ref('')
 const loading = ref(false)
+const formEl = ref(null)
+
+/** Même cascade d'entrée que la page de connexion : les deux écrans se répondent. */
+const root = useGsap(() => {
+  gsap.fromTo(
+    '[data-anim="head"]',
+    { y: 14, opacity: 0 },
+    { y: 0, opacity: 1, duration: 0.5, stagger: 0.06 },
+  )
+  gsap.fromTo(
+    '[data-anim="field"]',
+    { y: 16, opacity: 0 },
+    { y: 0, opacity: 1, duration: 0.5, stagger: 0.06, delay: 0.12 },
+  )
+})
+
+/** Inscription refusée : le formulaire se secoue avant même qu'on lise l'erreur. */
+function shakeForm() {
+  if (!formEl.value) return
+
+  gsap.fromTo(formEl.value, { x: -9 }, { x: 0, duration: 0.65, ease: 'appShake' })
+}
 
 /**
  * Indicateur de robustesse — purement informatif. La règle qui fait foi
@@ -70,6 +94,8 @@ async function submit() {
     if (!Object.keys(errors.value).length) {
       globalError.value = error.message
     }
+
+    shakeForm()
   } finally {
     loading.value = false
   }
@@ -77,11 +103,11 @@ async function submit() {
 </script>
 
 <template>
-  <div>
-    <h1 class="text-2xl font-bold tracking-tight">Créer un compte</h1>
-    <p class="mt-1.5 text-sm text-slate-500">Quelques secondes suffisent.</p>
+  <div ref="root">
+    <h1 data-anim="head" class="text-2xl font-bold tracking-tight">Créer un compte</h1>
+    <p data-anim="head" class="mt-1.5 text-sm text-slate-500">Quelques secondes suffisent.</p>
 
-    <form class="mt-8 space-y-4" novalidate @submit.prevent="submit">
+    <form ref="formEl" class="mt-8 space-y-4" novalidate @submit.prevent="submit">
       <div
         v-if="globalError"
         class="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
@@ -93,6 +119,7 @@ async function submit() {
 
       <BaseInput
         v-model="form.full_name"
+        data-anim="field"
         label="Nom complet"
         placeholder="Jean Dupont"
         autocomplete="name"
@@ -102,6 +129,7 @@ async function submit() {
 
       <BaseInput
         v-model="form.email"
+        data-anim="field"
         label="Adresse e-mail"
         type="email"
         placeholder="vous@exemple.fr"
@@ -110,7 +138,7 @@ async function submit() {
         :error="errors.email"
       />
 
-      <div>
+      <div data-anim="field">
         <BaseInput
           v-model="form.password"
           label="Mot de passe"
@@ -132,6 +160,7 @@ async function submit() {
 
       <BaseInput
         v-model="form.password_confirmation"
+        data-anim="field"
         label="Confirmation du mot de passe"
         type="password"
         placeholder="••••••••"
@@ -140,7 +169,7 @@ async function submit() {
         :error="errors.password_confirmation"
       />
 
-      <BaseButton type="submit" :loading="loading" block size="lg">
+      <BaseButton data-anim="field" type="submit" :loading="loading" block size="lg">
         Créer mon compte
       </BaseButton>
     </form>
