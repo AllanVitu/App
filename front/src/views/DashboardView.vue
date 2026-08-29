@@ -9,6 +9,7 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 
 import { gsap } from '@/animations/gsap'
 import AppIcon from '@/components/AppIcon.vue'
+import ModuleGallery from '@/components/ModuleGallery.vue'
 import TechnicalDiagram from '@/components/TechnicalDiagram.vue'
 import BaseBadge from '@/components/ui/BaseBadge.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
@@ -90,12 +91,6 @@ function playIntro() {
       { y: 18, opacity: 0 },
       { y: 0, opacity: 1, stagger: 0.06, overwrite: 'auto' },
       0.1,
-    )
-    timeline.fromTo(
-      '[data-anim="module-card"]',
-      { y: 22, opacity: 0 },
-      { y: 0, opacity: 1, stagger: 0.07, overwrite: 'auto' },
-      0.25,
     )
     timeline.fromTo(
       '[data-anim="recent"]',
@@ -180,39 +175,12 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="grid gap-6 lg:grid-cols-3">
-        <!-- Modules -->
-        <section class="lg:col-span-2">
-          <h3 class="mb-4 text-base font-semibold">Vos modules</h3>
+      <!-- Modules : la galerie gère ses deux dispositions et son entrée.
+           Pleine largeur — la spirale est un carré, et une colonne étroite
+           l'étirait sur toute la hauteur de la page. -->
+      <ModuleGallery :modules="overview.modules" />
 
-          <div class="grid gap-4 sm:grid-cols-2">
-            <RouterLink
-              v-for="module in overview.modules"
-              :key="module.id"
-              :to="{ name: 'module', params: { slug: module.slug } }"
-              data-anim="module-card"
-              class="card group p-5 transition hover:border-ink"
-            >
-              <div class="flex items-start justify-between">
-                <div class="flex size-10 items-center justify-center bg-raised text-ink">
-                  <AppIcon :name="module.icon" />
-                </div>
-                <AppIcon
-                  name="arrow-right"
-                  :size="18"
-                  class="text-ink-3 transition group-hover:translate-x-0.5 group-hover:text-ink-2"
-                />
-              </div>
-
-              <p class="mt-4 font-semibold">{{ module.name }}</p>
-              <p class="mt-1 line-clamp-2 text-sm text-ink-2">{{ module.description }}</p>
-              <p class="mt-3 text-xs font-medium text-ink-3">
-                {{ module.items_count }} élément{{ module.items_count > 1 ? 's' : '' }}
-              </p>
-            </RouterLink>
-          </div>
-        </section>
-
+      <div>
         <!-- Activité récente -->
         <section>
           <h3 class="mb-4 text-base font-semibold">Activité récente</h3>

@@ -90,6 +90,41 @@ test.describe('éléments de module', () => {
     await expect(lien).toContainText(String(avant))
   })
 
+  test('la galerie bascule entre spirale et liste, et retient le choix', async ({ page }) => {
+    const gallery = page.locator('section', { has: page.getByRole('group', { name: /disposition/i }) })
+    const tiles = gallery.locator('[data-tile]')
+
+    // Les cinq modules sont présents dans les deux dispositions : seule leur
+    // mise en page change, jamais leur nombre.
+    await expect(tiles).toHaveCount(5)
+
+    await gallery.getByRole('button', { name: 'liste', exact: true }).click()
+    await expect(gallery.getByRole('button', { name: 'liste', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await expect(tiles).toHaveCount(5)
+
+    // Le choix est une préférence, pas un état de page : il survit au
+    // rechargement.
+    await page.reload()
+    await expect(gallery.getByRole('button', { name: 'liste', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    await gallery.getByRole('button', { name: 'spirale', exact: true }).click()
+    await expect(gallery.getByRole('button', { name: 'spirale', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await expect(tiles).toHaveCount(5)
+
+    // La spirale n'est qu'un arrangement visuel : les tuiles restent des
+    // liens, dans l'ordre du catalogue.
+    await expect(tiles.first()).toHaveAttribute('href', /backend/)
+  })
+
   test('un module inexistant affiche un état vide explicite', async ({ page }) => {
     await page.goto('/modules/module-99')
 
