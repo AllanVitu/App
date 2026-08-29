@@ -3,7 +3,7 @@ import { createPinia } from 'pinia'
 
 import App from './App.vue'
 import router from './router'
-import { bindInterfaceSounds, play } from './services/sound'
+import { bindInterfaceSounds, play, setSuspended } from './services/sound'
 import { useUiStore } from './stores/ui'
 
 // Enregistre les plugins GSAP et définit les courbes partagées. Importé une
@@ -31,8 +31,14 @@ ui.restoreSound()
 // ajouté demain sonnera sans qu'on ait à le déclarer.
 bindInterfaceSounds()
 
-// Changement de page : une brève impulsion, comme un cran.
-router.afterEach(() => play('tick'))
+// Les écrans publics sont muets : on n'accueille pas quelqu'un avec du son,
+// et la préférence de l'utilisateur est conservée pendant la traversée.
+router.afterEach((to) => {
+  setSuspended(Boolean(to.meta.silent))
+
+  // Changement de page : une brève impulsion, comme un cran.
+  play('tick')
+})
 
 /**
  * Dernier filet : une exception dans un composant démonterait tout l'arbre

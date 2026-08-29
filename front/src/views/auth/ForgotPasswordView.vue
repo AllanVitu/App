@@ -43,12 +43,12 @@ async function submit() {
     <!-- Confirmation -->
     <template v-if="sent">
       <div
-        class="mb-6 flex size-12 items-center justify-center border border-moss bg-moss-bg text-moss"
+        class="mb-6 flex size-12 items-center justify-center rounded-full border border-moss/40 bg-moss-bg text-moss"
       >
         <AppIcon name="mail" :size="24" />
       </div>
 
-      <h1 class="text-xl font-bold">Vérifiez votre boîte mail</h1>
+      <h1 class="text-[1.3rem] font-semibold">vérifiez votre boîte mail</h1>
       <p class="mt-3 text-sm leading-relaxed text-ink-2">
         Si un compte est associé à <span class="font-medium text-ink">{{ email }}</span
         >, un lien de réinitialisation vient d'y être envoyé. Il est valable une heure.
@@ -64,7 +64,7 @@ async function submit() {
 
     <!-- Formulaire -->
     <template v-else>
-      <h1 class="text-xl font-bold">Mot de passe oublié</h1>
+      <h1 class="text-[1.3rem] font-semibold">mot de passe oublié</h1>
       <p class="mt-1.5 text-sm text-ink-2">
         Indiquez votre adresse : nous vous enverrons un lien de réinitialisation.
       </p>
@@ -72,7 +72,7 @@ async function submit() {
       <form class="mt-8 space-y-4" novalidate @submit.prevent="submit">
         <div
           v-if="globalError"
-          class="flex items-start gap-2.5 border border-line border-l-2 border-l-brick bg-brick-bg px-3.5 py-2.5 text-[0.78rem] text-ink"
+          class="flex items-start gap-2.5 rounded-field border border-brick/40 bg-brick-bg px-3.5 py-2.5 text-[0.8rem] text-ink"
           role="alert"
         >
           <AppIcon name="alert" :size="18" class="mt-0.5 shrink-0" />

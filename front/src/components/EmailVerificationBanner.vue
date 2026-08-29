@@ -41,7 +41,7 @@ async function resend() {
 <template>
   <div
     v-if="auth.user && !auth.user.email_verified_at"
-    class="mb-6 flex flex-wrap items-center gap-x-3 gap-y-2 border border-line border-l-2 border-l-ochre bg-ochre-bg px-3.5 py-2.5 text-[0.78rem] text-ink"
+    class="mb-6 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-field border border-ochre/35 bg-ochre-bg px-4 py-2.5 text-[0.8rem] text-ink"
     role="status"
   >
     <AppIcon name="mail" :size="16" class="shrink-0 text-ochre" />

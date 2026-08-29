@@ -58,7 +58,7 @@ onMounted(async () => {
     <!-- Confirmée -->
     <template v-else-if="state === 'success'">
       <SuccessBurst burst class="mb-6" />
-      <h1 class="text-xl font-bold">Adresse confirmée</h1>
+      <h1 class="text-[1.3rem] font-semibold">adresse confirmée</h1>
       <p class="mt-3 text-sm text-ink-2">{{ message }}</p>
 
       <BaseButton
@@ -74,11 +74,11 @@ onMounted(async () => {
     <!-- Échec -->
     <template v-else>
       <div
-        class="mx-auto mb-6 flex size-12 items-center justify-center border border-brick bg-brick-bg text-brick"
+        class="mx-auto mb-6 flex size-12 items-center justify-center rounded-full border border-brick/40 bg-brick-bg text-brick"
       >
         <AppIcon name="alert" :size="24" />
       </div>
-      <h1 class="text-xl font-bold">Confirmation impossible</h1>
+      <h1 class="text-[1.3rem] font-semibold">confirmation impossible</h1>
       <p class="mt-3 text-sm text-ink-2">{{ message }}</p>
       <p class="mt-2 text-sm text-ink-2">Connectez-vous pour demander l'envoi d'un nouveau lien.</p>
 

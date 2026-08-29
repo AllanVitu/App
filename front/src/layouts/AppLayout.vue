@@ -16,6 +16,7 @@ import AppSidebar from '@/components/AppSidebar.vue'
 import AppStatusBar from '@/components/AppStatusBar.vue'
 import AppTopbar from '@/components/AppTopbar.vue'
 import EmailVerificationBanner from '@/components/EmailVerificationBanner.vue'
+import SoundGate from '@/components/SoundGate.vue'
 import { useModulesStore } from '@/stores/modules'
 import { useUiStore } from '@/stores/ui'
 
@@ -63,5 +64,9 @@ onMounted(async () => {
     </div>
 
     <AppStatusBar />
+
+    <!-- Le choix sonore n'est proposé qu'une fois entré : les écrans
+         d'identification restent muets. -->
+    <SoundGate />
   </div>
 </template>

@@ -62,11 +62,11 @@ async function submit() {
     <!-- Lien absent ou tronqué -->
     <template v-if="!token">
       <div
-        class="mb-6 flex size-12 items-center justify-center border border-brick bg-brick-bg text-brick"
+        class="mb-6 flex size-12 items-center justify-center rounded-full border border-brick/40 bg-brick-bg text-brick"
       >
         <AppIcon name="alert" :size="24" />
       </div>
-      <h1 class="text-xl font-bold">Lien incomplet</h1>
+      <h1 class="text-[1.3rem] font-semibold">lien incomplet</h1>
       <p class="mt-3 text-sm text-ink-2">
         Ce lien de réinitialisation est invalide. Demandez-en un nouveau.
       </p>
@@ -78,7 +78,7 @@ async function submit() {
     <!-- Succès -->
     <template v-else-if="done">
       <SuccessBurst class="mb-6 mx-0!" />
-      <h1 class="text-xl font-bold">Mot de passe modifié</h1>
+      <h1 class="text-[1.3rem] font-semibold">mot de passe modifié</h1>
       <p class="mt-3 text-sm leading-relaxed text-ink-2">
         Toutes les sessions ouvertes ont été déconnectées par sécurité. Connectez-vous avec votre
         nouveau mot de passe.
@@ -88,7 +88,7 @@ async function submit() {
 
     <!-- Formulaire -->
     <template v-else>
-      <h1 class="text-xl font-bold">Nouveau mot de passe</h1>
+      <h1 class="text-[1.3rem] font-semibold">nouveau mot de passe</h1>
       <p class="mt-1.5 text-sm text-ink-2">
         Choisissez un mot de passe que vous n'utilisez pas ailleurs.
       </p>
@@ -96,7 +96,7 @@ async function submit() {
       <form class="mt-8 space-y-4" novalidate @submit.prevent="submit">
         <div
           v-if="globalError"
-          class="flex items-start gap-2.5 border border-line border-l-2 border-l-brick bg-brick-bg px-3.5 py-2.5 text-[0.78rem] text-ink"
+          class="flex items-start gap-2.5 rounded-field border border-brick/40 bg-brick-bg px-3.5 py-2.5 text-[0.8rem] text-ink"
           role="alert"
         >
           <AppIcon name="alert" :size="18" class="mt-0.5 shrink-0" />

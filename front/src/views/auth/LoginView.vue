@@ -86,22 +86,13 @@ function fillDemo() {
 
 <template>
   <div ref="root">
-    <div class="mb-8 lg:hidden">
-      <div class="mb-6 flex items-center gap-2.5">
-        <div class="flex size-9 items-center justify-center bg-ink text-white">
-          <AppIcon name="sparkles" :size="20" />
-        </div>
-        <span class="text-lg font-semibold">SaaS App</span>
-      </div>
-    </div>
-
-    <h1 data-anim="head" class="text-xl font-bold">Connexion</h1>
+    <h1 data-anim="head" class="text-[1.3rem] font-semibold">connexion</h1>
     <p data-anim="head" class="mt-1.5 text-sm text-ink-2">Accédez à votre espace de travail.</p>
 
     <form ref="formEl" class="mt-8 space-y-4" novalidate @submit.prevent="submit">
       <div
         v-if="globalError"
-        class="flex items-start gap-2.5 border border-line border-l-2 border-l-brick bg-brick-bg px-3.5 py-2.5 text-[0.78rem] text-ink"
+        class="flex items-start gap-2.5 rounded-field border border-brick/40 bg-brick-bg px-3.5 py-2.5 text-[0.8rem] text-ink"
         role="alert"
       >
         <AppIcon name="alert" :size="18" class="mt-0.5 shrink-0" />

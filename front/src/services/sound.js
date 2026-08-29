@@ -67,6 +67,27 @@ export function isEnabled() {
   return enabled
 }
 
+/**
+ * Suspension par zone.
+ *
+ * Les écrans publics — connexion, inscription, mot de passe oublié — sont
+ * volontairement muets : on n'y accueille pas quelqu'un avec du son, et un
+ * utilisateur qui avait activé le son en session ne doit pas le retrouver
+ * en arrivant sur un écran d'identification.
+ *
+ * Distinct de `enabled` : la préférence de l'utilisateur est conservée, elle
+ * est seulement ignorée le temps de la traversée.
+ */
+let suspended = false
+
+export function setSuspended(value) {
+  suspended = Boolean(value)
+
+  if (suspended) stopAmbient()
+
+  return suspended
+}
+
 // -----------------------------------------------------------------------------
 // Contexte
 // -----------------------------------------------------------------------------
@@ -256,7 +277,7 @@ const CUES = {
  * @param {keyof typeof CUES} name
  */
 export function play(name) {
-  if (!enabled || !CUES[name]) return
+  if (!enabled || suspended || !CUES[name]) return
 
   if (!unlocked && !unlock()) return
   if (context.state === 'suspended') context.resume()
