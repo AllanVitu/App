@@ -1,6 +1,10 @@
 <script setup>
 /**
- * Layout des pages authentifiées : menu latéral + barre supérieure.
+ * Layout des pages authentifiées.
+ *
+ * Structure de fenêtre : chaque zone est un panneau distinct séparé par une
+ * gouttière, plutôt qu'un flux continu. On lit l'application comme un poste
+ * de travail — menu, chemin, contenu, état — et non comme une page web.
  *
  * Le catalogue des modules est chargé ici, une fois pour toutes les pages
  * enfants ; le titre affiché suit la route courante.
@@ -9,6 +13,7 @@ import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppSidebar from '@/components/AppSidebar.vue'
+import AppStatusBar from '@/components/AppStatusBar.vue'
 import AppTopbar from '@/components/AppTopbar.vue'
 import EmailVerificationBanner from '@/components/EmailVerificationBanner.vue'
 import { useModulesStore } from '@/stores/modules'
@@ -36,21 +41,27 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="min-h-screen">
-    <AppSidebar />
+  <div class="flex h-screen flex-col gap-1.5 bg-paper p-1.5 lg:gap-2 lg:p-2">
+    <div class="flex min-h-0 flex-1 gap-1.5 lg:gap-2">
+      <AppSidebar />
 
-    <div class="lg:pl-64">
-      <AppTopbar :title="title" />
+      <div class="flex min-w-0 flex-1 flex-col gap-1.5 lg:gap-2">
+        <AppTopbar :title="title" />
 
-      <main class="px-4 py-6 lg:px-8 lg:py-8">
-        <EmailVerificationBanner />
+        <!-- Le défilement vit DANS le panneau, pas sur la page : le cadre
+             reste fixe, comme une fenêtre d'application. -->
+        <main class="panel min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-7 lg:py-6">
+          <EmailVerificationBanner />
 
-        <RouterView v-slot="{ Component }">
-          <Transition name="fade" mode="out-in">
-            <component :is="Component" />
-          </Transition>
-        </RouterView>
-      </main>
+          <RouterView v-slot="{ Component }">
+            <Transition name="fade" mode="out-in">
+              <component :is="Component" />
+            </Transition>
+          </RouterView>
+        </main>
+      </div>
     </div>
+
+    <AppStatusBar />
   </div>
 </template>

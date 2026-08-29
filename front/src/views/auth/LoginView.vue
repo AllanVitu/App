@@ -88,20 +88,20 @@ function fillDemo() {
   <div ref="root">
     <div class="mb-8 lg:hidden">
       <div class="mb-6 flex items-center gap-2.5">
-        <div class="flex size-9 items-center justify-center rounded-lg bg-brand-600 text-white">
+        <div class="flex size-9 items-center justify-center bg-ink text-white">
           <AppIcon name="sparkles" :size="20" />
         </div>
         <span class="text-lg font-semibold">SaaS App</span>
       </div>
     </div>
 
-    <h1 data-anim="head" class="text-2xl font-bold tracking-tight">Connexion</h1>
-    <p data-anim="head" class="mt-1.5 text-sm text-slate-500">Accédez à votre espace de travail.</p>
+    <h1 data-anim="head" class="text-xl font-bold">Connexion</h1>
+    <p data-anim="head" class="mt-1.5 text-sm text-ink-2">Accédez à votre espace de travail.</p>
 
     <form ref="formEl" class="mt-8 space-y-4" novalidate @submit.prevent="submit">
       <div
         v-if="globalError"
-        class="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
+        class="flex items-start gap-2.5 border border-line border-l-2 border-l-brick bg-brick-bg px-3.5 py-2.5 text-[0.78rem] text-ink"
         role="alert"
       >
         <AppIcon name="alert" :size="18" class="mt-0.5 shrink-0" />
@@ -133,7 +133,7 @@ function fillDemo() {
         <div class="mt-1.5 text-right">
           <RouterLink
             :to="{ name: 'forgot-password' }"
-            class="text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+            class="text-xs font-medium text-ink underline underline-offset-2 hover:text-ink-2"
           >
             Mot de passe oublié ?
           </RouterLink>
@@ -147,17 +147,17 @@ function fillDemo() {
 
     <button
       type="button"
-      class="mt-4 w-full rounded-lg border border-dashed border-slate-300 px-3 py-2.5 text-xs text-slate-500 transition hover:border-brand-400 hover:text-brand-600 dark:border-slate-700 dark:hover:border-brand-500"
+      class="mt-4 w-full border border-dashed border-line px-3 py-2.5 text-xs text-ink-2 transition hover:border-ink hover:text-ink"
       @click="fillDemo"
     >
       Utiliser le compte de démonstration
     </button>
 
-    <p class="mt-8 text-center text-sm text-slate-500">
+    <p class="mt-8 text-center text-sm text-ink-2">
       Pas encore de compte ?
       <RouterLink
         :to="{ name: 'register' }"
-        class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+        class="font-medium text-ink underline underline-offset-2 hover:text-ink-2"
       >
         Créer un compte
       </RouterLink>

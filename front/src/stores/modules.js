@@ -17,7 +17,9 @@ export const useModulesStore = defineStore('modules', () => {
   const error = ref(null)
 
   /** Retrouve un module par son slug d'URL. */
-  const bySlug = computed(() => (slug) => items.value.find((module) => module.slug === slug) ?? null)
+  const bySlug = computed(
+    () => (slug) => items.value.find((module) => module.slug === slug) ?? null,
+  )
 
   async function load({ force = false } = {}) {
     if (loaded.value && !force) return items.value

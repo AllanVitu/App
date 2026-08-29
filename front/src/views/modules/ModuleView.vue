@@ -324,14 +324,12 @@ onBeforeUnmount(() => {
     <!-- En-tête du module -->
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div class="flex items-start gap-4">
-        <div
-          class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400"
-        >
+        <div class="flex size-11 shrink-0 items-center justify-center bg-raised text-ink">
           <AppIcon :name="module?.icon ?? 'layout-grid'" :size="22" />
         </div>
         <div>
           <h2 class="text-xl font-bold tracking-tight">{{ module?.name ?? 'Module' }}</h2>
-          <p class="mt-0.5 text-sm text-slate-500">{{ module?.description }}</p>
+          <p class="mt-0.5 text-sm text-ink-2">{{ module?.description }}</p>
         </div>
       </div>
 
@@ -347,7 +345,7 @@ onBeforeUnmount(() => {
         <AppIcon
           name="search"
           :size="16"
-          class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+          class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3"
         />
         <input
           v-model="filters.search"
@@ -384,7 +382,7 @@ onBeforeUnmount(() => {
       <button
         v-if="hasFilters"
         type="button"
-        class="text-sm text-slate-500 underline-offset-2 hover:underline"
+        class="text-sm text-ink-2 underline-offset-2 hover:underline"
         @click="resetFilters"
       >
         Réinitialiser
@@ -394,7 +392,7 @@ onBeforeUnmount(() => {
     <!-- Liste -->
     <div class="card overflow-hidden">
       <div v-if="loading" class="flex justify-center py-20">
-        <BaseSpinner class="size-7 text-brand-600" />
+        <BaseSpinner class="size-7 text-ink" />
       </div>
 
       <EmptyState
@@ -415,30 +413,27 @@ onBeforeUnmount(() => {
         </BaseButton>
       </EmptyState>
 
-      <ul v-else ref="listRoot" class="divide-y divide-slate-200 dark:divide-slate-800">
+      <ul v-else ref="listRoot" class="divide-y divide-line">
         <li
           v-for="item in items"
           :key="item.id"
           data-flip-item
-          class="group flex items-start gap-4 px-5 py-4 transition hover:bg-slate-50 dark:hover:bg-slate-800/40"
+          class="group flex items-start gap-4 px-5 py-4 transition hover:bg-raised"
         >
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2">
               <p class="truncate font-medium">{{ item.title }}</p>
               <BaseBadge :status="item.status" />
-              <span
-                v-if="item.data?.priority === 'high'"
-                class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/15 dark:text-red-400"
-              >
+              <span v-if="item.data?.priority === 'high'" class="chip border-brick text-brick">
                 Priorité haute
               </span>
             </div>
 
-            <p v-if="item.description" class="mt-1 line-clamp-2 text-sm text-slate-500">
+            <p v-if="item.description" class="mt-1 line-clamp-2 text-sm text-ink-2">
               {{ item.description }}
             </p>
 
-            <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
+            <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-3">
               <span class="inline-flex items-center gap-1">
                 <AppIcon name="clock" :size="13" />
                 Modifié {{ formatRelative(item.updated_at) }}
@@ -453,7 +448,7 @@ onBeforeUnmount(() => {
           <div class="flex shrink-0 items-center gap-1">
             <button
               type="button"
-              class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              class="p-2 text-ink-3 transition hover:bg-raised hover:text-ink"
               :aria-label="`Modifier ${item.title}`"
               @click="openEdit(item)"
             >
@@ -461,7 +456,7 @@ onBeforeUnmount(() => {
             </button>
             <button
               type="button"
-              class="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+              class="p-2 text-ink-3 transition hover:bg-brick-bg hover:text-brick"
               :aria-label="`Supprimer ${item.title}`"
               @click="askDelete(item)"
             >
@@ -474,9 +469,9 @@ onBeforeUnmount(() => {
       <!-- Pagination -->
       <div
         v-if="meta.total_pages > 1"
-        class="flex items-center justify-between border-t border-slate-200 px-5 py-3 dark:border-slate-800"
+        class="flex items-center justify-between border-t border-line px-5 py-3"
       >
-        <p class="text-sm text-slate-500">
+        <p class="text-sm text-ink-2">
           Page {{ meta.page }} sur {{ meta.total_pages }} · {{ meta.total }} élément(s)
         </p>
 

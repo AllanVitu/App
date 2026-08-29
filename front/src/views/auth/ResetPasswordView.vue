@@ -62,12 +62,12 @@ async function submit() {
     <!-- Lien absent ou tronqué -->
     <template v-if="!token">
       <div
-        class="mb-6 flex size-12 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400"
+        class="mb-6 flex size-12 items-center justify-center border border-brick bg-brick-bg text-brick"
       >
         <AppIcon name="alert" :size="24" />
       </div>
-      <h1 class="text-2xl font-bold tracking-tight">Lien incomplet</h1>
-      <p class="mt-3 text-sm text-slate-500">
+      <h1 class="text-xl font-bold">Lien incomplet</h1>
+      <p class="mt-3 text-sm text-ink-2">
         Ce lien de réinitialisation est invalide. Demandez-en un nouveau.
       </p>
       <BaseButton :to="{ name: 'forgot-password' }" block class="mt-8">
@@ -78,25 +78,25 @@ async function submit() {
     <!-- Succès -->
     <template v-else-if="done">
       <SuccessBurst class="mb-6 mx-0!" />
-      <h1 class="text-2xl font-bold tracking-tight">Mot de passe modifié</h1>
-      <p class="mt-3 text-sm leading-relaxed text-slate-500">
-        Toutes les sessions ouvertes ont été déconnectées par sécurité.
-        Connectez-vous avec votre nouveau mot de passe.
+      <h1 class="text-xl font-bold">Mot de passe modifié</h1>
+      <p class="mt-3 text-sm leading-relaxed text-ink-2">
+        Toutes les sessions ouvertes ont été déconnectées par sécurité. Connectez-vous avec votre
+        nouveau mot de passe.
       </p>
-      <BaseButton :to="{ name: 'login' }" block size="lg" class="mt-8">
-        Se connecter
-      </BaseButton>
+      <BaseButton :to="{ name: 'login' }" block size="lg" class="mt-8"> Se connecter </BaseButton>
     </template>
 
     <!-- Formulaire -->
     <template v-else>
-      <h1 class="text-2xl font-bold tracking-tight">Nouveau mot de passe</h1>
-      <p class="mt-1.5 text-sm text-slate-500">Choisissez un mot de passe que vous n'utilisez pas ailleurs.</p>
+      <h1 class="text-xl font-bold">Nouveau mot de passe</h1>
+      <p class="mt-1.5 text-sm text-ink-2">
+        Choisissez un mot de passe que vous n'utilisez pas ailleurs.
+      </p>
 
       <form class="mt-8 space-y-4" novalidate @submit.prevent="submit">
         <div
           v-if="globalError"
-          class="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
+          class="flex items-start gap-2.5 border border-line border-l-2 border-l-brick bg-brick-bg px-3.5 py-2.5 text-[0.78rem] text-ink"
           role="alert"
         >
           <AppIcon name="alert" :size="18" class="mt-0.5 shrink-0" />

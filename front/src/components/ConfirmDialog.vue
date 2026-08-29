@@ -16,7 +16,7 @@ const emit = defineEmits(['confirm', 'close'])
 
 <template>
   <BaseModal :open="open" :title="title" size="sm" @close="emit('close')">
-    <p class="text-sm text-slate-600 dark:text-slate-400">{{ message }}</p>
+    <p class="text-[0.82rem] leading-relaxed text-ink-2">{{ message }}</p>
 
     <!-- Contenu additionnel : saisie de confirmation, avertissement... -->
     <div v-if="$slots.default" class="mt-4">

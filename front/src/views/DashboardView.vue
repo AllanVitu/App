@@ -9,7 +9,7 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 
 import { gsap } from '@/animations/gsap'
 import AppIcon from '@/components/AppIcon.vue'
-import ShaderBackground from '@/components/ShaderBackground.vue'
+import TechnicalDiagram from '@/components/TechnicalDiagram.vue'
 import BaseBadge from '@/components/ui/BaseBadge.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -33,10 +33,34 @@ const cards = computed(() => {
   if (!stats) return []
 
   return [
-    { key: 'total', label: 'Éléments', value: stats.total, icon: 'inbox', tone: 'text-brand-600 bg-brand-50 dark:bg-brand-500/10 dark:text-brand-400' },
-    { key: 'active', label: 'Actifs', value: stats.active, icon: 'check', tone: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400' },
-    { key: 'draft', label: 'Brouillons', value: stats.draft, icon: 'pencil', tone: 'text-slate-600 bg-slate-100 dark:bg-slate-800 dark:text-slate-300' },
-    { key: 'due_soon', label: 'Échéances 7 j', value: stats.due_soon, icon: 'clock', tone: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400' },
+    {
+      key: 'total',
+      label: 'Éléments',
+      value: stats.total,
+      icon: 'inbox',
+      tone: 'text-ink bg-raised',
+    },
+    {
+      key: 'active',
+      label: 'Actifs',
+      value: stats.active,
+      icon: 'check',
+      tone: 'text-moss bg-moss-bg',
+    },
+    {
+      key: 'draft',
+      label: 'Brouillons',
+      value: stats.draft,
+      icon: 'pencil',
+      tone: 'text-ink-2 bg-raised',
+    },
+    {
+      key: 'due_soon',
+      label: 'Échéances 7 j',
+      value: stats.due_soon,
+      icon: 'clock',
+      tone: 'text-ochre bg-ochre-bg',
+    },
   ]
 })
 
@@ -117,35 +141,27 @@ onMounted(async () => {
 
 <template>
   <div ref="root" class="space-y-8">
-    <!-- Bandeau d'accueil -->
-    <div class="relative overflow-hidden rounded-xl bg-brand-900 px-6 py-8 text-white sm:px-8">
-      <ShaderBackground
-        color1="#207bd6"
-        color2="#910aff"
-        color3="#af38ff"
-        :brightness="1.35"
-        :u-speed="0.22"
-        :u-density="0.7"
-        :u-frequency="5.5"
-        :u-amplitude="7"
-        :u-strength="0.35"
-        :rotation-z="140"
-        :camera-zoom="9"
-        :c-distance="1.5"
-        grain="on"
-      />
-      <div class="pointer-events-none absolute inset-0 bg-slate-950/35" />
-
-      <div class="relative">
-        <h2 class="text-2xl font-bold tracking-tight">
-          Bonjour <span data-anim="greeting">{{ firstName }}</span> 👋
+    <!-- Accueil : l'invite de commande donne le ton, le diagramme occupe le
+         vide à droite sans réclamer l'attention. -->
+    <div class="flex items-center justify-between gap-8">
+      <div class="min-w-0 max-w-lg">
+        <p class="label-caps">session ouverte</p>
+        <h2 class="mt-1.5 text-xl font-bold">
+          <span class="text-ink-3">&gt;</span> bonjour
+          <span data-anim="greeting">{{ firstName }}</span
+          ><span class="caret" aria-hidden="true" />
         </h2>
-        <p class="mt-1 text-sm text-brand-50/90">Voici l'état de votre espace de travail.</p>
+        <p class="mt-1.5 text-[0.82rem] text-ink-2">Voici l'état de votre espace de travail.</p>
+      </div>
+
+      <!-- Décoratif : masqué sous md, où la largeur doit aller au contenu. -->
+      <div class="hidden size-32 shrink-0 opacity-80 md:block lg:size-40" aria-hidden="true">
+        <TechnicalDiagram :satellites="5" :speed="0.7" />
       </div>
     </div>
 
     <div v-if="loading" class="flex justify-center py-20">
-      <BaseSpinner class="size-8 text-brand-600" />
+      <BaseSpinner class="size-8 text-ink" />
     </div>
 
     <template v-else-if="overview">
@@ -153,12 +169,14 @@ onMounted(async () => {
       <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div v-for="card in cards" :key="card.key" data-anim="stat" class="card p-5">
           <div class="flex items-center justify-between">
-            <p class="text-sm font-medium text-slate-500">{{ card.label }}</p>
-            <div class="flex size-9 items-center justify-center rounded-lg" :class="card.tone">
+            <p class="text-sm font-medium text-ink-2">{{ card.label }}</p>
+            <div class="flex size-9 items-center justify-center" :class="card.tone">
               <AppIcon :name="card.icon" :size="18" />
             </div>
           </div>
-          <p :data-count="card.value" class="mt-3 text-3xl font-bold tabular-nums">{{ card.value }}</p>
+          <p :data-count="card.value" class="mt-3 text-3xl font-bold tabular-nums">
+            {{ card.value }}
+          </p>
         </div>
       </div>
 
@@ -173,24 +191,22 @@ onMounted(async () => {
               :key="module.id"
               :to="{ name: 'module', params: { slug: module.slug } }"
               data-anim="module-card"
-              class="card group p-5 transition hover:border-brand-300 hover:shadow-md dark:hover:border-brand-500/50"
+              class="card group p-5 transition hover:border-ink"
             >
               <div class="flex items-start justify-between">
-                <div
-                  class="flex size-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400"
-                >
+                <div class="flex size-10 items-center justify-center bg-raised text-ink">
                   <AppIcon :name="module.icon" />
                 </div>
                 <AppIcon
                   name="arrow-right"
                   :size="18"
-                  class="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500"
+                  class="text-ink-3 transition group-hover:translate-x-0.5 group-hover:text-ink-2"
                 />
               </div>
 
               <p class="mt-4 font-semibold">{{ module.name }}</p>
-              <p class="mt-1 line-clamp-2 text-sm text-slate-500">{{ module.description }}</p>
-              <p class="mt-3 text-xs font-medium text-slate-400">
+              <p class="mt-1 line-clamp-2 text-sm text-ink-2">{{ module.description }}</p>
+              <p class="mt-3 text-xs font-medium text-ink-3">
                 {{ module.items_count }} élément{{ module.items_count > 1 ? 's' : '' }}
               </p>
             </RouterLink>
@@ -208,15 +224,15 @@ onMounted(async () => {
               description="Les éléments que vous créerez apparaîtront ici."
             />
 
-            <ul v-else class="divide-y divide-slate-200 dark:divide-slate-800">
+            <ul v-else class="divide-y divide-line">
               <li v-for="item in overview.recent" :key="item.id" data-anim="recent">
                 <RouterLink
                   :to="{ name: 'module', params: { slug: item.module_slug } }"
-                  class="flex items-start gap-3 px-4 py-3 transition hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                  class="flex items-start gap-3 px-4 py-3 transition hover:bg-raised"
                 >
                   <div class="min-w-0 flex-1">
                     <p class="truncate text-sm font-medium">{{ item.title }}</p>
-                    <p class="mt-0.5 text-xs text-slate-500">
+                    <p class="mt-0.5 text-xs text-ink-2">
                       {{ item.module_name }} · {{ formatRelative(item.updated_at) }}
                     </p>
                   </div>

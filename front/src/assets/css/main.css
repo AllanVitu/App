@@ -7,27 +7,91 @@
 --------------------------------------------------------------------------- */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ---------------------------------------------------------------------------
-   Jetons de design — une seule source de vérité pour la palette et les rayons.
-   Modifier « brand » ici suffit à recolorer toute l'application.
---------------------------------------------------------------------------- */
-@theme {
-  --color-brand-50: #eef4ff;
-  --color-brand-100: #dae4ff;
-  --color-brand-200: #bdcfff;
-  --color-brand-300: #90b0ff;
-  --color-brand-400: #5b85fd;
-  --color-brand-500: #375ef7;
-  --color-brand-600: #243dec;
-  --color-brand-700: #1c2dd8;
-  --color-brand-800: #1d28af;
-  --color-brand-900: #1d288a;
+/* ===========================================================================
+   Direction visuelle : poste de travail
+   ---------------------------------------------------------------------------
+   Une seule famille typographique (Source Code Pro), un fond papier chaud,
+   des panneaux délimités par des filets et des angles vifs. La hiérarchie
+   passe par la graisse et l'échelle, pas par la couleur — la couleur est
+   réservée au sens (statut d'un élément, danger).
 
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+   Les valeurs vivent dans des variables « --c-* » redéfinies par thème ;
+   @theme les expose ensuite à Tailwind, ce qui rend « bg-panel », « text-ink »
+   ou « border-line » automatiquement sensibles au thème.
+=========================================================================== */
+
+:root {
+  /* Surfaces */
+  --c-paper: #eceae4; /* fond général */
+  --c-panel: #f6f5f1; /* panneaux, cartes */
+  --c-raised: #ffffff; /* champs de saisie, survol */
+
+  /* Encre */
+  --c-ink: #0a0a0a;
+  --c-ink-2: #4a4844; /* texte secondaire */
+  --c-ink-3: #8a8781; /* libellés, métadonnées */
+
+  /* Filets */
+  --c-line: #cfccc3;
+  --c-line-2: #b3afa4; /* filet appuyé */
+
+  /* Sémantique — teintes terreuses, lisibles sur papier sans crier */
+  --c-moss: #3f6b3f; /* actif, succès */
+  --c-moss-bg: #e4ebe2;
+  --c-ochre: #8a6522; /* archivé, attention */
+  --c-ochre-bg: #f2eada;
+  --c-brick: #8f3a2a; /* danger, refus */
+  --c-brick-bg: #f6e5e0;
+}
+
+/* Thème sombre.
+   Pas de bloc @media ici, volontairement : index.html résout la préférence
+   système AVANT le premier rendu et pose la classe « dark », et le store la
+   remet à jour quand le système change. La classe est donc la seule source
+   de vérité — ajouter une requête média créerait un second avis, qui
+   contredirait le choix explicite « clair » d'un utilisateur sous système
+   sombre. */
+.dark {
+  --c-paper: #121110;
+  --c-panel: #1a1917;
+  --c-raised: #232220;
+  --c-ink: #eae7df;
+  --c-ink-2: #a8a399;
+  --c-ink-3: #726d64;
+  --c-line: #35332e;
+  --c-line-2: #4b483f;
+  --c-moss: #8fb98f;
+  --c-moss-bg: #1c2a1c;
+  --c-ochre: #cda45f;
+  --c-ochre-bg: #2c2415;
+  --c-brick: #d18570;
+  --c-brick-bg: #2f1c17;
+}
+
+@theme {
+  --color-paper: var(--c-paper);
+  --color-panel: var(--c-panel);
+  --color-raised: var(--c-raised);
+  --color-ink: var(--c-ink);
+  --color-ink-2: var(--c-ink-2);
+  --color-ink-3: var(--c-ink-3);
+  --color-line: var(--c-line);
+  --color-line-2: var(--c-line-2);
+
+  --color-moss: var(--c-moss);
+  --color-moss-bg: var(--c-moss-bg);
+  --color-ochre: var(--c-ochre);
+  --color-ochre-bg: var(--c-ochre-bg);
+  --color-brick: var(--c-brick);
+  --color-brick-bg: var(--c-brick-bg);
+
+  /* Une seule famille : la personnalité de l'interface tient dans ce choix. */
+  --font-sans: 'Source Code Pro', ui-monospace, 'Cascadia Code', Consolas, monospace;
+  --font-mono: 'Source Code Pro', ui-monospace, 'Cascadia Code', Consolas, monospace;
 }
 
 /* ---------------------------------------------------------------------------
-   Styles de base
+   Base
 --------------------------------------------------------------------------- */
 @layer base {
   html {
@@ -35,42 +99,102 @@
   }
 
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
-    @apply dark:bg-slate-950 dark:text-slate-100;
+    background: var(--c-paper);
+    color: var(--c-ink);
+    font-family: 'Source Code Pro', ui-monospace, 'Cascadia Code', Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
   }
 
-  /* Anneau de focus visible au clavier uniquement : indispensable à
-     l'accessibilité, sans gêner la souris. */
+  /* Le monospace est dense : les titres respirent par l'interlettrage
+     négatif plutôt que par une seconde famille. */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  /* Anneau de focus net, sans arrondi : cohérent avec le reste. */
   :focus-visible {
-    @apply outline-none ring-2 ring-brand-500 ring-offset-2;
-    @apply dark:ring-offset-slate-950;
+    outline: 2px solid var(--c-ink);
+    outline-offset: 2px;
   }
 
   ::selection {
-    @apply bg-brand-500/25;
+    background: var(--c-ink);
+    color: var(--c-paper);
+  }
+
+  /* Champs natifs : la date et les listes déroulantes doivent suivre le thème. */
+  select,
+  input,
+  textarea,
+  button {
+    font-family: inherit;
+    font-size: inherit;
+  }
+
+  input[type='date']::-webkit-calendar-picker-indicator {
+    filter: var(--picker-filter, none);
+  }
+
+  .dark input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(1) opacity(0.6);
   }
 }
 
 /* ---------------------------------------------------------------------------
-   Composants réutilisables
+   Composants
 --------------------------------------------------------------------------- */
 @layer components {
-  .card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
-    @apply dark:border-slate-800 dark:bg-slate-900;
+  /* Panneau : un rectangle, un filet. Aucune ombre — le relief viendrait
+     contredire l'idée de surface imprimée. */
+  .panel {
+    @apply border border-line bg-panel;
   }
 
-  .input-field {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900
-           placeholder:text-slate-400 transition
-           focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 focus:outline-none
-           disabled:cursor-not-allowed disabled:bg-slate-100;
-    @apply dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100
-           dark:placeholder:text-slate-500 dark:disabled:bg-slate-900;
+  .card {
+    @apply border border-line bg-panel;
+  }
+
+  /* Libellé de section, en petites capitales espacées. */
+  .label-caps {
+    @apply text-[0.68rem] uppercase tracking-[0.16em] text-ink-3;
   }
 
   .label-field {
-    @apply mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300;
+    @apply mb-1.5 block text-[0.72rem] uppercase tracking-[0.12em] text-ink-3;
+  }
+
+  .input-field {
+    @apply w-full border border-line bg-raised px-3 py-2 text-sm text-ink
+           placeholder:text-ink-3 transition-colors
+           focus:border-ink focus:outline-none
+           disabled:cursor-not-allowed disabled:bg-panel disabled:text-ink-3;
+  }
+
+  /* Puce de statut : rectangle fin, jamais arrondi. */
+  .chip {
+    @apply inline-flex items-center gap-1.5 border px-2 py-0.5 text-[0.7rem] tracking-wide;
+  }
+
+  /* Le curseur clignotant reprend le signe distinctif d'un terminal. */
+  .caret::after {
+    content: '_';
+    animation: caret 1.1s steps(1) infinite;
+  }
+
+  @keyframes caret {
+    0%,
+    50% {
+      opacity: 1;
+    }
+    50.01%,
+    100% {
+      opacity: 0;
+    }
   }
 }
 
@@ -79,7 +203,9 @@
 --------------------------------------------------------------------------- */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
 }
 
 .fade-enter-from {
@@ -91,10 +217,13 @@
   opacity: 0;
 }
 
-/* Respecte le réglage système « animations réduites ». */
 @media (prefers-reduced-motion: reduce) {
   .fade-enter-active,
   .fade-leave-active {
     transition: none;
+  }
+
+  .caret::after {
+    animation: none;
   }
 }

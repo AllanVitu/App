@@ -35,25 +35,37 @@ final class Router
         return $this->add('GET', $path, $handler, $middleware);
     }
 
-    /** @param array{0: class-string, 1: string} $handler @param list<class-string> $middleware */
+    /**
+     * @param array{0: class-string, 1: string} $handler
+     * @param list<class-string>                $middleware
+     */
     public function post(string $path, array $handler, array $middleware = []): self
     {
         return $this->add('POST', $path, $handler, $middleware);
     }
 
-    /** @param array{0: class-string, 1: string} $handler @param list<class-string> $middleware */
+    /**
+     * @param array{0: class-string, 1: string} $handler
+     * @param list<class-string>                $middleware
+     */
     public function put(string $path, array $handler, array $middleware = []): self
     {
         return $this->add('PUT', $path, $handler, $middleware);
     }
 
-    /** @param array{0: class-string, 1: string} $handler @param list<class-string> $middleware */
+    /**
+     * @param array{0: class-string, 1: string} $handler
+     * @param list<class-string>                $middleware
+     */
     public function patch(string $path, array $handler, array $middleware = []): self
     {
         return $this->add('PATCH', $path, $handler, $middleware);
     }
 
-    /** @param array{0: class-string, 1: string} $handler @param list<class-string> $middleware */
+    /**
+     * @param array{0: class-string, 1: string} $handler
+     * @param list<class-string>                $middleware
+     */
     public function delete(string $path, array $handler, array $middleware = []): self
     {
         return $this->add('DELETE', $path, $handler, $middleware);

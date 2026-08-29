@@ -12,13 +12,15 @@ defineProps({
 <template>
   <div class="flex flex-col items-center justify-center px-6 py-14 text-center">
     <div
-      class="mb-4 flex size-12 items-center justify-center rounded-full bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
+      class="mb-4 flex size-11 items-center justify-center border border-line bg-raised text-ink-3"
     >
       <AppIcon :name="icon" :size="24" />
     </div>
 
-    <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ title }}</h3>
-    <p v-if="description" class="mt-1 max-w-sm text-sm text-slate-500">{{ description }}</p>
+    <h3 class="text-[0.85rem] font-semibold">{{ title }}</h3>
+    <p v-if="description" class="mt-1.5 max-w-sm text-[0.8rem] leading-relaxed text-ink-2">
+      {{ description }}
+    </p>
 
     <div v-if="$slots.default" class="mt-5">
       <slot />

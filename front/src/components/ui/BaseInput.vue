@@ -36,7 +36,7 @@ const describedBy = computed(() => {
   <div>
     <label v-if="label" :for="id" class="label-field">
       {{ label }}
-      <span v-if="required" class="text-red-500" aria-hidden="true">*</span>
+      <span v-if="required" class="text-brick" aria-hidden="true">*</span>
     </label>
 
     <component
@@ -52,14 +52,14 @@ const describedBy = computed(() => {
       :aria-invalid="Boolean(error)"
       :aria-describedby="describedBy"
       class="input-field"
-      :class="error ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30' : ''"
+      :class="error ? 'border-brick focus:border-brick' : ''"
       @input="$emit('update:modelValue', $event.target.value)"
     />
 
-    <p v-if="error" :id="`${id}-error`" class="mt-1.5 text-xs text-red-600 dark:text-red-400">
+    <p v-if="error" :id="`${id}-error`" class="mt-1.5 text-[0.72rem] text-brick">
       {{ error }}
     </p>
-    <p v-else-if="hint" :id="`${id}-hint`" class="mt-1.5 text-xs text-slate-500">
+    <p v-else-if="hint" :id="`${id}-hint`" class="mt-1.5 text-[0.72rem] text-ink-3">
       {{ hint }}
     </p>
   </div>

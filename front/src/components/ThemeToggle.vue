@@ -72,19 +72,19 @@ onMounted(() => {
 <template>
   <button
     type="button"
-    class="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800"
+    class="p-1.5 text-ink-2 transition-colors hover:text-ink"
     :aria-label="isDark ? 'Passer au thème clair' : 'Passer au thème sombre'"
     :aria-pressed="isDark"
     @click="toggle"
   >
     <svg
       ref="svg"
-      width="20"
-      height="20"
+      width="17"
+      height="17"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      stroke-width="1.75"
+      stroke-width="1.5"
       stroke-linecap="round"
       aria-hidden="true"
     >

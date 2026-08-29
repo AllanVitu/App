@@ -128,7 +128,7 @@ function submit() {
               {{ status.label }}
             </option>
           </select>
-          <p v-if="errors.status" class="mt-1.5 text-xs text-red-600">{{ errors.status }}</p>
+          <p v-if="errors.status" class="mt-1.5 text-[0.72rem] text-brick">{{ errors.status }}</p>
         </div>
 
         <div>
@@ -141,12 +141,7 @@ function submit() {
         </div>
       </div>
 
-      <BaseInput
-        v-model="form.due_date"
-        label="Échéance"
-        type="date"
-        :error="errors.due_date"
-      />
+      <BaseInput v-model="form.due_date" label="Échéance" type="date" :error="errors.due_date" />
     </form>
 
     <template #footer>

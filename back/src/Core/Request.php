@@ -24,6 +24,12 @@ final class Request
     /** Vrai si le corps annonçait du JSON mais n'a pas pu être décodé. */
     private bool $bodyIsMalformed = false;
 
+    /**
+     * @param array<string, string> $query
+     * @param array<string, string> $headers
+     * @param array<string, string> $cookies
+     * @param array<string, mixed>  $body
+     */
     private function __construct(
         public readonly string $method,
         public readonly string $path,
@@ -59,6 +65,37 @@ final class Request
         $request->bodyIsMalformed = $body['malformed'];
 
         return $request;
+    }
+
+    /**
+     * Construit une requête sans passer par les superglobales.
+     *
+     * Seconde fabrique volontaire : `capture()` lit l'environnement PHP-FPM,
+     * `create()` prend ses valeurs en argument. C'est ce qui rend l'API
+     * testable de bout en bout — sans elle, il faudrait simuler `php://input`,
+     * impossible en ligne de commande.
+     *
+     * @param array<string, mixed>  $body
+     * @param array<string, string> $query
+     * @param array<string, string> $headers
+     * @param array<string, string> $cookies
+     */
+    public static function create(
+        string $method,
+        string $path,
+        array $body = [],
+        array $query = [],
+        array $headers = [],
+        array $cookies = [],
+    ): self {
+        return new self(
+            method:  strtoupper($method),
+            path:    '/' . trim($path, '/'),
+            query:   $query,
+            headers: array_change_key_case($headers, CASE_LOWER),
+            cookies: $cookies,
+            body:    $body,
+        );
     }
 
     /**

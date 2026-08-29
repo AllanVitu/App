@@ -94,7 +94,7 @@ final class Jwt
         $now = time();
 
         if (isset($payload['nbf']) && $now + self::LEEWAY_SECONDS < (int) $payload['nbf']) {
-            throw HttpException::unauthorized("Jeton pas encore valide.");
+            throw HttpException::unauthorized('Jeton pas encore valide.');
         }
 
         if (!isset($payload['exp']) || $now - self::LEEWAY_SECONDS >= (int) $payload['exp']) {

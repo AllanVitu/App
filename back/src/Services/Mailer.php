@@ -26,8 +26,6 @@ final class Mailer
     private $socket = null;
 
     /**
-     * @param array<string, string> $variables Remplacements {{clé}} dans le gabarit
-     *
      * @throws RuntimeException si le serveur SMTP refuse le message
      */
     public function send(string $toEmail, string $toName, string $subject, string $html, string $text): void

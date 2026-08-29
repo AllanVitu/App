@@ -52,9 +52,17 @@ const TIMEZONES = [
 ]
 
 const NOTIFICATIONS = [
-  { key: 'email', label: 'Notifications par e-mail', hint: 'Alertes sur les échéances et les modifications.' },
+  {
+    key: 'email',
+    label: 'Notifications par e-mail',
+    hint: 'Alertes sur les échéances et les modifications.',
+  },
   { key: 'push', label: 'Notifications push', hint: 'Messages instantanés dans le navigateur.' },
-  { key: 'weekly_digest', label: 'Résumé hebdomadaire', hint: 'Un récapitulatif de votre activité chaque lundi.' },
+  {
+    key: 'weekly_digest',
+    label: 'Résumé hebdomadaire',
+    hint: 'Un récapitulatif de votre activité chaque lundi.',
+  },
 ]
 
 function hydrate(settings) {
@@ -112,14 +120,14 @@ onMounted(async () => {
 <template>
   <div class="mx-auto max-w-3xl">
     <div v-if="loading" class="flex justify-center py-20">
-      <BaseSpinner class="size-8 text-brand-600" />
+      <BaseSpinner class="size-8 text-ink" />
     </div>
 
     <form v-else class="space-y-6" @submit.prevent="save">
       <!-- Apparence -->
       <section class="card p-6">
         <h3 class="text-base font-semibold">Apparence</h3>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-2">
           « Système » suit le réglage clair/sombre de votre appareil.
         </p>
 
@@ -128,11 +136,11 @@ onMounted(async () => {
             v-for="option in THEMES"
             :key="option.value"
             type="button"
-            class="flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-4 transition"
+            class="flex flex-col items-center gap-2 border-2 px-4 py-4 transition"
             :class="
               form.theme === option.value
-                ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
-                : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-400'
+                ? 'border-ink bg-raised text-ink '
+                : 'border-line text-ink-2 hover:border-line '
             "
             :aria-pressed="form.theme === option.value"
             @click="previewTheme(option.value)"
@@ -141,7 +149,7 @@ onMounted(async () => {
             <span class="text-sm font-medium">{{ option.label }}</span>
           </button>
         </div>
-        <p v-if="errors.theme" class="mt-2 text-xs text-red-600">{{ errors.theme }}</p>
+        <p v-if="errors.theme" class="mt-2 text-xs text-brick">{{ errors.theme }}</p>
       </section>
 
       <!-- Régionalisation -->
@@ -156,7 +164,7 @@ onMounted(async () => {
                 {{ lang.label }}
               </option>
             </select>
-            <p v-if="errors.language" class="mt-1.5 text-xs text-red-600">{{ errors.language }}</p>
+            <p v-if="errors.language" class="mt-1.5 text-xs text-brick">{{ errors.language }}</p>
           </div>
 
           <div>
@@ -164,7 +172,7 @@ onMounted(async () => {
             <select id="timezone" v-model="form.timezone" class="input-field">
               <option v-for="zone in TIMEZONES" :key="zone" :value="zone">{{ zone }}</option>
             </select>
-            <p v-if="errors.timezone" class="mt-1.5 text-xs text-red-600">{{ errors.timezone }}</p>
+            <p v-if="errors.timezone" class="mt-1.5 text-xs text-brick">{{ errors.timezone }}</p>
           </div>
         </div>
       </section>
@@ -173,7 +181,7 @@ onMounted(async () => {
       <section class="card p-6">
         <h3 class="text-base font-semibold">Notifications</h3>
 
-        <div class="mt-4 divide-y divide-slate-200 dark:divide-slate-800">
+        <div class="mt-4 divide-y divide-line">
           <label
             v-for="option in NOTIFICATIONS"
             :key="option.key"
@@ -181,7 +189,7 @@ onMounted(async () => {
           >
             <span class="min-w-0">
               <span class="block text-sm font-medium">{{ option.label }}</span>
-              <span class="mt-0.5 block text-sm text-slate-500">{{ option.hint }}</span>
+              <span class="mt-0.5 block text-sm text-ink-2">{{ option.hint }}</span>
             </span>
 
             <!-- Interrupteur : la case native reste présente (accessibilité
@@ -193,10 +201,10 @@ onMounted(async () => {
                 class="peer sr-only"
               />
               <span
-                class="block h-6 w-11 rounded-full bg-slate-300 transition peer-checked:bg-brand-600 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500 peer-focus-visible:ring-offset-2 dark:bg-slate-700 dark:peer-focus-visible:ring-offset-slate-900"
+                class="block h-5 w-9 border border-line bg-raised transition-colors peer-checked:border-ink peer-checked:bg-ink peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink"
               />
               <span
-                class="pointer-events-none absolute left-0.5 top-0.5 size-5 rounded-full bg-white shadow transition peer-checked:translate-x-5"
+                class="pointer-events-none absolute left-[3px] top-[3px] size-3.5 bg-ink transition-transform peer-checked:translate-x-4 peer-checked:bg-paper"
               />
             </span>
           </label>

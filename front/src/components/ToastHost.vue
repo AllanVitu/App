@@ -43,19 +43,15 @@ function onLeave(element, done) {
   })
 }
 
+/**
+ * Le message garde le fond papier ; seule une bande de 2 px sur son flanc
+ * gauche porte la couleur. Un aplat teinté plein écran jurerait avec la
+ * sobriété du reste.
+ */
 const STYLES = {
-  success: {
-    icon: 'check',
-    classes: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300',
-  },
-  error: {
-    icon: 'alert',
-    classes: 'border-red-200 bg-red-50 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300',
-  },
-  info: {
-    icon: 'info',
-    classes: 'border-slate-200 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200',
-  },
+  success: { icon: 'check', classes: 'border-l-moss text-ink', mark: 'text-moss' },
+  error: { icon: 'alert', classes: 'border-l-brick text-ink', mark: 'text-brick' },
+  info: { icon: 'info', classes: 'border-l-ink-3 text-ink', mark: 'text-ink-3' },
 }
 </script>
 
@@ -70,19 +66,24 @@ const STYLES = {
       <div
         v-for="toast in toasts"
         :key="toast.id"
-        class="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border px-4 py-3 shadow-lg"
+        class="pointer-events-auto flex w-full max-w-sm items-start gap-2.5 border border-line border-l-2 bg-panel px-3.5 py-2.5"
         :class="(STYLES[toast.type] ?? STYLES.info).classes"
       >
-        <AppIcon :name="(STYLES[toast.type] ?? STYLES.info).icon" :size="18" class="mt-0.5 shrink-0" />
-        <p class="flex-1 text-sm">{{ toast.message }}</p>
+        <AppIcon
+          :name="(STYLES[toast.type] ?? STYLES.info).icon"
+          :size="16"
+          class="mt-0.5 shrink-0"
+          :class="(STYLES[toast.type] ?? STYLES.info).mark"
+        />
+        <p class="flex-1 text-[0.8rem] leading-snug">{{ toast.message }}</p>
 
         <button
           type="button"
-          class="shrink-0 opacity-60 transition hover:opacity-100"
+          class="shrink-0 text-ink-3 transition-colors hover:text-ink"
           aria-label="Fermer la notification"
           @click="ui.dismiss(toast.id)"
         >
-          <AppIcon name="close" :size="16" />
+          <AppIcon name="close" :size="14" />
         </button>
       </div>
     </TransitionGroup>

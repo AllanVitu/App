@@ -2,20 +2,30 @@
 .env
 .env.local
 .env.*.local
+.env.production
 
 # --- Back-end (PHP) --------------------------------------------------------
 back/vendor/
-back/composer.lock
+back/.phpunit.cache/
+back/.php-cs-fixer.cache
 back/storage/logs/*.log
+# composer.lock EST versionné : c'est lui qui rend les installations
+# reproductibles entre les postes et l'intégration continue.
 
 # --- Front-end (Node) ------------------------------------------------------
 # Sans ancrage : couvre aussi un node_modules créé par erreur à la racine.
 node_modules/
 front/dist/
 front/.vite/
+front/coverage/
 npm-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# --- Parcours de bout en bout ----------------------------------------------
+e2e/.playwright/
+e2e/playwright-report/
+e2e/test-results/
 
 # --- Docker ----------------------------------------------------------------
 docker/**/data/
@@ -26,4 +36,3 @@ docker/**/data/
 !.vscode/extensions.json
 .DS_Store
 Thumbs.db
-.env.production

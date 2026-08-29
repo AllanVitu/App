@@ -41,10 +41,10 @@ async function resend() {
 <template>
   <div
     v-if="auth.user && !auth.user.email_verified_at"
-    class="mb-6 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+    class="mb-6 flex flex-wrap items-center gap-x-3 gap-y-2 border border-line border-l-2 border-l-ochre bg-ochre-bg px-3.5 py-2.5 text-[0.78rem] text-ink"
     role="status"
   >
-    <AppIcon name="mail" :size="18" class="shrink-0" />
+    <AppIcon name="mail" :size="16" class="shrink-0 text-ochre" />
 
     <p class="flex-1">
       Confirmez votre adresse

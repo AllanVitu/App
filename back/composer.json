@@ -9,10 +9,39 @@
         "ext-pdo_pgsql": "*",
         "ext-json": "*"
     },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.64",
+        "phpstan/phpstan": "^2.0",
+        "phpunit/phpunit": "^11.4"
+    },
     "autoload": {
         "psr-4": {
             "App\\": "src/"
         }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test:unit": "phpunit --testsuite unit",
+        "test:integration": "phpunit --testsuite integration",
+        "analyse": "phpstan analyse --memory-limit=512M",
+        "format": "php-cs-fixer fix",
+        "format:check": "php-cs-fixer fix --dry-run --diff",
+        "check": [
+            "@format:check",
+            "@analyse",
+            "@test"
+        ]
+    },
+    "scripts-descriptions": {
+        "test": "Exécute toute la suite de tests",
+        "analyse": "Analyse statique PHPStan",
+        "format": "Applique le formatage PSR-12",
+        "check": "Formatage + analyse + tests : ce que la CI exécute"
     },
     "config": {
         "optimize-autoloader": true,

@@ -51,15 +51,15 @@ onMounted(async () => {
   <div class="text-center">
     <!-- Vérification en cours -->
     <template v-if="state === 'pending'">
-      <BaseSpinner class="mx-auto size-8 text-brand-600" />
-      <p class="mt-4 text-sm text-slate-500">Confirmation de votre adresse…</p>
+      <BaseSpinner class="mx-auto size-8 text-ink" />
+      <p class="mt-4 text-sm text-ink-2">Confirmation de votre adresse…</p>
     </template>
 
     <!-- Confirmée -->
     <template v-else-if="state === 'success'">
       <SuccessBurst burst class="mb-6" />
-      <h1 class="text-2xl font-bold tracking-tight">Adresse confirmée</h1>
-      <p class="mt-3 text-sm text-slate-500">{{ message }}</p>
+      <h1 class="text-xl font-bold">Adresse confirmée</h1>
+      <p class="mt-3 text-sm text-ink-2">{{ message }}</p>
 
       <BaseButton
         :to="auth.isAuthenticated ? { name: 'dashboard' } : { name: 'login' }"
@@ -74,15 +74,13 @@ onMounted(async () => {
     <!-- Échec -->
     <template v-else>
       <div
-        class="mx-auto mb-6 flex size-12 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400"
+        class="mx-auto mb-6 flex size-12 items-center justify-center border border-brick bg-brick-bg text-brick"
       >
         <AppIcon name="alert" :size="24" />
       </div>
-      <h1 class="text-2xl font-bold tracking-tight">Confirmation impossible</h1>
-      <p class="mt-3 text-sm text-slate-500">{{ message }}</p>
-      <p class="mt-2 text-sm text-slate-500">
-        Connectez-vous pour demander l'envoi d'un nouveau lien.
-      </p>
+      <h1 class="text-xl font-bold">Confirmation impossible</h1>
+      <p class="mt-3 text-sm text-ink-2">{{ message }}</p>
+      <p class="mt-2 text-sm text-ink-2">Connectez-vous pour demander l'envoi d'un nouveau lien.</p>
 
       <BaseButton
         :to="auth.isAuthenticated ? { name: 'dashboard' } : { name: 'login' }"

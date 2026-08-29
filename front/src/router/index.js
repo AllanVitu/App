@@ -88,7 +88,7 @@ const routes = [
         path: 'verification-email',
         name: 'verify-email',
         component: () => import('@/views/auth/VerifyEmailView.vue'),
-        meta: { title: 'Confirmation de l\'adresse' },
+        meta: { title: "Confirmation de l'adresse" },
       },
     ],
   },

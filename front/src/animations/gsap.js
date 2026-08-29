@@ -17,8 +17,8 @@ import { gsap } from 'gsap'
 
 // --- Eases -------------------------------------------------------------------
 import { CustomEase } from 'gsap/CustomEase'
-import { CustomBounce } from 'gsap/CustomBounce'   // dépend de CustomEase
-import { CustomWiggle } from 'gsap/CustomWiggle'   // dépend de CustomEase
+import { CustomBounce } from 'gsap/CustomBounce' // dépend de CustomEase
+import { CustomWiggle } from 'gsap/CustomWiggle' // dépend de CustomEase
 import { RoughEase, ExpoScaleEase, SlowMo } from 'gsap/EasePack'
 
 // --- Plugins d'exécution -----------------------------------------------------

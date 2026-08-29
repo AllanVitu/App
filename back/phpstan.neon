@@ -1,0 +1,20 @@
+# ============================================================================
+#  Analyse statique
+#
+#  Niveau 6 : exige que tout soit typé, y compris le contenu des tableaux.
+#  Le code étant déjà annoté (@param array<string, mixed>…), la marche est
+#  basse — et le niveau empêche les annotations de se désynchroniser du code.
+# ============================================================================
+
+parameters:
+    level: 6
+
+    paths:
+        - src
+        - routes
+        - public
+        - tests
+
+    # Le contrôleur frontal et la table de routage s'exécutent hors classe.
+    treatPhpDocTypesAsCertain: false
+

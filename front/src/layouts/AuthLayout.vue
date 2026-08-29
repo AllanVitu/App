@@ -1,20 +1,21 @@
 <script setup>
 /**
- * Layout des pages publiques (connexion, inscription).
+ * Layout des pages publiques (connexion, inscription, mot de passe oublié,
+ * confirmation d'adresse).
  *
- * Deux colonnes sur grand écran : présentation à gauche, formulaire à droite.
- * Le panneau de présentation est masqué sur mobile pour laisser toute la
- * place au formulaire.
+ * Même cadre que l'application authentifiée : deux panneaux séparés par une
+ * gouttière, barre d'état en pied. L'utilisateur reconnaît l'endroit avant
+ * même de s'être connecté.
  */
 import { gsap, SplitText } from '@/animations/gsap'
 import AppIcon from '@/components/AppIcon.vue'
-import ShaderBackground from '@/components/ShaderBackground.vue'
+import TechnicalDiagram from '@/components/TechnicalDiagram.vue'
 import { useGsap } from '@/composables/useGsap'
 
 const highlights = [
-  { icon: 'layout-grid', title: 'Modules métier', text: 'Quatre espaces de travail prêts à l\'emploi.' },
-  { icon: 'shield', title: 'Sécurité', text: 'Sessions JWT et mots de passe chiffrés.' },
-  { icon: 'chart-bar', title: 'Pilotage', text: 'Indicateurs consolidés sur le tableau de bord.' },
+  { icon: 'layout-grid', title: 'modules', text: "Quatre espaces de travail prêts à l'emploi." },
+  { icon: 'shield', title: 'sécurité', text: 'Sessions JWT, mots de passe chiffrés.' },
+  { icon: 'chart-bar', title: 'pilotage', text: "Indicateurs consolidés à l'accueil." },
 ]
 
 /**
@@ -41,84 +42,113 @@ const root = useGsap(() => {
   // fromTo systématiquement : les deux extrémités sont écrites, l'animation
   // ne peut pas déduire un état d'arrivée erroné.
   timeline
-    .fromTo('[data-anim="auth-brand"]', { y: -12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, 0)
-    .fromTo('[data-anim="auth-lead"]', { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, 0.25)
-    .fromTo('[data-anim="auth-item"]', { x: -18, opacity: 0 }, { x: 0, opacity: 1, stagger: 0.08 }, 0.35)
-    .fromTo('[data-anim="auth-footer"]', { opacity: 0 }, { opacity: 1, duration: 0.6 }, 0.6)
+    .fromTo(
+      '[data-anim="auth-brand"]',
+      { y: -12, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.5 },
+      0,
+    )
+    .fromTo(
+      '[data-anim="auth-lead"]',
+      { y: 12, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.5 },
+      0.25,
+    )
+    .fromTo(
+      '[data-anim="auth-item"]',
+      { x: -18, opacity: 0 },
+      { x: 0, opacity: 1, stagger: 0.08 },
+      0.35,
+    )
+    .fromTo('[data-anim="auth-diagram"]', { opacity: 0 }, { opacity: 1, duration: 1.1 }, 0.2)
 })
 </script>
 
 <template>
-  <div ref="root" class="flex min-h-screen">
-    <!-- Panneau de présentation -->
-    <div
-      class="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-brand-900 p-12 text-white lg:flex"
-    >
-      <!-- Dégradé animé (WebGL), assombri pour garder le texte lisible -->
-      <ShaderBackground
-        color1="#207bd6"
-        color2="#910aff"
-        color3="#af38ff"
-        :brightness="1.5"
-        :u-speed="0.3"
-        :u-density="0.8"
-        :u-frequency="5.5"
-        :u-amplitude="7"
-        :u-strength="0.4"
-        :rotation-z="140"
-        :camera-zoom="12.5"
-        :c-distance="1.5"
-        grain="on"
-      />
-      <div class="pointer-events-none absolute inset-0 bg-slate-950/35" />
-
-      <div data-anim="auth-brand" class="relative flex items-center gap-3">
-        <div class="flex size-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
-          <AppIcon name="sparkles" :size="22" />
+  <div ref="root" class="flex h-screen flex-col gap-1.5 bg-paper p-1.5 lg:gap-2 lg:p-2">
+    <div class="flex min-h-0 flex-1 gap-1.5 lg:gap-2">
+      <!-- Panneau de présentation -->
+      <section
+        class="panel relative hidden min-w-0 flex-1 flex-col justify-between p-8 lg:flex xl:p-10"
+      >
+        <div data-anim="auth-brand" class="relative z-10 flex items-baseline gap-2.5">
+          <div class="flex size-8 items-center justify-center border border-line bg-raised">
+            <AppIcon name="sparkles" :size="16" />
+          </div>
+          <div>
+            <p class="text-[0.9rem] font-bold tracking-[0.08em]">SAAS OS</p>
+            <p class="text-[0.68rem] text-ink-3">v1.0.0</p>
+          </div>
         </div>
-        <span class="text-lg font-semibold tracking-tight">SaaS App</span>
-      </div>
 
-      <div class="relative max-w-md">
-        <h2
-          data-anim="auth-heading"
-          class="overflow-hidden text-3xl font-bold leading-tight [text-shadow:0_2px_20px_rgb(2_6_23/0.45)]"
+        <!-- Diagramme : ancré à droite et atténué, pour que le texte garde un
+             champ libre à gauche. Il ne capte jamais le pointeur. -->
+        <div
+          data-anim="auth-diagram"
+          class="pointer-events-none absolute right-[-14%] top-1/2 aspect-square w-[62%] -translate-y-1/2 opacity-45"
         >
-          Pilotez votre activité depuis une interface unique.
-        </h2>
-        <p data-anim="auth-lead" class="mt-4 text-brand-50">
-          Tableau de bord, modules métier et paramétrage — tout est réuni au même endroit.
-        </p>
+          <TechnicalDiagram :satellites="7" />
+        </div>
 
-        <ul class="mt-10 space-y-5">
-          <li v-for="item in highlights" :key="item.title" data-anim="auth-item" class="flex gap-4">
-            <div
-              class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/15 backdrop-blur-sm"
+        <div class="relative z-10 max-w-sm">
+          <h2
+            data-anim="auth-heading"
+            class="overflow-hidden text-[1.75rem] font-bold leading-[1.15] xl:text-[2rem]"
+          >
+            Pilotez votre activité depuis une interface unique.
+          </h2>
+          <p data-anim="auth-lead" class="mt-3 text-[0.82rem] leading-relaxed text-ink-2">
+            Tableau de bord, modules métier et paramétrage — réunis au même endroit.
+          </p>
+
+          <ul class="mt-8 space-y-3.5">
+            <li
+              v-for="item in highlights"
+              :key="item.title"
+              data-anim="auth-item"
+              class="flex gap-3"
             >
-              <AppIcon :name="item.icon" :size="18" />
-            </div>
-            <div>
-              <p class="text-sm font-semibold">{{ item.title }}</p>
-              <p class="text-sm text-brand-50/90">{{ item.text }}</p>
-            </div>
-          </li>
-        </ul>
-      </div>
+              <div
+                class="flex size-7 shrink-0 items-center justify-center border border-line bg-raised text-ink-2"
+              >
+                <AppIcon :name="item.icon" :size="14" />
+              </div>
+              <div class="min-w-0">
+                <p class="label-caps">{{ item.title }}</p>
+                <p class="text-[0.78rem] leading-snug text-ink-2">{{ item.text }}</p>
+              </div>
+            </li>
+          </ul>
+        </div>
 
-      <p data-anim="auth-footer" class="relative text-xs text-brand-100/80">
-        Vue 3 · PHP 8.3 · PostgreSQL 16 · Docker
-      </p>
+        <p class="relative z-10 text-[0.68rem] tracking-wide text-ink-3">
+          vue 3 · php 8.3 · postgresql 16 · docker
+        </p>
+      </section>
+
+      <!-- Formulaire -->
+      <section
+        class="panel flex min-w-0 flex-1 items-center justify-center overflow-y-auto px-5 py-10"
+      >
+        <div class="w-full max-w-sm">
+          <RouterView v-slot="{ Component }">
+            <Transition name="fade" mode="out-in">
+              <component :is="Component" />
+            </Transition>
+          </RouterView>
+        </div>
+      </section>
     </div>
 
-    <!-- Formulaire -->
-    <div class="flex w-full items-center justify-center px-5 py-10 lg:w-1/2">
-      <div class="w-full max-w-sm">
-        <RouterView v-slot="{ Component }">
-          <Transition name="fade" mode="out-in">
-            <component :is="Component" />
-          </Transition>
-        </RouterView>
-      </div>
-    </div>
+    <!-- Barre d'état, sans données de session -->
+    <footer
+      class="panel flex h-9 shrink-0 items-center gap-3 px-3 text-[0.7rem] tracking-wide text-ink-3"
+    >
+      <span class="flex items-center gap-1.5">
+        <span class="size-1.5 bg-ink-3" aria-hidden="true" />
+        non authentifié
+      </span>
+      <span class="ml-auto">v1.0.0</span>
+    </footer>
   </div>
 </template>

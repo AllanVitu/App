@@ -120,17 +120,17 @@ const lastLogin = computed(() => formatDateTime(auth.user?.last_login_at))
         />
         <div
           v-else
-          class="flex size-16 items-center justify-center rounded-full bg-brand-100 text-xl font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
+          class="flex size-16 items-center justify-center rounded-full bg-raised text-xl font-semibold text-ink"
         >
           {{ auth.initials }}
         </div>
 
         <div class="min-w-0">
           <h2 class="truncate text-lg font-semibold">{{ auth.user?.full_name }}</h2>
-          <p class="truncate text-sm text-slate-500">{{ auth.user?.email }}</p>
+          <p class="truncate text-sm text-ink-2">{{ auth.user?.email }}</p>
           <span
             v-if="auth.user?.role === 'admin'"
-            class="mt-1.5 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-400"
+            class="mt-1.5 inline-flex items-center gap-1 rounded-full bg-raised px-2 py-0.5 text-xs font-medium text-ink"
           >
             <AppIcon name="shield" :size="12" />
             Administrateur
@@ -138,15 +138,13 @@ const lastLogin = computed(() => formatDateTime(auth.user?.last_login_at))
         </div>
       </div>
 
-      <dl class="mt-6 grid gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2 dark:border-slate-800">
+      <dl class="mt-6 grid gap-4 border-t border-line pt-5 sm:grid-cols-2">
         <div>
-          <dt class="text-xs font-medium uppercase tracking-wide text-slate-400">Membre depuis</dt>
+          <dt class="text-xs font-medium uppercase tracking-wide text-ink-3">Membre depuis</dt>
           <dd class="mt-1 text-sm">{{ memberSince }}</dd>
         </div>
         <div>
-          <dt class="text-xs font-medium uppercase tracking-wide text-slate-400">
-            Dernière connexion
-          </dt>
+          <dt class="text-xs font-medium uppercase tracking-wide text-ink-3">Dernière connexion</dt>
           <dd class="mt-1 text-sm">{{ lastLogin }}</dd>
         </div>
       </dl>
@@ -155,7 +153,7 @@ const lastLogin = computed(() => formatDateTime(auth.user?.last_login_at))
     <!-- Informations personnelles -->
     <section class="card p-6">
       <h3 class="text-base font-semibold">Informations personnelles</h3>
-      <p class="mt-1 text-sm text-slate-500">
+      <p class="mt-1 text-sm text-ink-2">
         L'adresse e-mail sert d'identifiant de connexion et n'est pas modifiable.
       </p>
 
@@ -168,12 +166,7 @@ const lastLogin = computed(() => formatDateTime(auth.user?.last_login_at))
           :error="profileErrors.full_name"
         />
 
-        <BaseInput
-          :model-value="auth.user?.email"
-          label="Adresse e-mail"
-          type="email"
-          disabled
-        />
+        <BaseInput :model-value="auth.user?.email" label="Adresse e-mail" type="email" disabled />
 
         <BaseInput
           v-model="profileForm.avatar_url"
@@ -192,7 +185,7 @@ const lastLogin = computed(() => formatDateTime(auth.user?.last_login_at))
     <!-- Sécurité -->
     <section class="card p-6">
       <h3 class="text-base font-semibold">Mot de passe</h3>
-      <p class="mt-1 text-sm text-slate-500">
+      <p class="mt-1 text-sm text-ink-2">
         Le changement déconnecte toutes vos sessions, y compris celle-ci.
       </p>
 
@@ -234,9 +227,9 @@ const lastLogin = computed(() => formatDateTime(auth.user?.last_login_at))
     </section>
 
     <!-- Zone sensible -->
-    <section class="rounded-xl border border-red-200 bg-red-50/50 p-6 dark:border-red-500/30 dark:bg-red-500/5">
-      <h3 class="text-base font-semibold text-red-700 dark:text-red-400">Supprimer le compte</h3>
-      <p class="mt-1 text-sm text-red-600/80 dark:text-red-400/80">
+    <section class="border border-brick bg-brick-bg p-6">
+      <h3 class="text-base font-semibold text-brick">Supprimer le compte</h3>
+      <p class="mt-1 text-sm text-brick">
         Toutes vos données seront définitivement effacées. Cette action est irréversible.
       </p>
 

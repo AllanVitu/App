@@ -69,11 +69,11 @@ const strength = computed(() => {
   if (/[^a-zA-Z0-9]/.test(value)) score++
 
   const levels = [
-    { label: 'Très faible', classes: 'w-1/5 bg-red-500' },
-    { label: 'Faible', classes: 'w-2/5 bg-orange-500' },
-    { label: 'Moyen', classes: 'w-3/5 bg-amber-500' },
-    { label: 'Bon', classes: 'w-4/5 bg-lime-500' },
-    { label: 'Excellent', classes: 'w-full bg-emerald-500' },
+    { label: 'très faible', classes: 'w-1/5 bg-brick' },
+    { label: 'faible', classes: 'w-2/5 bg-brick' },
+    { label: 'moyen', classes: 'w-3/5 bg-ochre' },
+    { label: 'bon', classes: 'w-4/5 bg-ochre' },
+    { label: 'excellent', classes: 'w-full bg-moss' },
   ]
 
   return { score, ...levels[Math.max(0, score - 1)] }
@@ -104,13 +104,13 @@ async function submit() {
 
 <template>
   <div ref="root">
-    <h1 data-anim="head" class="text-2xl font-bold tracking-tight">Créer un compte</h1>
-    <p data-anim="head" class="mt-1.5 text-sm text-slate-500">Quelques secondes suffisent.</p>
+    <h1 data-anim="head" class="text-xl font-bold">Créer un compte</h1>
+    <p data-anim="head" class="mt-1.5 text-sm text-ink-2">Quelques secondes suffisent.</p>
 
     <form ref="formEl" class="mt-8 space-y-4" novalidate @submit.prevent="submit">
       <div
         v-if="globalError"
-        class="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
+        class="flex items-start gap-2.5 border border-line border-l-2 border-l-brick bg-brick-bg px-3.5 py-2.5 text-[0.78rem] text-ink"
         role="alert"
       >
         <AppIcon name="alert" :size="18" class="mt-0.5 shrink-0" />
@@ -151,10 +151,10 @@ async function submit() {
         />
 
         <div v-if="form.password" class="mt-2">
-          <div class="h-1 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+          <div class="h-1 w-full overflow-hidden rounded-full bg-line">
             <div class="h-full rounded-full transition-all" :class="strength.classes" />
           </div>
-          <p class="mt-1 text-xs text-slate-500">Robustesse : {{ strength.label }}</p>
+          <p class="mt-1 text-xs text-ink-2">Robustesse : {{ strength.label }}</p>
         </div>
       </div>
 
@@ -174,11 +174,11 @@ async function submit() {
       </BaseButton>
     </form>
 
-    <p class="mt-8 text-center text-sm text-slate-500">
+    <p class="mt-8 text-center text-sm text-ink-2">
       Déjà inscrit ?
       <RouterLink
         :to="{ name: 'login' }"
-        class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+        class="font-medium text-ink underline underline-offset-2 hover:text-ink-2"
       >
         Se connecter
       </RouterLink>

@@ -87,77 +87,61 @@ onBeforeUnmount(() => {
   matchMedia = null
 })
 
-const linkBase =
-  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors'
-const linkIdle =
-  'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100'
-const linkActive = 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
+const linkBase = 'flex items-center gap-2.5 px-3 py-1.5 text-[0.8rem] transition-colors border-l-2'
+const linkIdle = 'border-l-transparent text-ink-2 hover:bg-raised hover:text-ink'
+const linkActive = 'border-l-ink bg-raised text-ink font-semibold'
 </script>
 
 <template>
   <!-- Voile d'arrière-plan, mobile uniquement -->
   <div
     v-if="sidebarOpen"
-    class="fixed inset-0 z-30 bg-slate-900/50 lg:hidden"
+    class="fixed inset-0 z-30 bg-ink/40 lg:hidden"
     @click="ui.toggleSidebar(false)"
   />
 
   <aside
     ref="aside"
-    class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:translate-x-0 dark:border-slate-800 dark:bg-slate-900"
+    class="panel fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col transition-transform duration-200 lg:static lg:z-auto lg:w-52 lg:translate-x-0"
     :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
   >
     <!-- Marque -->
-    <div class="flex h-16 shrink-0 items-center gap-2.5 border-b border-slate-200 px-5 dark:border-slate-800">
-      <div class="flex size-8 items-center justify-center rounded-lg bg-brand-600 text-white">
-        <AppIcon name="sparkles" :size="18" />
-      </div>
-      <span class="text-base font-semibold tracking-tight">SaaS App</span>
+    <div class="shrink-0 border-b border-line px-3 py-3">
+      <p class="text-[0.9rem] font-bold tracking-[0.08em]">SAAS OS</p>
+      <p class="text-[0.68rem] text-ink-3">v1.0.0</p>
     </div>
 
     <!-- Navigation -->
-    <nav class="flex-1 space-y-6 overflow-y-auto px-3 py-5" aria-label="Navigation principale">
-      <div class="space-y-1">
+    <nav class="flex-1 space-y-5 overflow-y-auto py-4" aria-label="Navigation principale">
+      <div>
         <RouterLink
           :to="{ name: 'dashboard' }"
           :class="[linkBase, $route.name === 'dashboard' ? linkActive : linkIdle]"
           @click="ui.toggleSidebar(false)"
         >
-          <AppIcon name="home" :size="18" />
-          Accueil
+          <AppIcon name="home" :size="15" />
+          accueil
         </RouterLink>
       </div>
 
       <div>
-        <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-          Modules
-        </p>
+        <p class="label-caps px-3 pb-1.5">modules</p>
 
         <div v-if="loading && !modules.length" class="space-y-1 px-3">
-          <div
-            v-for="n in 4"
-            :key="n"
-            class="h-9 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800"
-          />
+          <div v-for="n in 4" :key="n" class="h-6 animate-pulse bg-raised" />
         </div>
 
-        <div v-else class="space-y-1">
+        <div v-else>
           <RouterLink
             v-for="module in modules"
             :key="module.id"
             :to="{ name: 'module', params: { slug: module.slug } }"
-            :class="[
-              linkBase,
-              $route.params.slug === module.slug ? linkActive : linkIdle,
-            ]"
+            :class="[linkBase, $route.params.slug === module.slug ? linkActive : linkIdle]"
             @click="ui.toggleSidebar(false)"
           >
-            <AppIcon :name="module.icon" :size="18" />
-            <span class="flex-1 truncate">{{ module.name }}</span>
-            <span
-              v-if="module.items_count"
-              class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-            >
+            <AppIcon :name="module.icon" :size="15" />
+            <span class="flex-1 truncate">{{ module.name.toLowerCase() }}</span>
+            <span v-if="module.items_count" class="text-[0.7rem] text-ink-3 tabular-nums">
               {{ module.items_count }}
             </span>
           </RouterLink>
@@ -165,48 +149,43 @@ const linkActive = 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-br
       </div>
 
       <div>
-        <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-          Compte
-        </p>
-        <div class="space-y-1">
-          <RouterLink
-            :to="{ name: 'profile' }"
-            :class="[linkBase, $route.name === 'profile' ? linkActive : linkIdle]"
-            @click="ui.toggleSidebar(false)"
-          >
-            <AppIcon name="user" :size="18" />
-            Profil
-          </RouterLink>
+        <p class="label-caps px-3 pb-1.5">compte</p>
 
-          <RouterLink
-            :to="{ name: 'settings' }"
-            :class="[linkBase, $route.name === 'settings' ? linkActive : linkIdle]"
-            @click="ui.toggleSidebar(false)"
-          >
-            <AppIcon name="settings" :size="18" />
-            Paramètres
-          </RouterLink>
-        </div>
+        <RouterLink
+          :to="{ name: 'profile' }"
+          :class="[linkBase, $route.name === 'profile' ? linkActive : linkIdle]"
+          @click="ui.toggleSidebar(false)"
+        >
+          <AppIcon name="user" :size="15" />
+          profil
+        </RouterLink>
+
+        <RouterLink
+          :to="{ name: 'settings' }"
+          :class="[linkBase, $route.name === 'settings' ? linkActive : linkIdle]"
+          @click="ui.toggleSidebar(false)"
+        >
+          <AppIcon name="settings" :size="15" />
+          paramètres
+        </RouterLink>
       </div>
     </nav>
 
     <!-- Utilisateur courant -->
-    <div class="shrink-0 border-t border-slate-200 p-3 dark:border-slate-800">
-      <RouterLink
-        :to="{ name: 'profile' }"
-        class="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
-        @click="ui.toggleSidebar(false)"
+    <RouterLink
+      :to="{ name: 'profile' }"
+      class="flex shrink-0 items-center gap-2.5 border-t border-line px-3 py-2.5 transition-colors hover:bg-raised"
+      @click="ui.toggleSidebar(false)"
+    >
+      <span
+        class="flex size-7 shrink-0 items-center justify-center border border-line bg-raised text-[0.68rem] font-semibold"
       >
-        <div
-          class="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
-        >
-          {{ auth.initials }}
-        </div>
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-sm font-medium">{{ auth.user?.full_name }}</p>
-          <p class="truncate text-xs text-slate-500">{{ auth.user?.email }}</p>
-        </div>
-      </RouterLink>
-    </div>
+        {{ auth.initials }}
+      </span>
+      <span class="min-w-0 flex-1">
+        <span class="block truncate text-[0.76rem]">{{ auth.user?.full_name }}</span>
+        <span class="block truncate text-[0.68rem] text-ink-3">{{ auth.user?.email }}</span>
+      </span>
+    </RouterLink>
   </aside>
 </template>

@@ -188,6 +188,7 @@ final class Validator
     /**
      * Objet JSON libre (colonnes JSONB).
      *
+     * @param  array<string, mixed> $default
      * @return array<string, mixed>
      */
     public function jsonObject(string $field, array $default = []): array

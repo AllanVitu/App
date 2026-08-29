@@ -73,23 +73,32 @@ révocation au démontage), écrit avec `onMounted` / `onUnmounted`.
 
 ---
 
-## Fond animé
+## Décor animé
 
-`components/ShaderBackground.vue` reproduit le rendu de **ShaderGradient** en
-WebGL natif : le paquet `shadergradient` est publié pour React
-(`react` en peerDependency, rendu via react-three-fiber) et imposerait
-d'ajouter React, react-dom et three à une application Vue pour un décor.
+`components/TechnicalDiagram.vue` : orbites concentriques, couronne graduée
+au demi-degré, sphère à méridiens et satellites en révolution lente. Dessiné
+au canvas 2D, sans aucune dépendance.
 
-Le composant reprend la nomenclature des props du preset (`color1..3`,
-`uSpeed`, `uDensity`, `uFrequency`, `uAmplitude`, `uStrength`, `brightness`,
-`grain`, `rotationZ`, `cameraZoom`, `cDistance`) afin qu'un réglage se
-transpose directement. Les paramètres purement tridimensionnels (`envPreset`,
-`reflection`, `fov`, `lightType`) n'ont pas d'équivalent et sont ignorés.
+**Ce qu'il a remplacé, et pourquoi.** Une première version utilisait un
+dégradé WebGL coloré reproduisant *ShaderGradient* — dont le paquet officiel
+est publié pour React et imposerait d'ajouter React, react-dom et three à une
+application Vue. La direction visuelle retenue ensuite (monochrome sur fond
+papier) rendait ce dégradé incohérent : un aplat violet-bleu au milieu d'une
+interface à l'encre. Le dessin au trait dit la même chose — « il se passe
+quelque chose ici » — dans le vocabulaire de la page.
+
+Canvas plutôt que SVG : la figure tourne en continu, et animer quelques
+dizaines de tracés coûte moins cher que le même nombre de nœuds DOM
+réévalués à chaque image.
 
 Garde-fous : rendu suspendu hors écran (`IntersectionObserver`) et onglet
 masqué (`visibilitychange`), densité de pixels plafonnée à 2, image fixe si
-`prefers-reduced-motion`, repli sur un dégradé CSS si WebGL est indisponible,
-contexte WebGL libéré au démontage.
+`prefers-reduced-motion`, périodes orbitales non harmoniques pour que la
+figure ne se répète jamais à l'identique.
 
-Emplacements : panneau de présentation de l'authentification, bandeau
-d'en-tête du tableau de bord, en-tête des vues de module (teinté par module).
+La couleur du trait est lue sur `--c-ink-3` à chaque image : le dessin suit
+le thème clair/sombre sans configuration.
+
+Emplacements : panneau de présentation de l'authentification (grand format,
+atténué), en-tête du tableau de bord (petit format, masqué sous `md` où la
+largeur doit aller au contenu).

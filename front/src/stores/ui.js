@@ -49,11 +49,9 @@ export const useUiStore = defineStore('ui', () => {
    * Suit les changements de préférence système tant que le thème est « system ».
    */
   function watchSystemTheme() {
-    window
-      .matchMedia('(prefers-color-scheme: dark)')
-      .addEventListener('change', () => {
-        if (theme.value === 'system') applyTheme('system')
-      })
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (theme.value === 'system') applyTheme('system')
+    })
   }
 
   function toggleSidebar(value) {

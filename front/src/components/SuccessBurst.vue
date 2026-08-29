@@ -37,12 +37,7 @@ onMounted(() => {
     // Les particules partent du centre avec un angle et une vitesse tirés au
     // sort, puis retombent : c'est le moteur de Physics2DPlugin, pas une
     // trajectoire scriptée à la main.
-    timeline.fromTo(
-      '[data-particle]',
-      { opacity: 0 },
-      { opacity: 1, duration: 0.1 },
-      0.3,
-    )
+    timeline.fromTo('[data-particle]', { opacity: 0 }, { opacity: 1, duration: 0.1 }, 0.3)
 
     timeline.to(
       '[data-particle]',
@@ -82,18 +77,14 @@ onBeforeUnmount(() => {
         v-for="n in particles"
         :key="n"
         data-particle
-        class="absolute size-1.5 rounded-full"
-        :class="[
-          'bg-brand-500',
-          n % 3 === 0 ? 'bg-emerald-500' : '',
-          n % 4 === 0 ? 'bg-amber-400' : '',
-        ]"
+        class="absolute size-1"
+        :class="['bg-ink', n % 3 === 0 ? 'bg-moss' : '', n % 4 === 0 ? 'bg-ochre' : '']"
       />
     </div>
 
     <div
       data-badge
-      class="relative flex size-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400"
+      class="relative flex size-14 items-center justify-center border border-moss bg-moss-bg text-moss"
     >
       <svg width="34" height="34" viewBox="0 0 36 36" fill="none" aria-hidden="true">
         <circle

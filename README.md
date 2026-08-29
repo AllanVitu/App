@@ -2,7 +2,8 @@
 
 Application SaaS complète : authentification (avec vérification d'adresse et
 mot de passe oublié), tableau de bord, quatre modules métier, profil et
-paramètres. Animations GSAP et fond WebGL.
+paramètres. Interface monospace « poste de travail », animations GSAP,
+suite de tests et intégration continue.
 
 ## Démarrage
 
@@ -38,12 +39,15 @@ App/
 │   │   ├── Services/           # Jwt, RefreshToken, UserToken, Throttle, Mailer
 │   │   ├── Models/             # dépôts PDO (requêtes préparées)
 │   │   └── Controllers/        # Auth, Account, Dashboard, Module, Item, Profile, Settings
+│   ├── tests/                  # PHPUnit : unit + integration
 │   └── database/
 │       ├── init/               # schéma, joué à la création du volume
 │       └── seeds/              # jeux de données, choisis par DB_SEED
+├── e2e/                        # Playwright — hors conteneur
 └── front/                      # client Vue 3
     └── src/
         ├── animations/         # gsap.js (plugins, courbes) + PLAN.md
+        ├── tests/              # Vitest : formatage, intercepteur HTTP
         ├── composables/        # useGsap : équivalent Vue de useGSAP
         ├── router/ stores/ services/ layouts/ components/ views/
         └── utils/format.js
@@ -125,9 +129,10 @@ confirmation. `prefers-reduced-motion` est respecté globalement.
 `@gsap/react` n'est pas utilisable en Vue : l'équivalent est le composable
 [`useGsap`](front/src/composables/useGsap.js).
 
-Le fond animé [`ShaderBackground.vue`](front/src/components/ShaderBackground.vue)
-reproduit **ShaderGradient** en WebGL natif — le paquet officiel exige React et
-react-three-fiber.
+Le décor animé est [`TechnicalDiagram.vue`](front/src/components/TechnicalDiagram.vue) :
+orbites et couronne graduée tracées au canvas, sans dépendance. Il a remplacé
+un dégradé WebGL coloré, incompatible avec la direction monochrome retenue.
+Le rendu est suspendu hors écran et onglet masqué.
 
 **Coût mesuré** : GSAP pèse 236 Ko (92 Ko gzip), isolé dans son propre chunk.
 C'est plus que Vue + Router + Pinia + axios réunis. Retirer un plugin =
@@ -153,11 +158,55 @@ Différences avec la stack de développement :
 ⚠ Le conteneur web écoute en HTTP : placez-le derrière une terminaison TLS.
 Sans HTTPS, le cookie de session marqué `Secure` ne sera pas transmis.
 
+## Tests et qualité
+
+Trois portes, exécutables en local exactement comme en intégration continue.
+
+```bash
+docker compose exec php composer check   # PSR-12 + PHPStan niveau 6 + PHPUnit
+docker compose exec node npm run check   # ESLint + Prettier + Vitest + build
+cd e2e && npm test                       # parcours navigateur (Playwright)
+```
+
+| Suite | Portée | Volume |
+|---|---|---|
+| PHPUnit `unit` | Jetons JWT, validation — sans base | 7 tests |
+| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel | 36 tests |
+| Vitest | Formatage des dates, intercepteur HTTP | 17 tests |
+| Playwright | Parcours complets dans Chromium | 16 tests |
+
+Les tests d'intégration traversent `App\Core\Kernel` — le même point d'entrée
+que `public/index.php`. Un test empruntant un chemin parallèle ne dirait rien
+du comportement déployé.
+
+Ils créent leur propre base (`saas_db_test`), recréée à chaque exécution : la
+base de développement n'est jamais touchée, et aucun test n'hérite de l'état
+laissé par un autre.
+
+Playwright s'exécute **hors conteneur** — le projet ne publie pas de binaires
+pour Alpine. La première fois :
+
+```bash
+cd e2e && npm install && npx playwright install chromium
+```
+
+## Direction visuelle
+
+Poste de travail : une seule famille typographique (Source Code Pro), fond
+papier chaud, panneaux délimités par des filets, angles vifs. La hiérarchie
+passe par la graisse et l'échelle ; la couleur est réservée au sens — mousse
+pour l'actif, ocre pour l'archivé, brique pour le danger.
+
+Les jetons vivent dans [`front/src/assets/css/main.css`](front/src/assets/css/main.css) :
+modifier une variable `--c-*` recolore toute l'application, thème sombre
+compris.
+
 ## Commandes utiles
 
 ```bash
 docker compose logs -f php              # journaux de l'API
 docker compose exec db psql -U saas_user -d saas_db
 docker compose exec node npm run build  # build de production
+docker compose logs -f mailer            # e-mails interceptés (Mailpit)
 docker compose down -v                  # remise à zéro complète de la base
 ```
