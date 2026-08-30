@@ -90,9 +90,11 @@
   --radius-card: var(--r-card);
   --radius-field: var(--r-field);
 
-  /* Grotesque variable : une seule famille, toutes les graisses. */
-  --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
-  --font-mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  /* Geist pour le texte, Geist Mono pour ce qui s'aligne en colonne :
+     empreintes de commit, durées, compteurs, journaux. Deux familles issues
+     du même dessin — aucune rupture quand les deux se côtoient sur une ligne. */
+  --font-sans: 'Geist', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
 }
 
 /* ---------------------------------------------------------------------------
@@ -106,7 +108,7 @@
   body {
     background: var(--c-paper);
     color: var(--c-ink);
-    font-family: 'Instrument Sans', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+    font-family: 'Geist', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
     font-size: 15px;
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;

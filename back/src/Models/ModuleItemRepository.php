@@ -173,40 +173,6 @@ final class ModuleItemRepository
     }
 
     /**
-     * Indicateurs du tableau de bord, en une seule requête.
-     *
-     * @return array{total: int, active: int, draft: int, archived: int, due_soon: int, created_this_week: int}
-     */
-    public function statsForUser(string $userId): array
-    {
-        $statement = Database::connection()->prepare(
-            "SELECT
-                 COUNT(*)                                                              AS total,
-                 COUNT(*) FILTER (WHERE status = 'active')                             AS active,
-                 COUNT(*) FILTER (WHERE status = 'draft')                              AS draft,
-                 COUNT(*) FILTER (WHERE status = 'archived')                           AS archived,
-                 COUNT(*) FILTER (WHERE due_date IS NOT NULL
-                                    AND due_date BETWEEN CURRENT_DATE
-                                                     AND CURRENT_DATE + INTERVAL '7 days') AS due_soon,
-                 COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')        AS created_this_week
-               FROM module_items
-              WHERE user_id = :user_id AND deleted_at IS NULL",
-        );
-
-        $statement->execute(['user_id' => $userId]);
-        $row = $statement->fetch() ?: [];
-
-        return [
-            'total'             => (int) ($row['total'] ?? 0),
-            'active'            => (int) ($row['active'] ?? 0),
-            'draft'             => (int) ($row['draft'] ?? 0),
-            'archived'          => (int) ($row['archived'] ?? 0),
-            'due_soon'          => (int) ($row['due_soon'] ?? 0),
-            'created_this_week' => (int) ($row['created_this_week'] ?? 0),
-        ];
-    }
-
-    /**
      * Derniers éléments modifiés, tous modules confondus (fil d'activité).
      *
      * @return list<array<string, mixed>>

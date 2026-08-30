@@ -8,6 +8,7 @@ use App\Core\HttpException;
 use App\Core\Request;
 use App\Core\Response;
 use App\Models\ModuleRepository;
+use App\Services\ModuleMetrics;
 
 /**
  * Catalogue des modules accessibles à l'utilisateur connecté.
@@ -19,17 +20,27 @@ final class ModuleController
 {
     private ModuleRepository $modules;
 
+    private ModuleMetrics $metrics;
+
     public function __construct()
     {
         $this->modules = new ModuleRepository();
+        $this->metrics = new ModuleMetrics();
     }
 
     /**
      * GET /api/modules
+     *
+     * Le catalogue passe par ModuleMetrics : chaque module y reçoit le
+     * compteur qui correspond à SA source de données. Sans cela, le menu
+     * afficherait pour « tickets » le nombre de lignes qu'il possède dans la
+     * table générique — c'est-à-dire un chiffre faux.
      */
     public function index(Request $request): void
     {
-        Response::json($this->modules->listForUser($request->userId()));
+        $userId = $request->userId();
+
+        Response::json($this->metrics->decorate($this->modules->listForUser($userId), $userId));
     }
 
     /**

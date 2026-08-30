@@ -32,7 +32,17 @@ onBeforeUnmount(() => {
 })
 
 const handle = computed(() => auth.user?.email?.split('@')[0] ?? 'invité')
-const itemCount = computed(() =>
+
+/**
+ * Total du travail ouvert, tous modules confondus.
+ *
+ * Chaque module fournit le chiffre qui a un sens chez lui — tickets ouverts
+ * ici, éléments là — et c'est leur somme qui est affichée. L'étiquette dit
+ * donc « en cours » et non « éléments » : depuis que les modules ne partagent
+ * plus une table unique, « éléments » désignait une addition de choses de
+ * natures différentes.
+ */
+const openCount = computed(() =>
   modules.items.reduce((total, module) => total + (module.items_count ?? 0), 0),
 )
 </script>
@@ -51,7 +61,7 @@ const itemCount = computed(() =>
 
     <span class="ml-auto hidden items-center gap-4 md:flex">
       <span>{{ modules.items.length }} modules</span>
-      <span>{{ itemCount }} éléments</span>
+      <span>{{ openCount }} en cours</span>
     </span>
 
     <span class="ml-auto md:ml-0">v1.0.0</span>

@@ -18,19 +18,25 @@ final class ModuleRepository
      * Modules accessibles à un utilisateur, avec le nombre d'éléments qu'il
      * y possède. Une seule requête, agrégation faite par PostgreSQL.
      *
+     * Ces compteurs ne valent QUE pour les modules encore adossés à la table
+     * générique module_items. Ceux qui ont leur propre modèle — « tickets » —
+     * sont corrigés ensuite par App\Services\ModuleMetrics, seul endroit où
+     * l'on décide de ce que le chiffre d'un module signifie.
+     *
      * @return list<array<string, mixed>>
      */
     public function listForUser(string $userId): array
     {
         $statement = Database::connection()->prepare(
-            'SELECT m.id,
+            "SELECT m.id,
                     m.slug,
                     m.name,
                     m.description,
                     m.icon,
                     m.position,
                     um.settings,
-                    COUNT(i.id) FILTER (WHERE i.deleted_at IS NULL) AS items_count
+                    COUNT(i.id) FILTER (WHERE i.deleted_at IS NULL)                        AS items_count,
+                    COUNT(i.id) FILTER (WHERE i.deleted_at IS NULL AND i.status = 'active') AS active_count
                FROM modules m
                JOIN user_modules um
                  ON um.module_id = m.id
@@ -41,7 +47,7 @@ final class ModuleRepository
                 AND i.user_id = :user_id
               WHERE m.is_active
               GROUP BY m.id, um.settings
-              ORDER BY m.position, m.name',
+              ORDER BY m.position, m.name",
         );
 
         $statement->execute(['user_id' => $userId]);
@@ -114,6 +120,9 @@ final class ModuleRepository
 
         if (array_key_exists('items_count', $row)) {
             $module['items_count'] = (int) $row['items_count'];
+            // Consommé par ModuleMetrics puis retiré de la réponse : c'est un
+            // chiffre intermédiaire, pas une donnée que le client interprète.
+            $module['active_count'] = (int) ($row['active_count'] ?? 0);
         }
 
         return $module;

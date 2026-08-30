@@ -19,12 +19,20 @@ use PHPUnit\Framework\TestCase;
  */
 abstract class ApiTestCase extends TestCase
 {
-    /** Tables vidées avant chaque test ; « modules » est conservée (catalogue). */
+    /**
+     * Tables vidées avant chaque test ; « modules » est conservée (catalogue).
+     *
+     * tickets et ticket_counters seraient vidées de toute façon par la cascade
+     * depuis « users », mais les nommer rend la liste lisible : on voit ce qui
+     * est remis à zéro sans avoir à dérouler mentalement les clés étrangères.
+     */
     private const MUTABLE_TABLES = [
         'user_tokens',
         'refresh_tokens',
         'login_attempts',
         'module_items',
+        'tickets',
+        'ticket_counters',
         'user_modules',
         'user_settings',
         'users',

@@ -19,6 +19,7 @@ use App\Controllers\ItemController;
 use App\Controllers\ModuleController;
 use App\Controllers\ProfileController;
 use App\Controllers\SettingsController;
+use App\Controllers\TicketController;
 use App\Core\Router;
 use App\Middleware\AuthMiddleware;
 
@@ -69,5 +70,18 @@ $router->post('/api/modules/{slug}/items', [ItemController::class, 'store'], $au
 $router->get('/api/items/{id}', [ItemController::class, 'show'], $auth);
 $router->put('/api/items/{id}', [ItemController::class, 'update'], $auth);
 $router->delete('/api/items/{id}', [ItemController::class, 'destroy'], $auth);
+
+// --- Tickets ---------------------------------------------------------------
+// Module « Tickets » : endpoints DÉDIÉS, hors de /api/modules/{slug}/items.
+// Un ticket a son propre modèle (numéro, priorité ordonnée, cycle de vie) que
+// la structure générique des items ne sait pas porter. Les quatre modules
+// restants continuent d'emprunter ItemController en attendant le même
+// traitement.
+$router->get('/api/tickets', [TicketController::class, 'index'], $auth);
+$router->post('/api/tickets', [TicketController::class, 'store'], $auth);
+
+$router->get('/api/tickets/{id}', [TicketController::class, 'show'], $auth);
+$router->put('/api/tickets/{id}', [TicketController::class, 'update'], $auth);
+$router->delete('/api/tickets/{id}', [TicketController::class, 'destroy'], $auth);
 
 return $router;

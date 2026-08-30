@@ -8,12 +8,25 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Models\ModuleItemRepository;
 use App\Models\ModuleRepository;
+use App\Models\TicketRepository;
+use App\Services\ModuleMetrics;
 
 /**
- * Données d'accueil : indicateurs, répartition par module et activité récente.
+ * Données d'accueil.
  *
- * Regroupées en un seul endpoint pour que le tableau de bord s'affiche en un
- * aller-retour réseau.
+ * Le tableau de bord n'est PAS un second menu — la navigation appartient au
+ * menu latéral. Il répond à trois questions, et à rien d'autre :
+ *
+ *   1. Qu'est-ce qui demande une action ?   -> attention
+ *   2. Où en est chaque module ?            -> modules (avec leur état)
+ *   3. Que s'est-il passé récemment ?       -> recent
+ *
+ * Les compteurs globaux qui figuraient ici ne comptaient que la table
+ * générique module_items : depuis que « tickets » a sa propre table, ils
+ * affichaient « 3 éléments » à un utilisateur qui avait quatorze tickets.
+ * Ils sont remplacés par l'état par module, qui a une source par module.
+ *
+ * Le tout en un seul aller-retour réseau : l'écran s'affiche d'un bloc.
  */
 final class DashboardController
 {
@@ -23,12 +36,13 @@ final class DashboardController
     public function index(Request $request): void
     {
         $userId = $request->userId();
-        $items  = new ModuleItemRepository();
+
+        $modules = (new ModuleRepository())->listForUser($userId);
 
         Response::json([
-            'stats'   => $items->statsForUser($userId),
-            'modules' => (new ModuleRepository())->listForUser($userId),
-            'recent'  => $items->recentForUser($userId, 6),
+            'attention' => (new TicketRepository())->needsAttention($userId, 5),
+            'modules'   => (new ModuleMetrics())->decorate($modules, $userId),
+            'recent'    => (new ModuleItemRepository())->recentForUser($userId, 6),
         ]);
     }
 }

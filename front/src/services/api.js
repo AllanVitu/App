@@ -60,6 +60,33 @@ export const itemsApi = {
   remove: (id) => http.delete(`/items/${id}`),
 }
 
+// --- Tickets ----------------------------------------------------------------
+
+export const ticketsApi = {
+  /**
+   * Renvoie { tickets, meta }. La méta porte les indicateurs, les projets et
+   * les étiquettes connus : tout l'écran se construit en un seul appel, ce
+   * qui est la condition d'une interface au clavier — un filtre ne doit
+   * jamais attendre le réseau.
+   */
+  list: (params = {}, signal) =>
+    http.get('/tickets', { params, signal }).then((response) => ({
+      tickets: response.data.data,
+      meta: response.data.meta,
+    })),
+
+  create: (payload) => http.post('/tickets', payload).then(unwrap),
+
+  /**
+   * Mise à jour PARTIELLE : n'envoyer que les champs modifiés. C'est ce qui
+   * permet à un raccourci clavier de changer une priorité sans renvoyer un
+   * ticket complet, potentiellement périmé.
+   */
+  update: (id, payload) => http.put(`/tickets/${id}`, payload).then(unwrap),
+
+  remove: (id) => http.delete(`/tickets/${id}`),
+}
+
 // --- Profil -----------------------------------------------------------------
 
 export const profileApi = {

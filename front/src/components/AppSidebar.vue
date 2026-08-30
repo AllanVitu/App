@@ -16,6 +16,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useModulesStore } from '@/stores/modules'
 import { useUiStore } from '@/stores/ui'
+import { modulePath } from '@/utils/modules'
 
 const auth = useAuthStore()
 const ui = useUiStore()
@@ -135,8 +136,8 @@ const linkActive = 'border-l-ink bg-raised text-ink font-semibold'
           <RouterLink
             v-for="module in modules"
             :key="module.id"
-            :to="{ name: 'module', params: { slug: module.slug } }"
-            :class="[linkBase, $route.params.slug === module.slug ? linkActive : linkIdle]"
+            :to="modulePath(module.slug)"
+            :class="[linkBase, $route.path === modulePath(module.slug) ? linkActive : linkIdle]"
             @click="ui.toggleSidebar(false)"
           >
             <AppIcon :name="module.icon" :size="15" />

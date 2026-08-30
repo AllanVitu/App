@@ -33,7 +33,9 @@ test.describe('éléments de module', () => {
   })
 
   test('un titre vidé est refusé par le serveur', async ({ page }) => {
-    const titre = await createItem(page, 'tickets')
+    // « supervision » et non « tickets » : ce dernier a désormais son propre
+    // écran et son propre modèle, il ne passe plus par la vue générique.
+    const titre = await createItem(page, 'supervision')
 
     await page.locator('li').filter({ hasText: titre }).getByRole('button', { name: /^modifier/i }).click()
 

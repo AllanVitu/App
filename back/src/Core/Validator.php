@@ -215,6 +215,76 @@ final class Validator
         return $value;
     }
 
+    /**
+     * Liste de chaînes courtes : étiquettes, mots-clés.
+     *
+     * La valeur est NORMALISÉE autant que validée. Sans cela « Bug », « bug »
+     * et « bug  » coexisteraient comme trois étiquettes distinctes, et les
+     * filtres deviendraient inutilisables au bout de quelques semaines.
+     * L'ordre de première apparition est conservé : c'est celui que
+     * l'utilisateur a saisi, donc celui qu'il s'attend à relire.
+     *
+     * @param  list<string> $default
+     * @return list<string>
+     */
+    public function stringList(
+        string $field,
+        array $default = [],
+        int $maxItems = 8,
+        int $maxLength = 30,
+        ?string $label = null,
+    ): array {
+        $label = $label ?? $field;
+        $value = $this->data[$field] ?? null;
+
+        if ($value === null) {
+            return $default;
+        }
+
+        if (!is_array($value)) {
+            $this->errors[$field] = "Le champ « {$label} » doit être une liste.";
+
+            return $default;
+        }
+
+        $clean = [];
+
+        foreach ($value as $entry) {
+            if (!is_string($entry)) {
+                $this->errors[$field] = "Le champ « {$label} » ne doit contenir que du texte.";
+
+                return $default;
+            }
+
+            $entry = mb_strtolower(trim($entry));
+
+            if ($entry === '') {
+                continue;
+            }
+
+            if (mb_strlen($entry) > $maxLength) {
+                $this->errors[$field] = "Chaque valeur de « {$label} » est limitée à {$maxLength} caractères.";
+
+                return $default;
+            }
+
+            // in_array plutôt qu'array_unique en sortie : le dédoublonnage
+            // doit précéder le comptage, sinon une liste de doublons serait
+            // refusée alors qu'elle tient dans la limite une fois réduite.
+            if (!in_array($entry, $clean, true)) {
+                $clean[] = $entry;
+            }
+        }
+
+        if (count($clean) > $maxItems) {
+            $this->errors[$field] = "Le champ « {$label} » accepte au plus {$maxItems} valeurs.";
+
+            return $default;
+        }
+
+        return $clean;
+    }
+
     public function uuid(string $field, bool $required = true): ?string
     {
         $value = $this->data[$field] ?? null;

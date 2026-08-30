@@ -1,9 +1,28 @@
 # SaaS Starter — Vue 3 / PHP 8.3 / PostgreSQL 16 / Docker
 
 Application SaaS complète : authentification (avec vérification d'adresse et
-mot de passe oublié), tableau de bord, quatre modules métier, profil et
-paramètres. Interface monospace « poste de travail », animations GSAP,
-suite de tests et intégration continue.
+mot de passe oublié), tableau de bord, cinq modules métier, profil et
+paramètres. Interface « poste de travail », animations GSAP, suite de tests
+et intégration continue.
+
+## Les modules
+
+Chaque module reçoit progressivement son propre modèle de données et son
+propre écran. La table générique `module_items` (titre, statut, échéance,
+charge utile JSONB) n'est qu'un point de départ : elle permet à un module
+d'exister avant d'être écrit, pas de rester ainsi.
+
+| Module        | Modèle     | Détail                                                 |
+| ------------- | ---------- | ------------------------------------------------------ |
+| `tickets`     | **Propre** | Table `tickets`, endpoints dédiés, écran clavier-first  |
+| `backend`     | Générique  | En attente d'un modèle propre                          |
+| `deploiement` | Générique  | En attente d'un modèle propre                          |
+| `supervision` | Générique  | En attente d'un modèle propre                          |
+| `design`      | Générique  | En attente d'un modèle propre                          |
+
+Le compteur affiché pour un module vient de SA source de données, assemblé
+par `App\Services\ModuleMetrics` — c'est le seul endroit à modifier quand un
+module passe au modèle propre.
 
 ## Démarrage
 
@@ -71,14 +90,19 @@ nécessaire pour démarrer.
 | POST    | `/api/auth/password/reset`    |      | Nouveau mot de passe (jeton e-mail)    |
 | POST    | `/api/auth/email/resend`      |  ✓   | Renvoi du lien de confirmation         |
 | GET     | `/api/auth/me`                |  ✓   | Utilisateur + préférences              |
-| GET     | `/api/dashboard`              |  ✓   | Indicateurs, modules, activité récente |
-| GET     | `/api/modules`                |  ✓   | Modules accessibles                    |
+| GET     | `/api/dashboard`              |  ✓   | Alertes, état des modules, activité    |
+| GET     | `/api/modules`                |  ✓   | Modules accessibles, avec leur état    |
 | GET     | `/api/modules/{slug}`         |  ✓   | Détail d'un module                     |
 | GET     | `/api/modules/{slug}/items`   |  ✓   | Liste paginée, filtrable, triable      |
 | POST    | `/api/modules/{slug}/items`   |  ✓   | Création                               |
 | GET     | `/api/items/{id}`             |  ✓   | Détail                                 |
 | PUT     | `/api/items/{id}`             |  ✓   | Mise à jour partielle                  |
 | DELETE  | `/api/items/{id}`             |  ✓   | Suppression logique                    |
+| GET     | `/api/tickets`                |  ✓   | Liste + indicateurs, projets, étiquettes |
+| POST    | `/api/tickets`                |  ✓   | Création (numéro attribué par la base) |
+| GET     | `/api/tickets/{id}`           |  ✓   | Détail                                 |
+| PUT     | `/api/tickets/{id}`           |  ✓   | Mise à jour partielle                  |
+| DELETE  | `/api/tickets/{id}`           |  ✓   | Suppression logique                    |
 | GET/PUT | `/api/profile`                |  ✓   | Profil                                 |
 | PUT     | `/api/profile/password`       |  ✓   | Changement de mot de passe             |
 | DELETE  | `/api/profile`                |  ✓   | Suppression du compte                  |

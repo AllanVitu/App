@@ -1,32 +1,33 @@
 <script setup>
 /**
- * Galerie des modules : spirale ou liste.
+ * État des modules : spirale ou liste.
+ *
+ * Ce n'est PAS un second menu — la navigation appartient au menu latéral.
+ * Chaque tuile porte l'état réel de son module : combien de travail ouvert,
+ * et ce qui demande attention. Sans cela, le tableau de bord se contenterait
+ * de répéter la liste de gauche.
  *
  * Les MÊMES éléments du DOM servent aux deux dispositions — seules leurs
  * classes et leurs positions changent. C'est ce qui permet à Flip d'animer
  * le passage : chaque tuile glisse de son ancienne place vers la nouvelle,
  * au lieu de disparaître d'un côté pour réapparaître de l'autre.
  *
- * La spirale n'est qu'un arrangement visuel. Dans le DOM, les tuiles
- * restent des liens dans l'ordre du catalogue : la navigation au clavier et
- * les lecteurs d'écran suivent cet ordre, pas la courbe.
+ * La spirale n'est qu'un arrangement visuel. Dans le DOM, les tuiles restent
+ * des liens dans l'ordre du catalogue : la navigation au clavier et les
+ * lecteurs d'écran suivent cet ordre, pas la courbe.
  */
 import { computed, nextTick, onMounted, ref } from 'vue'
 
 import { Flip, gsap, prefersReducedMotion } from '@/animations/gsap'
 import AppIcon from '@/components/AppIcon.vue'
 import { play } from '@/services/sound'
+import { modulePath } from '@/utils/modules'
 
-const props = defineProps({
-  modules: { type: Array, default: () => [] },
-})
+const props = defineProps({ modules: { type: Array, default: () => [] } })
 
 const STORAGE_KEY = 'modules-view'
 const MODES = ['spiral', 'list']
-
 const root = ref(null)
-
-/** Mode retenu d'une visite à l'autre : c'est une préférence, pas un état. */
 const mode = ref(readStoredMode())
 
 function readStoredMode() {
@@ -40,32 +41,47 @@ function readStoredMode() {
 }
 
 /**
- * Spirale d'Archimède : le rayon croît linéairement avec l'angle,
- * r(θ) = r₀ + k·θ. Les tuiles s'éloignent donc du centre à pas constant,
- * ce qui garde l'écart entre elles régulier — une spirale logarithmique
- * les tasserait au centre et les disperserait à l'extérieur.
+ * Spirale d'Archimède : r(θ) = r₀ + k·θ. Le rayon croît linéairement avec
+ * l'angle, donc l'écart entre tuiles voisines reste régulier — une spirale
+ * logarithmique les tasserait au centre et les disperserait à l'extérieur.
+ *
+ * Quatre contraintes fixent les constantes, aucune n'est choisie à vue.
+ *
+ *  1. CONTENANCE — après recentrage, la figure entière tient dans le cadre.
+ *     C'est la BOÎTE ENGLOBANTE qui compte, pas le rayon maximal : la spirale
+ *     étant recentrée, son point le plus lointain n'est pas à 50 du bord.
+ *     Ici, demi-boîte 32,7 + demi-tuile 12 = 44,7 ≤ 50.
+ *
+ *  2. SÉPARATION — deux tuiles voisines ne se chevauchent pas. La corde entre
+ *     elles vaut 2·r·sin(TURN/2) ; il la faut supérieure à la largeur d'une
+ *     tuile, Y COMPRIS au rayon le plus faible, qui est le cas critique.
+ *     Ici, au plus près du centre : 2 × 27,6 × sin(38,7°) ≈ 34,5 pour des
+ *     tuiles de 24.
+ *
+ *  3. CONTINUITÉ — le pas angulaire doit rester assez petit pour que l'œil
+ *     suive la courbe d'une tuile à la suivante. Un réglage antérieur à 130°
+ *     satisfaisait les deux premières contraintes mais pas celle-ci : sur cinq
+ *     tuiles, un pas aussi large fait faire un tour et demi et disperse les
+ *     points au lieu de tracer un balayage. 77° enchaîne 310° d'un seul geste.
+ *
+ *  4. REMPLISSAGE — la figure doit OCCUPER son cadre. Un réglage antérieur
+ *     (R0 = 18, K = 2,8) respectait les trois premières contraintes mais ne
+ *     couvrait que 44 % de la hauteur : le cadre carré réservait 670 px pour
+ *     une figure qui en utilisait 300, et le tableau de bord s'ouvrait sur du
+ *     vide. Les rayons sont donc dimensionnés pour que la boîte englobante
+ *     remplisse le cadre — 89 % en largeur, 80 % en hauteur, le reste étant
+ *     la marge que réclament les tuiles elles-mêmes.
  */
-// Géométrie contrainte par deux exigences, et non choisie à vue.
-//
-// 1. CONTENANCE — la tuile la plus externe doit tenir dans le cadre :
-//    R0 + K·(n−1)·TURN + demi-largeur ≤ 50.
-//    Ici : 15 + 2,42 × 9,08 + 11 = 48.
-//
-// 2. SÉPARATION — deux tuiles voisines ne doivent pas se confondre. La corde
-//    entre elles vaut 2·r·sin(TURN/2) ; il la faut supérieure à la largeur
-//    d'une tuile. Au rayon moyen (26) : 2 × 26 × sin(65°) ≈ 47, pour des
-//    tuiles de 22 unités.
-//
-// Un premier essai avec un pas angulaire serré (83°) et un pas radial de 5,5
-// échouait sur ce second point : les tuiles s'empilaient en grappe au centre
-// et la figure ne se lisait pas comme une spirale.
-const TURN = 2.27 // écart angulaire entre deux tuiles, en radians (130°)
-const R0 = 15 // rayon de départ, en % du conteneur
-const K = 2.42 // croissance du rayon par radian
+const TURN = 1.35 // écart angulaire entre deux tuiles, en radians (77°)
+const R0 = 25 // rayon de départ, en % du conteneur
+const K = 3.9 // croissance du rayon par radian
 
 /** Position brute d'une tuile sur la courbe, avant recentrage. */
 function pointAt(index) {
-  const angle = index * TURN - Math.PI / 2 // départ en haut plutôt qu'à droite
+  // −π/2 place la première tuile EN HAUT du cadre : sans ce décalage, l'angle
+  // nul d'un cercle trigonométrique la mettrait à droite, et la lecture de la
+  // spirale ne commencerait pas là où l'œil se pose.
+  const angle = index * TURN - Math.PI / 2
   const radius = R0 + K * (index * TURN)
 
   return { angle, x: radius * Math.cos(angle), y: radius * Math.sin(angle) }
@@ -74,12 +90,10 @@ function pointAt(index) {
 /**
  * Décalage de recentrage.
  *
- * Une spirale n'est pas centrée sur son origine : avec cinq tuiles réparties
- * sur une révolution et demie, la matière se concentre d'un côté. Placer
- * l'origine au milieu du cadre laissait donc un grand vide en haut à gauche
- * et débordait en bas à droite.
- *
- * On centre la BOÎTE ENGLOBANTE des tuiles, pas la courbe.
+ * Une spirale n'est pas centrée sur son origine : la matière se concentre
+ * d'un côté. Placer l'origine au milieu du cadre laisserait un grand vide
+ * d'un bord et un débordement de l'autre. On centre donc la BOÎTE
+ * ENGLOBANTE des tuiles, pas la courbe.
  */
 const offset = computed(() => {
   const points = props.modules.map((_, index) => pointAt(index))
@@ -101,16 +115,18 @@ const layout = computed(() =>
 
     return {
       module,
-      // Coordonnées en pourcentage : la spirale suit la taille du conteneur.
+      // Coordonnées en pourcentage : la spirale suit la taille du conteneur,
+      // qui reste carré — sinon les pourcentages horizontaux et verticaux ne
+      // représenteraient plus la même distance et la courbe s'aplatirait.
       x: 50 + x + offset.value.x,
       y: 50 + y + offset.value.y,
       // Les tuiles grandissent vers l'extérieur : le regard suit la courbe
       // dans le sens de lecture du catalogue.
-      scale: 0.86 + index * 0.038,
-      // Inclinaison tangentielle, BORNÉE. Sans borne, l'angle cumulé atteint
-      // 240° sur la cinquième tuile : le texte devenait illisible pour un
-      // gain purement décoratif.
-      rotation: Math.max(-6, Math.min(6, (((angle * 180) / Math.PI) % 360) * 0.045)),
+      scale: 0.88 + index * 0.03,
+      // Inclinaison tangentielle, BORNÉE. Sans borne, l'angle cumulé dépasse
+      // 200° sur la dernière tuile et le texte devient illisible pour un gain
+      // purement décoratif.
+      rotation: Math.max(-5, Math.min(5, (((angle * 180) / Math.PI) % 360) * 0.04)),
     }
   }),
 )
@@ -119,12 +135,11 @@ const layout = computed(() =>
 const spiralPath = computed(() => {
   const points = []
   const last = Math.max(props.modules.length - 1, 0) * TURN
-
   // Le MÊME décalage que les tuiles : sans lui, la courbe ne passerait plus
   // par elles et l'arrangement paraîtrait accidentel.
   const { x: dx, y: dy } = offset.value
 
-  for (let theta = 0; theta <= last + 0.3; theta += 0.06) {
+  for (let theta = 0; theta <= last + 0.3; theta += 0.05) {
     const angle = theta - Math.PI / 2
     const radius = R0 + K * theta
 
@@ -136,10 +151,18 @@ const spiralPath = computed(() => {
   return points.length ? `M${points.join(' L')}` : ''
 })
 
-/**
- * Bascule. L'état de départ est capturé AVANT le changement de mode, puis
- * Flip fait glisser chaque tuile vers sa nouvelle position.
- */
+/** Couleur d'un signal — « alerte » est la seule qui doit accrocher l'œil. */
+const TONES = {
+  alert: 'text-brick',
+  good: 'text-moss',
+  neutral: 'text-ink-2',
+}
+
+const toneOf = (signal) => TONES[signal.tone] ?? TONES.neutral
+
+/** Un module qui réclame une action se signale aussi par son cadre. */
+const hasAlert = (module) => (module.signals ?? []).some((signal) => signal.tone === 'alert')
+
 async function setMode(next) {
   if (next === mode.value) return
 
@@ -162,14 +185,7 @@ async function setMode(next) {
 
   await nextTick()
 
-  Flip.from(state, {
-    duration: 0.72,
-    ease: 'appEnter',
-    // Chaque tuile part avec un léger décalage : le mouvement se lit comme
-    // un enroulement, pas comme un basculement en bloc.
-    stagger: 0.045,
-    absolute: true,
-  })
+  Flip.from(state, { duration: 0.72, ease: 'appEnter', stagger: 0.045, absolute: true })
 }
 
 onMounted(() => {
@@ -189,7 +205,7 @@ onMounted(() => {
 <template>
   <section ref="root">
     <header class="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <h3 class="text-[0.95rem] font-semibold">vos modules</h3>
+      <h3 class="text-[0.95rem] font-semibold">état des modules</h3>
 
       <!-- Bascule : deux boutons plutôt qu'un interrupteur, pour que le mode
            courant se lise sans avoir à l'interpréter. -->
@@ -220,7 +236,7 @@ onMounted(() => {
     </header>
 
     <!-- ============================ SPIRALE ============================ -->
-    <div v-if="mode === 'spiral'" class="relative mx-auto aspect-square w-full max-w-3xl">
+    <div v-if="mode === 'spiral'" class="relative mx-auto aspect-square w-full max-w-2xl">
       <!-- Courbe guide : sans elle, les tuiles paraissent éparpillées plutôt
            qu'arrangées. -->
       <svg
@@ -244,8 +260,13 @@ onMounted(() => {
         v-for="(tile, index) in layout"
         :key="tile.module.id"
         data-tile
-        :to="{ name: 'module', params: { slug: tile.module.slug } }"
-        class="group absolute w-[22%] max-w-40 rounded-card border border-line bg-panel p-4 transition-colors hover:border-ink-3 hover:bg-raised"
+        :to="modulePath(tile.module.slug)"
+        class="group absolute w-[24%] rounded-card border bg-panel p-3 transition-colors hover:bg-raised"
+        :class="
+          hasAlert(tile.module)
+            ? 'border-brick/50 hover:border-brick'
+            : 'border-line hover:border-ink-3'
+        "
         :style="{
           left: `${tile.x}%`,
           top: `${tile.y}%`,
@@ -255,16 +276,29 @@ onMounted(() => {
       >
         <div class="flex items-start justify-between gap-2">
           <span
-            class="flex size-9 items-center justify-center rounded-pill border border-line bg-raised text-ink"
+            class="flex size-8 items-center justify-center rounded-pill border border-line bg-raised text-ink"
           >
-            <AppIcon :name="tile.module.icon" :size="17" />
+            <AppIcon :name="tile.module.icon" :size="15" />
           </span>
           <span class="label-caps tabular-nums">{{ String(index + 1).padStart(2, '0') }}</span>
         </div>
 
-        <p class="mt-3 text-[0.9rem] font-semibold lowercase">{{ tile.module.name }}</p>
-        <p class="mt-1 text-[0.72rem] text-ink-3">
-          {{ tile.module.items_count }} élément{{ tile.module.items_count > 1 ? 's' : '' }}
+        <p class="mt-2.5 truncate text-[0.84rem] font-semibold lowercase">{{ tile.module.name }}</p>
+
+        <!-- Le chiffre est l'information principale de la tuile : c'est lui
+             qui dit où en est le module. -->
+        <p class="mt-1 text-[0.72rem] text-ink-2 tabular-nums">
+          <span class="text-[0.95rem] font-semibold text-ink">{{ tile.module.items_count }}</span>
+          {{ tile.module.unit }}
+        </p>
+
+        <p
+          v-for="signal in tile.module.signals"
+          :key="signal.label"
+          class="mt-0.5 text-[0.68rem] tabular-nums"
+          :class="toneOf(signal)"
+        >
+          {{ signal.value }} {{ signal.label }}
         </p>
       </RouterLink>
     </div>
@@ -275,8 +309,13 @@ onMounted(() => {
         v-for="(tile, index) in layout"
         :key="tile.module.id"
         data-tile
-        :to="{ name: 'module', params: { slug: tile.module.slug } }"
-        class="group flex items-center gap-4 rounded-card border border-line bg-panel p-4 transition-colors hover:border-ink-3 hover:bg-raised"
+        :to="modulePath(tile.module.slug)"
+        class="group flex items-center gap-4 rounded-card border bg-panel p-4 transition-colors hover:bg-raised"
+        :class="
+          hasAlert(tile.module)
+            ? 'border-brick/50 hover:border-brick'
+            : 'border-line hover:border-ink-3'
+        "
       >
         <span class="label-caps w-6 shrink-0 tabular-nums">
           {{ String(index + 1).padStart(2, '0') }}
@@ -295,8 +334,20 @@ onMounted(() => {
           </span>
         </span>
 
-        <span class="shrink-0 text-[0.72rem] text-ink-3 tabular-nums">
-          {{ tile.module.items_count }}
+        <span class="flex shrink-0 items-center gap-3 text-[0.72rem] tabular-nums">
+          <span
+            v-for="signal in tile.module.signals"
+            :key="signal.label"
+            class="hidden sm:inline"
+            :class="toneOf(signal)"
+          >
+            {{ signal.value }} {{ signal.label }}
+          </span>
+
+          <span class="text-ink-2">
+            <span class="text-[0.9rem] font-semibold text-ink">{{ tile.module.items_count }}</span>
+            {{ tile.module.unit }}
+          </span>
         </span>
 
         <AppIcon

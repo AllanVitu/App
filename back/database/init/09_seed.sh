@@ -10,6 +10,13 @@
 #  seul fait de sa présence dans le dépôt.
 #
 #  Exécuté une seule fois, à la création du volume PostgreSQL.
+#
+#  PRÉFIXE 09 : PostgreSQL exécute ce dossier dans l'ordre des noms, et ce
+#  script insère des DONNÉES — il doit donc passer après TOUTE la structure.
+#  Numéroté 03, il précédait 05_terms.sql et insérait « terms_accepted_at »
+#  dans une table qui n'avait pas encore la colonne : sur un volume neuf, le
+#  chargement échouait. Tout nouveau fichier de structure se numérote donc
+#  entre 01 et 08.
 # ============================================================================
 
 SEED_FILE="/seeds/${DB_SEED:-dev.sql}"

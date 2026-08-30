@@ -28,8 +28,27 @@ test.describe('authentification', () => {
   test('la connexion mène au tableau de bord', async ({ page }) => {
     await login(page)
 
-    await expect(page.getByText('Vos modules')).toBeVisible()
-    await expect(page.getByText('Activité récente')).toBeVisible()
+    // Les trois questions auxquelles l'accueil répond. Il n'est plus un
+    // annuaire des modules — cette fonction appartient au menu latéral —
+    // mais un état : ce qui demande une action, où en est chaque module,
+    // et ce qui s'est passé récemment.
+    await expect(page.getByRole('heading', { name: 'demande attention' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'état des modules' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'activité récente' })).toBeVisible()
+
+    // Le compteur du module « tickets » lit SA table, et non la table
+    // générique. On le compare au chiffre qu'affiche le module lui-même
+    // plutôt qu'à une valeur écrite en dur : le nombre exact dépend de ce que
+    // les autres tests ont créé, et un test qui suppose une base intacte
+    // échoue au premier voisin qui laisse une ligne derrière lui.
+    const nav = page.getByRole('navigation', { name: /navigation principale/i })
+    const compteurMenu = (await nav.getByRole('link', { name: /tickets/i }).textContent()) ?? ''
+    const ouvertsMenu = compteurMenu.match(/(\d+)\s*$/)?.[1]
+
+    await page.goto('/modules/tickets')
+    await expect(page.getByRole('heading', { name: 'tickets' })).toBeVisible()
+
+    await expect(page.getByText(/\d+ ouverts/)).toContainText(String(ouvertsMenu))
   })
 
   test('le menu latéral est alimenté par l’API', async ({ page }) => {

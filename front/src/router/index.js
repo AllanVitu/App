@@ -22,8 +22,21 @@ const routes = [
         meta: { title: 'Tableau de bord' },
       },
       {
-        // Une seule vue sert les quatre modules : leur structure est
-        // identique, seul le slug change. Ajouter un module en base suffit.
+        // Chemin STATIQUE déclaré avant le paramétré : vue-router retient la
+        // première correspondance, « modules/tickets » ne tombe donc jamais
+        // dans la vue générique.
+        //
+        // Ce module a son propre modèle de données (numéro, priorité
+        // ordonnée, cycle de vie) et son propre écran. Les quatre autres
+        // attendent le même traitement.
+        path: 'modules/tickets',
+        name: 'module-tickets',
+        component: () => import('@/views/modules/TicketsView.vue'),
+        meta: { title: 'Tickets' },
+      },
+      {
+        // Vue générique, pour les modules qui n'ont pas encore de modèle
+        // propre : structure identique, seul le slug change.
         path: 'modules/:slug',
         name: 'module',
         component: () => import('@/views/modules/ModuleView.vue'),

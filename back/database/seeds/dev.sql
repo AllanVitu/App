@@ -82,6 +82,81 @@ FROM (VALUES
 ) AS v(module_slug, title, description, status, data, position)
 JOIN modules m ON m.slug = v.module_slug
 CROSS JOIN (SELECT id FROM users WHERE email = 'demo@saas.local') AS u
-ON CONFLICT DO NOTHING;
+-- Idempotence par NOT EXISTS, et non par ON CONFLICT : module_items n'a aucune
+-- contrainte d'unicité sur (titre, module, utilisateur), donc « ON CONFLICT DO
+-- NOTHING » n'attrapait rien et rejouer ce fichier créait des doublons.
+WHERE NOT EXISTS (SELECT 1 FROM module_items i WHERE i.user_id = u.id);
+
+-- ---------------------------------------------------------------------------
+-- Tickets de démonstration.
+--
+-- Le module « Tickets » a sa propre table : numéro, priorité ordonnée, cycle
+-- de vie. Les numéros (#1, #2…) sont attribués par le trigger dans l'ordre
+-- d'insertion, d'où le ORDER BY explicite — sans lui, l'ordre des lignes
+-- d'un VALUES n'est pas garanti et la numérotation varierait d'une base à
+-- l'autre, y compris entre deux exécutions de la suite de tests.
+--
+-- Les échéances sont RELATIVES à la date du jour : le jeu de démonstration
+-- montre toujours des retards et des échéances proches, quelle que soit la
+-- date à laquelle la base est créée.
+-- ---------------------------------------------------------------------------
+INSERT INTO tickets (user_id, title, description, status, priority, project, labels, due_date)
+SELECT
+    u.id,
+    v.title,
+    v.description,
+    v.status::ticket_status,
+    v.priority::ticket_priority,
+    v.project,
+    v.labels::text[],
+    CASE WHEN v.due_in_days IS NULL THEN NULL ELSE CURRENT_DATE + v.due_in_days END
+FROM (VALUES
+    (1,  'Détecter la réutilisation d''un refresh token',
+         'Un jeton présenté deux fois signale un vol : révoquer toute la famille et forcer la reconnexion.',
+         'todo',        'urgent', 'Sécurité',    '{securite,auth}',      -2),
+    (2,  'Purger les jetons expirés',
+         'Aucune tâche de nettoyage : la table grossit indéfiniment.',
+         'todo',        'high',   'Sécurité',    '{securite,dette}',      1),
+    (3,  'Piéger le focus dans les fenêtres modales',
+         'La tabulation sort de la modale et atteint la page derrière.',
+         'in_progress', 'high',   'Accessibilité', '{a11y}',              3),
+    (4,  'CSP sans unsafe-inline',
+         'Les styles en ligne de GSAP imposent la tolérance : passer par une nonce.',
+         'backlog',     'medium', 'Sécurité',    '{securite}',         NULL),
+    (5,  'Sauvegardes automatiques de PostgreSQL',
+         'pg_dump quotidien, rétention 30 jours, restauration à vérifier.',
+         'backlog',     'high',   'Exploitation', '{infra}',            NULL),
+    (6,  'Journalisation structurée',
+         'error_log en texte libre : passer au JSON pour rendre les incidents interrogeables.',
+         'backlog',     'low',    'Exploitation', '{infra,dette}',      NULL),
+    (7,  'Second facteur TOTP',
+         'Applications d''authentification, avec codes de secours.',
+         'backlog',     'medium', 'Sécurité',    '{securite}',         NULL),
+    (8,  'Changement d''adresse e-mail',
+         'Confirmation sur l''ancienne ET la nouvelle adresse.',
+         'todo',        'medium', 'Compte',      '{}',                    7),
+    (9,  'Corbeille consultable',
+         'La suppression est logique mais rien ne permet de restaurer.',
+         'backlog',     'low',    'Produit',     '{}',                 NULL),
+    (10, 'Écran de repli sur erreur Vue',
+         'Le gestionnaire global est en place, l''écran de repli manque.',
+         'in_progress', 'medium', 'Produit',     '{}',                    5),
+    (11, 'Latence de l''API en développement',
+         'OPcache revalidait à chaque inclusion : plancher ramené de 400 ms à 60 ms.',
+         'done',        'high',   'Exploitation', '{perf}',              -6),
+    (12, 'En-têtes de sécurité en production',
+         'Un add_header dans un location annulait ceux hérités : extraits dans un fichier ré-inclus.',
+         'done',        'urgent', 'Sécurité',    '{securite}',           -4),
+    (13, 'Consentement aux conditions générales',
+         'Version et horodatage enregistrés dans la même transaction que la création du compte.',
+         'done',        'high',   'Conformité',  '{conformite}',         -3),
+    (14, 'Migrer vers une autre bibliothèque d''icônes',
+         'Écarté : le jeu actuel couvre tous les usages.',
+         'canceled',    'none',   'Produit',     '{}',                 NULL)
+) AS v(seq, title, description, status, priority, project, labels, due_in_days)
+CROSS JOIN (SELECT id FROM users WHERE email = 'demo@saas.local') AS u
+-- Idempotence : rejouer le fichier sur une base déjà peuplée n'ajoute rien.
+WHERE NOT EXISTS (SELECT 1 FROM tickets t WHERE t.user_id = u.id)
+ORDER BY v.seq;
 
 COMMIT;
