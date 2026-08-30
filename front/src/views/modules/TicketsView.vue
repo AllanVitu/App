@@ -28,6 +28,7 @@ import TicketRow from '@/components/tickets/TicketRow.vue'
 import TicketStatusIcon from '@/components/tickets/TicketStatusIcon.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import { Flip, gsap, prefersReducedMotion } from '@/animations/gsap'
 import { ticketsApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useWriteQueue } from '@/composables/useWriteQueue'
@@ -230,8 +231,34 @@ async function patch(ticket, changes) {
 
   const previous = tickets.value[index]
 
+  // Un changement de STATUT déplace la ligne d'un groupe à l'autre. Sans
+  // Flip, elle disparaît d'un endroit et réapparaît ailleurs : rien ne dit
+  // que c'est la même. C'est pourtant le geste le plus fréquent du module.
+  //
+  // L'état est capturé AVANT la mise à jour optimiste, et l'animation jouée
+  // juste après — pas au retour du serveur : le mouvement doit accompagner
+  // la frappe, pas l'aller-retour réseau.
+  const flipState =
+    changes.status !== undefined && !prefersReducedMotion() && listBox.value
+      ? Flip.getState(listBox.value.querySelectorAll('[role="option"]'))
+      : null
+
   tickets.value[index] = { ...previous, ...changes }
   saving.value = true
+
+  if (flipState) {
+    await nextTick()
+
+    Flip.from(flipState, {
+      duration: 0.42,
+      ease: 'appEnter',
+      // Les lignes qui ENTRENT dans un groupe ou en sortent ne sont pas
+      // déplacées mais créées ou détruites : elles se contentent d'un fondu,
+      // sinon elles glisseraient depuis un point qui n'existait pas.
+      onEnter: (elements) => gsap.fromTo(elements, { opacity: 0 }, { opacity: 1, duration: 0.3 }),
+      onLeave: (elements) => gsap.to(elements, { opacity: 0, duration: 0.2 }),
+    })
+  }
 
   try {
     const updated = await enqueue(ticket.id, () => ticketsApi.update(ticket.id, changes))

@@ -8,11 +8,11 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { gsap } from '@/animations/gsap'
+import { animate, appEnter, DURATION, shake, stagger, STAGGER } from '@/animations/anime'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
-import { useGsap } from '@/composables/useGsap'
+import { useAnime } from '@/composables/useAnime'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 
@@ -27,30 +27,29 @@ const globalError = ref('')
 const loading = ref(false)
 const formEl = ref(null)
 
-/** Arrivée du formulaire : titre puis champs, en cascade. */
-const root = useGsap(() => {
-  gsap.fromTo(
-    '[data-anim="head"]',
-    { y: 14, opacity: 0 },
-    { y: 0, opacity: 1, duration: 0.5, stagger: 0.06 },
-  )
-  gsap.fromTo(
-    '[data-anim="field"]',
-    { y: 16, opacity: 0 },
-    { y: 0, opacity: 1, duration: 0.5, stagger: 0.07, delay: 0.12 },
-  )
-})
-
 /**
- * Refus de connexion : le formulaire se secoue.
- * Le mouvement précède la lecture du message — l'utilisateur sait qu'il a
- * échoué avant même d'avoir lu pourquoi.
+ * Arrivée du formulaire : titre puis champs, en cascade.
+ *
+ * Durées en MILLISECONDES : cet écran appartient à la moitié publique et
+ * tourne sous anime.js, pas sous GSAP (cf. animations/anime.js).
  */
-function shakeForm() {
-  if (!formEl.value) return
+const root = useAnime(() => {
+  animate('[data-anim="head"]', {
+    translateY: [14, 0],
+    opacity: [0, 1],
+    duration: DURATION.base,
+    delay: stagger(STAGGER.blocks),
+    ease: appEnter,
+  })
 
-  gsap.fromTo(formEl.value, { x: -9 }, { x: 0, duration: 0.65, ease: 'appShake' })
-}
+  animate('[data-anim="field"]', {
+    translateY: [16, 0],
+    opacity: [0, 1],
+    duration: DURATION.base,
+    delay: stagger(STAGGER.blocks, { start: 120 }),
+    ease: appEnter,
+  })
+})
 
 async function submit() {
   loading.value = true
@@ -71,7 +70,9 @@ async function submit() {
       globalError.value = error.message
     }
 
-    shakeForm()
+    // Le mouvement précède la lecture du message : on sait qu'on a échoué
+    // avant même d'avoir lu pourquoi.
+    shake(formEl.value)
   } finally {
     loading.value = false
   }

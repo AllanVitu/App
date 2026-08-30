@@ -1,9 +1,24 @@
 /**
  * ---------------------------------------------------------------------------
- * Point d'entrée unique de GSAP
+ * Point d'entrée unique de GSAP — moitié APPLICATION du front
  *
- * Tous les plugins sont enregistrés ICI, une seule fois. Les composants
- * importent `gsap` depuis ce module plutôt que depuis le paquet : impossible
+ * Le front utilise deux moteurs d'animation, et la frontière est stricte :
+ *
+ *   AppLayout   (tableau de bord, modules, profil, paramètres)  -> GSAP
+ *   AuthLayout  (connexion, inscription, mot de passe oublié…)  -> anime.js
+ *
+ * Ce module N'EST PLUS importé par main.js. Il l'était, pour enregistrer les
+ * plugins une fois pour toutes — mais l'effet de bord était de placer GSAP
+ * dans le morceau d'entrée, donc de le faire charger par toutes les pages, y
+ * compris l'écran de connexion. Il s'auto-enregistre à son premier import,
+ * quel qu'il soit : le compilateur le range dans un morceau à part, chargé
+ * seulement avec les composants qui en ont besoin.
+ *
+ * RÈGLE À TENIR : aucun composant chargé par les DEUX mises en page ne doit
+ * importer ce module. C'est pourquoi ToastHost — monté dans App.vue — utilise
+ * anime.js. Un test de bout en bout garde cet invariant (animation.spec.js).
+ *
+ * Tous les plugins sont enregistrés ICI, une seule fois : impossible
  * d'oublier un registerPlugin, et l'inventaire de ce qui est chargé reste
  * lisible à un seul endroit.
  *
@@ -17,9 +32,7 @@ import { gsap } from 'gsap'
 
 // --- Eases -------------------------------------------------------------------
 import { CustomEase } from 'gsap/CustomEase'
-import { CustomBounce } from 'gsap/CustomBounce' // dépend de CustomEase
 import { CustomWiggle } from 'gsap/CustomWiggle' // dépend de CustomEase
-import { RoughEase, ExpoScaleEase, SlowMo } from 'gsap/EasePack'
 
 // --- Plugins d'exécution -----------------------------------------------------
 //
@@ -27,43 +40,41 @@ import { RoughEase, ExpoScaleEase, SlowMo } from 'gsap/EasePack'
 // expédié au navigateur. Enregistrer l'ensemble du catalogue « au cas où »
 // double le poids de l'application (mesuré : ~106 Ko gzip contre ~40 Ko).
 //
-// Les absents volontaires, et leur raison, sont documentés dans PLAN.md :
+// Les absents volontaires, et leur raison :
 //   ScrollSmoother  — détourne le défilement natif, néfaste sur des listes
 //   MotionPathPlugin — aucun trajet courbe justifié ici
 //   PixiPlugin / EaselPlugin — ponts vers des bibliothèques absentes du projet
 //   PhysicsPropsPlugin — redondant avec InertiaPlugin
-//   TextPlugin — recouvert par ScrambleTextPlugin
+//
+// SIX plugins sont partis avec le partage GSAP / anime.js — non par arbitrage,
+// mais parce que leurs seuls utilisateurs étaient dans la moitié publique et
+// tournent maintenant sous anime.js :
+//   SplitText        — logotype de AuthLayout        -> utils/text.js
+//   DrawSVGPlugin    — tracé de SuccessBurst          -> svg.createDrawable
+//   Physics2DPlugin  — gerbe de SuccessBurst          -> x = vx·t, y = vy·t + ½gt²
+//   CustomBounce     — rebond de SuccessBurst         -> createSpring
+//   ScrambleTextPlugin — prénom du tableau de bord    -> retiré (décoratif)
+//   EasePack         — courbe « slow » des compteurs  -> compteurs retirés
+//
 // Réactiver l'un d'eux = une ligne d'import et une entrée dans registerPlugin.
 import { Draggable } from 'gsap/Draggable'
-import { DrawSVGPlugin } from 'gsap/DrawSVGPlugin'
 import { Flip } from 'gsap/Flip'
 import { InertiaPlugin } from 'gsap/InertiaPlugin'
 import { MorphSVGPlugin } from 'gsap/MorphSVGPlugin'
 import { Observer } from 'gsap/Observer'
-import { Physics2DPlugin } from 'gsap/Physics2DPlugin'
-import { ScrambleTextPlugin } from 'gsap/ScrambleTextPlugin'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin'
-import { SplitText } from 'gsap/SplitText'
 
 gsap.registerPlugin(
   CustomEase,
-  CustomBounce,
   CustomWiggle,
-  RoughEase,
-  ExpoScaleEase,
-  SlowMo,
   Draggable,
-  DrawSVGPlugin,
   Flip,
   InertiaPlugin,
   MorphSVGPlugin,
   Observer,
-  Physics2DPlugin,
-  ScrambleTextPlugin,
   ScrollTrigger,
   ScrollToPlugin,
-  SplitText,
 )
 
 /**
@@ -102,8 +113,10 @@ CustomEase.create('appExit', '0.7, 0, 0.84, 0')
 /** Léger dépassement, pour les éléments qui « arrivent » (modales, pastilles). */
 CustomEase.create('appOvershoot', '0.34, 1.56, 0.64, 1')
 
-/** Rebond discret : validation, coche de succès. */
-CustomBounce.create('appBounce', { strength: 0.4, squash: 1.2 })
+// « appBounce » vivait ici. Son unique usage — la coche de SuccessBurst —
+// appartient à la moitié publique : il est devenu un ressort anime.js
+// (cf. animations/anime.js). Le garder aurait maintenu CustomBounce dans le
+// lot GSAP pour personne.
 
 /** Secousse latérale : champ de formulaire refusé. */
 CustomWiggle.create('appShake', { wiggles: 6, type: 'easeOut' })
@@ -137,17 +150,12 @@ export const motionDuration = (seconds) => (prefersReducedMotion() ? 0 : seconds
 export {
   gsap,
   CustomEase,
-  CustomBounce,
   CustomWiggle,
   Draggable,
-  DrawSVGPlugin,
   Flip,
   InertiaPlugin,
   MorphSVGPlugin,
   Observer,
-  Physics2DPlugin,
-  ScrambleTextPlugin,
   ScrollTrigger,
   ScrollToPlugin,
-  SplitText,
 }

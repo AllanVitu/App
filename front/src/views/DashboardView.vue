@@ -25,7 +25,6 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { gsap } from '@/animations/gsap'
 import AppIcon from '@/components/AppIcon.vue'
 import ModuleGallery from '@/components/ModuleGallery.vue'
-import TechnicalDiagram from '@/components/TechnicalDiagram.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { useGsapContext } from '@/composables/useGsap'
@@ -81,34 +80,45 @@ const moduleName = (slug) => MODULE_NAMES[slug] ?? slug
 const { root, run } = useGsapContext()
 
 /**
+ * L'entrée n'est jouée qu'UNE FOIS par session.
+ *
+ * Le tableau de bord est remonté à chaque retour dessus — c'est-à-dire
+ * souvent. Rejouée à chaque fois, la cascade cesse d'aider le regard à entrer
+ * dans la page et devient un péage : on attend qu'elle finisse pour lire.
+ * Utile la première fois, pénible les suivantes.
+ *
+ * Le témoin vit au niveau du MODULE, pas du composant : il survit donc au
+ * démontage, mais pas au rechargement de la page — ce qui correspond bien à
+ * « la première fois de cette visite ».
+ */
+let introPlayed = false
+
+/**
  * Entrée, jouée APRÈS l'arrivée des données : animer un squelette vide puis
  * remplacer le contenu produirait deux mouvements successifs, illisibles.
  */
 function playIntro() {
+  if (introPlayed) return
+
+  introPlayed = true
+
   run(() => {
-    const timeline = gsap.timeline()
-
-    // Le prénom se stabilise : signale que la donnée vient d'être chargée.
-    timeline.to('[data-anim="greeting"]', {
-      duration: 0.9,
-      scrambleText: { text: firstName.value, chars: 'upperAndLowerCase', speed: 0.5 },
-    })
-
     // fromTo plutôt que from : les deux extrémités sont explicites. Un tween
     // `from` déduit son état d'arrivée de la valeur courante au moment du
     // rendu — si l'élément a déjà été touché par une autre animation, il
     // mémorise 0 comme arrivée et reste invisible.
+    const timeline = gsap.timeline()
+
     timeline.fromTo(
       '[data-anim="attention"]',
       { x: -12, opacity: 0 },
       { x: 0, opacity: 1, stagger: 0.05, overwrite: 'auto' },
-      0.1,
     )
     timeline.fromTo(
       '[data-anim="recent"]',
       { x: 16, opacity: 0 },
       { x: 0, opacity: 1, stagger: 0.05, overwrite: 'auto' },
-      0.3,
+      0.2,
     )
   })
 }
@@ -131,23 +141,18 @@ onMounted(async () => {
 
 <template>
   <div ref="root" class="space-y-8">
-    <!-- Accueil : l'invite de commande donne le ton, le diagramme occupe le
-         vide à droite sans réclamer l'attention. -->
-    <div class="flex items-center justify-between gap-8">
-      <div class="min-w-0 max-w-lg">
-        <p class="label-caps">session ouverte</p>
-        <h2 class="mt-1.5 text-xl font-bold">
-          <span class="text-ink-3">&gt;</span> bonjour
-          <span data-anim="greeting">{{ firstName }}</span
-          ><span class="caret" aria-hidden="true" />
-        </h2>
-        <p class="mt-1.5 text-[0.82rem] text-ink-2">Voici l'état de votre espace de travail.</p>
-      </div>
-
-      <!-- Décoratif : masqué sous md, où la largeur doit aller au contenu. -->
-      <div class="hidden size-32 shrink-0 opacity-80 md:block lg:size-40" aria-hidden="true">
-        <TechnicalDiagram :satellites="5" :speed="0.7" />
-      </div>
+    <!-- Accueil.
+         Le diagramme décoratif qui occupait la droite a été retiré : il
+         n'encodait rien, et la place vaut mieux pour l'état des modules.
+         Le prénom ne se brouille plus non plus à l'arrivée — joli une fois,
+         coûteux à chacune des dizaines de visites quotidiennes. -->
+    <div class="min-w-0 max-w-lg">
+      <p class="label-caps">session ouverte</p>
+      <h2 class="mt-1.5 text-xl font-bold">
+        <span class="text-ink-3">&gt;</span> bonjour {{ firstName
+        }}<span class="caret" aria-hidden="true" />
+      </h2>
+      <p class="mt-1.5 text-[0.82rem] text-ink-2">Voici l'état de votre espace de travail.</p>
     </div>
 
     <div v-if="loading" class="flex justify-center py-20">

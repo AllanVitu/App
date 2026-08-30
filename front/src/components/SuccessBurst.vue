@@ -1,15 +1,18 @@
 <script setup>
 /**
- * Pastille de confirmation animée : le cercle puis la coche se **tracent**
- * (DrawSVGPlugin), la pastille rebondit (CustomBounce), et une gerbe de
- * particules part du centre (Physics2DPlugin).
+ * Pastille de confirmation animée : le cercle puis la coche se **tracent**,
+ * la pastille rebondit, et une gerbe de particules part du centre.
  *
  * Réservé aux fins de parcours (adresse confirmée, mot de passe réinitialisé) :
  * c'est le seul endroit où une animation franchement expressive se justifie.
+ *
+ * Ce composant appartient à la moitié PUBLIQUE — il n'est monté que par
+ * ResetPasswordView et VerifyEmailView. Il tourne donc sous anime.js, et
+ * n'importe jamais GSAP.
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
-import { gsap, prefersReducedMotion } from '@/animations/gsap'
+import { animate, appBounce, prefersReducedMotion, svg, utils } from '@/animations/anime'
 
 const props = defineProps({
   /** Gerbe de particules : à réserver au moment le plus marquant. */
@@ -19,49 +22,87 @@ const props = defineProps({
 
 const root = ref(null)
 
-let context = null
+/** Toutes les animations lancées, pour les révoquer au démontage. */
+let running = []
 
 onMounted(() => {
   if (prefersReducedMotion() || !root.value) return
 
-  context = gsap.context(() => {
-    const timeline = gsap.timeline()
+  const element = root.value
 
-    timeline
-      .fromTo('[data-badge]', { scale: 0.3 }, { scale: 1, duration: 0.75, ease: 'appBounce' })
-      .fromTo('[data-circle]', { drawSVG: '0%' }, { drawSVG: '100%', duration: 0.5 }, 0.05)
-      .fromTo('[data-check]', { drawSVG: '0%' }, { drawSVG: '100%', duration: 0.35 }, 0.35)
+  running.push(
+    animate(element.querySelector('[data-badge]'), {
+      scale: [0.3, 1],
+      duration: 750,
+      ease: appBounce,
+    }),
+  )
 
-    if (!props.burst) return
+  // createDrawable transforme un tracé SVG en cible animable : il pose le
+  // pointillé et son décalage, et expose une propriété « draw » de la forme
+  // « début fin ». Aller de « 0 0 » à « 0 1 », c'est dessiner le trait.
+  const [circle] = svg.createDrawable(element.querySelector('[data-circle]'))
+  const [check] = svg.createDrawable(element.querySelector('[data-check]'))
 
-    // Les particules partent du centre avec un angle et une vitesse tirés au
-    // sort, puis retombent : c'est le moteur de Physics2DPlugin, pas une
-    // trajectoire scriptée à la main.
-    timeline.fromTo('[data-particle]', { opacity: 0 }, { opacity: 1, duration: 0.1 }, 0.3)
+  running.push(
+    animate(circle, { draw: ['0 0', '0 1'], duration: 500, delay: 50 }),
+    animate(check, { draw: ['0 0', '0 1'], duration: 350, delay: 350 }),
+  )
 
-    timeline.to(
-      '[data-particle]',
-      {
-        duration: 1.4,
-        physics2D: {
-          velocity: 'random(160, 300)',
-          angle: 'random(200, 340)',
-          gravity: 420,
-        },
-        opacity: 0,
-        scale: 'random(0.4, 1)',
-        ease: 'none',
-        stagger: 0.012,
+  if (!props.burst) return
+
+  // --- Gerbe de particules -------------------------------------------------
+  //
+  // GSAP avait un moteur pour cela (Physics2DPlugin). anime.js n'en a pas, et
+  // il n'en faut pas : une particule lancée puis soumise à la gravité suit
+  //     x = vx·t          y = vy·t + ½·g·t²
+  // Deux lignes d'arithmétique, et la trajectoire est exacte plutôt
+  // qu'approchée par une courbe d'accélération.
+  const shots = [...element.querySelectorAll('[data-particle]')].map((node) => ({
+    node,
+    // Vers le HAUT : les angles sont pris dans la moitié supérieure, et l'axe
+    // y de l'écran descend — d'où le sinus négatif.
+    angle: utils.random(200, 340) * (Math.PI / 180),
+    velocity: utils.random(160, 300),
+    scale: utils.random(40, 100) / 100,
+  }))
+
+  const GRAVITY = 420
+
+  // UNE seule animation pilote les dix-huit particules : elles partagent la
+  // même horloge, donc la même image. Dix-huit animations concurrentes
+  // donneraient dix-huit calculs de progression pour le même instant.
+  // L'objet piloté est muté en place par anime.js : on le lit directement
+  // plutôt que de passer par les cibles du rappel.
+  const driver = { t: 0 }
+
+  running.push(
+    animate(driver, {
+      t: 1,
+      duration: 1400,
+      delay: 320,
+      ease: 'linear',
+      onUpdate: () => {
+        const t = driver.t
+
+        for (const shot of shots) {
+          const x = Math.cos(shot.angle) * shot.velocity * t
+          const y = Math.sin(shot.angle) * shot.velocity * t + 0.5 * GRAVITY * t * t
+
+          shot.node.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${shot.scale})`
+          // Apparition franche puis disparition progressive : la particule
+          // ne doit pas s'éteindre avant d'avoir été vue partir.
+          shot.node.style.opacity = String(t < 0.08 ? t / 0.08 : 1 - (t - 0.08) / 0.92)
+        }
       },
-      0.32,
-    )
-  }, root.value)
+    }),
+  )
 })
 
-// Révocation explicite : aucune timeline ne survit au composant.
+// Révocation explicite : aucune animation ne survit au composant.
 onBeforeUnmount(() => {
-  context?.revert()
-  context = null
+  for (const animation of running) animation?.revert?.()
+  running = []
 })
 </script>
 

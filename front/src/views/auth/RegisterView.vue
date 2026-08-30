@@ -8,11 +8,11 @@
 import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { gsap } from '@/animations/gsap'
+import { animate, appEnter, DURATION, shake, stagger, STAGGER } from '@/animations/anime'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
-import { useGsap } from '@/composables/useGsap'
+import { useAnime } from '@/composables/useAnime'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 
@@ -36,25 +36,23 @@ const loading = ref(false)
 const formEl = ref(null)
 
 /** Même cascade d'entrée que la page de connexion : les deux écrans se répondent. */
-const root = useGsap(() => {
-  gsap.fromTo(
-    '[data-anim="head"]',
-    { y: 14, opacity: 0 },
-    { y: 0, opacity: 1, duration: 0.5, stagger: 0.06 },
-  )
-  gsap.fromTo(
-    '[data-anim="field"]',
-    { y: 16, opacity: 0 },
-    { y: 0, opacity: 1, duration: 0.5, stagger: 0.06, delay: 0.12 },
-  )
+const root = useAnime(() => {
+  animate('[data-anim="head"]', {
+    translateY: [14, 0],
+    opacity: [0, 1],
+    duration: DURATION.base,
+    delay: stagger(STAGGER.blocks),
+    ease: appEnter,
+  })
+
+  animate('[data-anim="field"]', {
+    translateY: [16, 0],
+    opacity: [0, 1],
+    duration: DURATION.base,
+    delay: stagger(STAGGER.blocks, { start: 120 }),
+    ease: appEnter,
+  })
 })
-
-/** Inscription refusée : le formulaire se secoue avant même qu'on lise l'erreur. */
-function shakeForm() {
-  if (!formEl.value) return
-
-  gsap.fromTo(formEl.value, { x: -9 }, { x: 0, duration: 0.65, ease: 'appShake' })
-}
 
 /**
  * Indicateur de robustesse — purement informatif. La règle qui fait foi
@@ -98,7 +96,7 @@ async function submit() {
       globalError.value = error.message
     }
 
-    shakeForm()
+    shake(formEl.value)
   } finally {
     loading.value = false
   }

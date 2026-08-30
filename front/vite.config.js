@@ -41,14 +41,17 @@ export default defineConfig({
     // Les dépendances stables sont isolées : elles restent en cache navigateur
     // entre deux déploiements applicatifs.
     //
-    // GSAP a son propre lot : avec l'ensemble des plugins enregistrés, il pèse
-    // plus que tout le reste réuni. L'isoler évite qu'une modification du code
-    // applicatif n'invalide son cache — et rend son coût visible dans le
-    // rapport de build plutôt que noyé dans le bundle principal.
+    // Les DEUX moteurs d'animation ont chacun leur lot, et c'est structurant :
+    // le front est coupé en deux moitiés qui n'en chargent qu'un chacune —
+    // anime.js pour les écrans publics, GSAP pour l'application. Laissés dans
+    // « vendor », ils seraient chargés par tout le monde et la séparation
+    // n'existerait que sur le papier. C'est aussi ce qui rend leur coût
+    // lisible dans le rapport de compilation plutôt que noyé dans un bloc.
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (id.includes('node_modules/gsap')) return 'gsap'
+          if (id.includes('node_modules/animejs')) return 'anime'
           if (id.includes('node_modules')) return 'vendor'
 
           return undefined

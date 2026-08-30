@@ -6,10 +6,17 @@ import router from './router'
 import { bindInterfaceSounds, play, setSuspended } from './services/sound'
 import { useUiStore } from './stores/ui'
 
-// Enregistre les plugins GSAP et définit les courbes partagées. Importé une
-// seule fois, au démarrage : les composants importent ensuite « @/animations/gsap ».
-import './animations/gsap'
-
+// Aucune bibliothèque d'animation n'est importée ici — et c'est délibéré.
+//
+// « @/animations/gsap » l'était, pour enregistrer les plugins une fois pour
+// toutes. L'effet de bord était que GSAP se retrouvait dans le morceau
+// d'entrée, donc chargé par TOUTES les pages : l'écran de connexion payait
+// 92 Ko compressés pour animer un logotype.
+//
+// Le module s'auto-enregistre à son premier import, quel qu'il soit : les
+// composants qui en ont besoin l'importent, et le compilateur le place dans
+// un morceau à part, chargé avec eux. La moitié publique, elle, passe par
+// « @/animations/anime » et ne voit jamais GSAP.
 import './assets/css/main.css'
 
 const app = createApp(App)

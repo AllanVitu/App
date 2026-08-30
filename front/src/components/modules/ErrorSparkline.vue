@@ -14,7 +14,7 @@
  * Le texte ne porte jamais la couleur de la série : les libellés restent en
  * encre, et c'est la marque colorée à côté qui porte l'identité.
  */
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
   /** [{ date: 'AAAA-MM-JJ', count: n }] */
@@ -75,6 +75,49 @@ const formatDay = (date) =>
   new Date(`${date}T00:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
 
 const total = computed(() => props.points.reduce((sum, point) => sum + point.count, 0))
+
+// --- Tracé à l'arrivée des données -------------------------------------------
+//
+// La courbe se dessine UNE FOIS, quand les données arrivent : c'est ce qui la
+// distingue d'un décor. Elle ne rejoue ni au survol ni au rafraîchissement des
+// compteurs.
+//
+// Sans bibliothèque : un trait qui se dessine, c'est un pointillé de la
+// longueur du tracé dont on ramène le décalage à zéro. `getTotalLength()` la
+// donne, une transition CSS fait le reste. GSAP a un plugin pour cela
+// (DrawSVG) mais il a été retiré du lot — le garder pour une seule courbe
+// coûterait plus que ces huit lignes.
+
+const line = ref(null)
+let drawn = false
+
+async function draw() {
+  if (drawn || !props.points.length) return
+
+  await nextTick()
+
+  const path = line.value
+
+  if (!path || typeof path.getTotalLength !== 'function') return
+
+  drawn = true
+
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const length = path.getTotalLength()
+
+  if (reduced || length === 0) return
+
+  path.style.strokeDasharray = String(length)
+  path.style.strokeDashoffset = String(length)
+  // Lecture forcée du style calculé : sans elle, le navigateur regroupe les
+  // deux écritures et il n'y a aucune transition à animer.
+  void path.getBoundingClientRect()
+  path.style.transition = 'stroke-dashoffset 900ms cubic-bezier(0.16, 1, 0.3, 1)'
+  path.style.strokeDashoffset = '0'
+}
+
+onMounted(draw)
+watch(() => props.points.length, draw)
 </script>
 
 <template>
@@ -107,6 +150,7 @@ const total = computed(() => props.points.reduce((sum, point) => sum + point.cou
       <path :d="areaPath" fill="currentColor" class="text-chart-alert" opacity="0.16" />
 
       <path
+        ref="line"
         :d="linePath"
         fill="none"
         stroke="currentColor"

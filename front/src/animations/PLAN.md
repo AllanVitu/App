@@ -1,5 +1,51 @@
 # Plan d'animations
 
+## Deux moteurs, une frontière
+
+Le front utilise **deux** bibliothèques d'animation, et la frontière est
+stricte :
+
+| Moitié                                               | Moteur           | Poids      |
+| ---------------------------------------------------- | ---------------- | ---------- |
+| `AuthLayout` — connexion, inscription, mot de passe… | **anime.js 4.5** | 16,8 Ko gz |
+| `AppLayout` — tableau de bord, modules, profil…      | **GSAP 3.15**    | 81,3 Ko gz |
+
+Ce n'est pas une préférence de style. Les écrans publics n'ont besoin que
+d'entrées simples ; les faire tourner sous GSAP obligeait le visiteur pas
+encore identifié à télécharger 92 Ko pour animer un logotype. L'écran de
+connexion est passé de **174 à 99 Ko compressés**.
+
+Trois règles tiennent cette frontière :
+
+1. **`main.js` n'importe aucune bibliothèque d'animation.** Elle l'était —
+   pour enregistrer les plugins GSAP une fois pour toutes — et l'effet de bord
+   était de placer GSAP dans le morceau d'entrée, donc dans toutes les pages.
+2. **Aucun composant chargé par les DEUX mises en page n'importe GSAP.**
+   `ToastHost`, monté dans `App.vue`, utilise donc anime.js. Un seul import de
+   travers ramènerait les 92 Ko dans le chemin public — sans la moindre erreur
+   pour le signaler.
+3. **Chaque moteur a son morceau** (`manualChunks` dans `vite.config.js`).
+   Laissés dans `vendor`, ils seraient chargés par tout le monde et la
+   séparation n'existerait que sur le papier.
+
+Un test de bout en bout (`e2e/tests/animation.spec.js`) vérifie ces trois
+points à chaque exécution : il échoue si GSAP réapparaît sur `/connexion`.
+
+### Le piège quand les deux cohabitent
+
+**anime.js compte en MILLISECONDES, GSAP en SECONDES.** `duration: 0.5` dure
+une demi-milliseconde chez anime.js : invisible, et sans erreur. D'où les
+durées nommées dans `animations/anime.js`, à utiliser plutôt que des nombres
+écrits à la main.
+
+Second écart, plus grave : côté GSAP, toutes les animations sont des tweens
+`from()` — ne rien jouer laisse l'interface dans son état final. Côté
+anime.js, elles partent d'un état explicite `[départ, arrivée]` : ne rien
+jouer laisserait les éléments **invisibles**. En mouvement réduit, il faut
+donc POSER l'état final, ce que fait `useAnime` via l'attribut `data-anim`.
+
+---
+
 ## Principes
 
 L'application est un outil de travail, pas une page de présentation. Une
@@ -73,32 +119,16 @@ révocation au démontage), écrit avec `onMounted` / `onUnmounted`.
 
 ---
 
-## Décor animé
+## Décor animé — retiré
 
-`components/TechnicalDiagram.vue` : orbites concentriques, couronne graduée
-au demi-degré, sphère à méridiens et satellites en révolution lente. Dessiné
-au canvas 2D, sans aucune dépendance.
+`components/TechnicalDiagram.vue` dessinait au canvas des orbites, une
+couronne graduée et des satellites en révolution lente, dans un coin du
+tableau de bord. Il a été supprimé lors du partage GSAP / anime.js.
 
-**Ce qu'il a remplacé, et pourquoi.** Une première version utilisait un
-dégradé WebGL coloré reproduisant *ShaderGradient* — dont le paquet officiel
-est publié pour React et imposerait d'ajouter React, react-dom et three à une
-application Vue. La direction visuelle retenue ensuite (monochrome sur fond
-papier) rendait ce dégradé incohérent : un aplat violet-bleu au milieu d'une
-interface à l'encre. Le dessin au trait dit la même chose — « il se passe
-quelque chose ici » — dans le vocabulaire de la page.
+La raison tient en une phrase : **il n'encodait rien**. Aucune de ses valeurs
+ne venait des données, aucune de ses rotations ne signalait un état. La place
+qu'il occupait revient à l'état des modules, qui, lui, dit quelque chose.
 
-Canvas plutôt que SVG : la figure tourne en continu, et animer quelques
-dizaines de tracés coûte moins cher que le même nombre de nœuds DOM
-réévalués à chaque image.
-
-Garde-fous : rendu suspendu hors écran (`IntersectionObserver`) et onglet
-masqué (`visibilitychange`), densité de pixels plafonnée à 2, image fixe si
-`prefers-reduced-motion`, périodes orbitales non harmoniques pour que la
-figure ne se répète jamais à l'identique.
-
-La couleur du trait est lue sur `--c-ink-3` à chaque image : le dessin suit
-le thème clair/sombre sans configuration.
-
-Emplacements : panneau de présentation de l'authentification (grand format,
-atténué), en-tête du tableau de bord (petit format, masqué sous `md` où la
-largeur doit aller au contenu).
+Le composant reste dans l'historique Git si le besoin d'un décor se
+représentait — mais il faudrait alors répondre d'abord à la question qu'il
+n'avait jamais posée : que montre-t-il ?

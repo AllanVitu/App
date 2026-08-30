@@ -11,37 +11,55 @@
  * Ces écrans sont MUETS : la suspension est posée par le routeur
  * (meta.silent), et le choix sonore n'est proposé qu'une fois entré.
  */
-import { gsap, SplitText } from '@/animations/gsap'
-import { useGsap } from '@/composables/useGsap'
+import { animate, appEnter, DURATION, STAGGER, stagger } from '@/animations/anime'
+import { useAnime } from '@/composables/useAnime'
+import { splitChars } from '@/utils/text'
 
 /**
- * Entrée : la marque, puis le contenu. Une seule timeline, donc un rythme
- * tenu plutôt que des animations concurrentes.
+ * Entrée : la marque, puis le contenu.
+ *
+ * Écrite avec anime.js et non GSAP : cet écran appartient à la moitié
+ * publique, qui doit rester légère (cf. animations/anime.js). Les durées
+ * sont en MILLISECONDES — le piège nº 1 quand les deux moteurs cohabitent.
+ *
+ * Les animations démarrent ensemble, décalées par leur `delay`, plutôt que
+ * d'être enchaînées dans une timeline : à cette échelle — quatre éléments,
+ * moins d'une seconde — une timeline n'apporterait qu'un objet de plus à
+ * révoquer.
  */
-const root = useGsap(() => {
-  const timeline = gsap.timeline()
-  const brand = document.querySelector('[data-anim="brand-name"]')
+const root = useAnime(() => {
+  animate('[data-anim="orb"]', {
+    scale: [0.6, 1],
+    opacity: [0, 1],
+    duration: DURATION.feature,
+    ease: appEnter,
+  })
 
-  if (brand) {
-    // Le nom se compose lettre à lettre — le seul geste appuyé de l'écran.
-    const split = new SplitText(brand, { type: 'chars', charsClass: 'inline-block' })
+  // Le nom se compose lettre à lettre — le seul geste appuyé de l'écran.
+  const letters = splitChars(document.querySelector('[data-anim="brand-name"]'))
 
-    timeline.fromTo(
-      split.chars,
-      { yPercent: 120, opacity: 0 },
-      { yPercent: 0, opacity: 1, duration: 0.6, stagger: 0.035, ease: 'appEnter' },
-    )
-  }
+  animate(letters, {
+    translateY: ['120%', '0%'],
+    opacity: [0, 1],
+    duration: DURATION.feature,
+    delay: stagger(STAGGER.letters),
+    ease: appEnter,
+  })
 
-  timeline
-    .fromTo(
-      '[data-anim="orb"]',
-      { scale: 0.6, opacity: 0 },
-      { scale: 1, opacity: 1, duration: 0.9 },
-      0,
-    )
-    .fromTo('[data-anim="panel"]', { y: 22, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7 }, 0.25)
-    .fromTo('[data-anim="foot"]', { opacity: 0 }, { opacity: 1, duration: 0.6 }, 0.5)
+  animate('[data-anim="panel"]', {
+    translateY: [22, 0],
+    opacity: [0, 1],
+    duration: DURATION.feature,
+    delay: 250,
+    ease: appEnter,
+  })
+
+  animate('[data-anim="foot"]', {
+    opacity: [0, 1],
+    duration: DURATION.base,
+    delay: 450,
+    ease: appEnter,
+  })
 })
 </script>
 
