@@ -84,13 +84,24 @@ test.describe('tickets', () => {
     await page.keyboard.press('c')
     await page.getByPlaceholder(/Entrée pour créer/i).fill(titre)
     await page.keyboard.press('Enter')
+
+    // On ATTEND que le ticket créé porte le curseur avant d'ouvrir son
+    // détail. Sans cette attente, les touches suivantes partent pendant que
+    // la création est encore en vol : le panneau s'ouvre sur le ticket
+    // précédemment sélectionné, puis saute sur le nouveau quand la réponse
+    // arrive — et la saisie en cours repart à zéro, ce qui est le bon
+    // comportement pour un AUTRE ticket, mais pas ce que le test voulait
+    // vérifier.
+    const nouvelle = page.getByRole('option').filter({ hasText: titre })
+    await expect(nouvelle).toHaveAttribute('aria-selected', 'true')
+
     await page.keyboard.press('Escape')
 
     // Entrée ouvre le détail du ticket sous le curseur.
     await page.keyboard.press('Enter')
 
     const panneau = page.getByRole('complementary', { name: /détail du ticket/i })
-    await expect(panneau).toBeVisible()
+    await expect(panneau.locator('input').first()).toHaveValue(titre)
 
     // Le projet part à la sortie du champ : il n'y a pas de bouton
     // « enregistrer » à oublier.

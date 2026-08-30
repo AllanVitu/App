@@ -26,8 +26,6 @@ import { gsap } from '@/animations/gsap'
 import AppIcon from '@/components/AppIcon.vue'
 import ModuleGallery from '@/components/ModuleGallery.vue'
 import TechnicalDiagram from '@/components/TechnicalDiagram.vue'
-import TicketPriorityIcon from '@/components/tickets/TicketPriorityIcon.vue'
-import BaseBadge from '@/components/ui/BaseBadge.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { useGsapContext } from '@/composables/useGsap'
@@ -36,7 +34,6 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { formatRelative } from '@/utils/format'
 import { modulePath } from '@/utils/modules'
-import { formatDue } from '@/utils/tickets'
 
 const auth = useAuthStore()
 const ui = useUiStore()
@@ -48,13 +45,38 @@ const firstName = computed(() => auth.user?.full_name?.split(' ')[0] ?? '')
 
 const attention = computed(() => overview.value?.attention ?? [])
 
-/** Formulation du motif — le retard est un fait, l'urgence une intention. */
+/**
+ * Formulation du motif.
+ *
+ * L'ordre d'affichage est décidé par le SERVEUR (cf. AttentionFeed) : les
+ * faits — une production cassée, une exception fatale, une échéance
+ * dépassée — passent avant l'intention qu'est une priorité déclarée. Ce
+ * composant ne fait que nommer ce qu'il reçoit.
+ */
+// La pastille porte sa classe EN TOUTES LETTRES : Tailwind compile en
+// scannant les noms de classe littéralement présents dans les sources, une
+// classe fabriquée à l'exécution (« text- » remplacé par « bg- ») ne serait
+// pas générée et la pastille resterait invisible.
 const REASONS = {
-  overdue: { label: 'en retard', tone: 'text-brick' },
-  urgent: { label: 'urgent', tone: 'text-ochre' },
+  failed: { label: 'déploiement en échec', tone: 'text-brick', dot: 'bg-brick' },
+  fatal: { label: 'erreur fatale', tone: 'text-brick', dot: 'bg-brick' },
+  overdue: { label: 'en retard', tone: 'text-brick', dot: 'bg-brick' },
+  error: { label: 'erreur non résolue', tone: 'text-ochre', dot: 'bg-ochre' },
+  urgent: { label: 'urgent', tone: 'text-ochre', dot: 'bg-ochre' },
 }
 
 const reasonOf = (item) => REASONS[item.reason] ?? REASONS.urgent
+
+/** Nom lisible d'un module, pour situer une ligne du fil. */
+const MODULE_NAMES = {
+  backend: 'backend',
+  deploiement: 'déploiement',
+  tickets: 'tickets',
+  supervision: 'supervision',
+  design: 'design',
+}
+
+const moduleName = (slug) => MODULE_NAMES[slug] ?? slug
 
 const { root, run } = useGsapContext()
 
@@ -144,25 +166,42 @@ onMounted(async () => {
           class="card flex items-center gap-3 px-4 py-3.5 text-[0.82rem] text-ink-2"
         >
           <AppIcon name="check" :size="16" class="shrink-0 text-moss" />
-          Rien ne demande d'action : aucune échéance dépassée, aucun ticket urgent.
+          Rien ne demande d'action : aucun déploiement en échec, aucune erreur non résolue, aucune
+          échéance dépassée.
         </div>
 
         <ul v-else class="card divide-y divide-line overflow-hidden">
           <li v-for="item in attention" :key="item.id" data-anim="attention">
             <RouterLink
-              :to="modulePath('tickets')"
+              :to="modulePath(item.module)"
               class="flex items-center gap-3 px-4 py-2.5 transition hover:bg-raised"
             >
-              <TicketPriorityIcon :priority="item.priority" class="shrink-0" />
+              <!-- Une pastille de la couleur du motif : l'identité passe par
+                   la marque, jamais par la couleur du texte. -->
+              <span
+                class="size-2 shrink-0 rounded-pill"
+                :class="reasonOf(item).dot"
+                aria-hidden="true"
+              />
 
-              <span class="w-10 shrink-0 font-mono text-[0.72rem] tabular-nums text-ink-3">
-                {{ item.number }}
+              <span class="hidden w-24 shrink-0 text-[0.72rem] text-ink-3 sm:block">
+                {{ moduleName(item.module) }}
+              </span>
+
+              <!-- La référence dit QUOI sans ouvrir : une branche Git, un
+                   numéro de ticket, un nombre d'occurrences. Trop étroite,
+                   elle ne dirait plus rien — d'où la largeur qui suit
+                   l'espace disponible. -->
+              <span
+                class="hidden w-32 shrink-0 truncate font-mono text-[0.72rem] tabular-nums text-ink-3 md:block"
+              >
+                {{ item.ref }}
               </span>
 
               <span class="min-w-0 flex-1 truncate text-[0.84rem]">{{ item.title }}</span>
 
-              <span class="shrink-0 text-[0.72rem] tabular-nums" :class="reasonOf(item).tone">
-                {{ item.reason === 'overdue' ? formatDue(item) : reasonOf(item).label }}
+              <span class="shrink-0 text-[0.72rem]" :class="reasonOf(item).tone">
+                {{ reasonOf(item).label }}
               </span>
             </RouterLink>
           </li>
@@ -186,18 +225,28 @@ onMounted(async () => {
           />
 
           <ul v-else class="divide-y divide-line">
-            <li v-for="item in overview.recent" :key="item.id" data-anim="recent">
+            <li
+              v-for="item in overview.recent"
+              :key="`${item.module}-${item.id}`"
+              data-anim="recent"
+            >
               <RouterLink
-                :to="modulePath(item.module_slug)"
-                class="flex items-start gap-3 px-4 py-3 transition hover:bg-raised"
+                :to="modulePath(item.module)"
+                class="flex items-center gap-3 px-4 py-2.5 transition hover:bg-raised"
               >
-                <div class="min-w-0 flex-1">
-                  <p class="truncate text-sm font-medium">{{ item.title }}</p>
-                  <p class="mt-0.5 text-xs text-ink-2">
-                    {{ item.module_name }} · {{ formatRelative(item.updated_at) }}
-                  </p>
-                </div>
-                <BaseBadge :status="item.status" />
+                <span class="hidden w-24 shrink-0 text-[0.72rem] text-ink-3 sm:block">
+                  {{ moduleName(item.module) }}
+                </span>
+
+                <span class="w-24 shrink-0 truncate font-mono text-[0.72rem] text-ink-3">
+                  {{ item.ref }}
+                </span>
+
+                <span class="min-w-0 flex-1 truncate text-[0.84rem]">{{ item.title }}</span>
+
+                <span class="shrink-0 text-[0.72rem] text-ink-3">
+                  {{ formatRelative(item.happened_at) }}
+                </span>
               </RouterLink>
             </li>
           </ul>

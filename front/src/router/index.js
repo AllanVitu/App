@@ -21,22 +21,43 @@ const routes = [
         component: () => import('@/views/DashboardView.vue'),
         meta: { title: 'Tableau de bord' },
       },
+      // Chemins STATIQUES déclarés AVANT le paramétré : vue-router retient la
+      // première correspondance, ces cinq slugs ne tombent donc jamais dans la
+      // vue générique. Chacun a son propre modèle de données et son écran.
       {
-        // Chemin STATIQUE déclaré avant le paramétré : vue-router retient la
-        // première correspondance, « modules/tickets » ne tombe donc jamais
-        // dans la vue générique.
-        //
-        // Ce module a son propre modèle de données (numéro, priorité
-        // ordonnée, cycle de vie) et son propre écran. Les quatre autres
-        // attendent le même traitement.
+        path: 'modules/backend',
+        name: 'module-backend',
+        component: () => import('@/views/modules/BackendView.vue'),
+        meta: { title: 'Backend' },
+      },
+      {
+        path: 'modules/deploiement',
+        name: 'module-deploiement',
+        component: () => import('@/views/modules/DeploymentsView.vue'),
+        meta: { title: 'Déploiement' },
+      },
+      {
         path: 'modules/tickets',
         name: 'module-tickets',
         component: () => import('@/views/modules/TicketsView.vue'),
         meta: { title: 'Tickets' },
       },
       {
-        // Vue générique, pour les modules qui n'ont pas encore de modèle
-        // propre : structure identique, seul le slug change.
+        path: 'modules/supervision',
+        name: 'module-supervision',
+        component: () => import('@/views/modules/SupervisionView.vue'),
+        meta: { title: 'Supervision' },
+      },
+      {
+        path: 'modules/design',
+        name: 'module-design',
+        component: () => import('@/views/modules/DesignView.vue'),
+        meta: { title: 'Design' },
+      },
+      {
+        // Repli pour un module ajouté EN BASE sans écran dédié : le catalogue
+        // le fait apparaître dans le menu, et cette vue générique lui donne
+        // de quoi exister (titre, statut, échéance) en attendant le sien.
         path: 'modules/:slug',
         name: 'module',
         component: () => import('@/views/modules/ModuleView.vue'),

@@ -142,6 +142,44 @@ final class Validator
         return $value;
     }
 
+    /**
+     * Entier borné.
+     *
+     * FILTER_VALIDATE_INT refuse « 12.5 » et « douze » là où un simple cast
+     * (int) les transformerait silencieusement en 12 et 0 — une valeur fausse
+     * acceptée sans bruit est pire qu'une valeur rejetée.
+     */
+    public function integer(
+        string $field,
+        int $min,
+        int $max,
+        ?int $default = null,
+        ?string $label = null,
+    ): ?int {
+        $label = $label ?? $field;
+        $value = $this->data[$field] ?? null;
+
+        if ($value === null || $value === '') {
+            return $default;
+        }
+
+        $parsed = filter_var($value, FILTER_VALIDATE_INT);
+
+        if ($parsed === false) {
+            $this->errors[$field] = "Le champ « {$label} » doit être un nombre entier.";
+
+            return $default;
+        }
+
+        if ($parsed < $min || $parsed > $max) {
+            $this->errors[$field] = "Le champ « {$label} » doit être compris entre {$min} et {$max}.";
+
+            return $default;
+        }
+
+        return $parsed;
+    }
+
     public function boolean(string $field, bool $default = false): bool
     {
         $value = $this->data[$field] ?? null;

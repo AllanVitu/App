@@ -256,35 +256,58 @@ final class TicketsTest extends ApiTestCase
     }
 
     #[Test]
-    public function le_catalogue_compte_les_tickets_ouverts_et_non_les_lignes_generiques(): void
+    public function le_catalogue_compte_les_tickets_ouverts_et_ignore_la_table_generique(): void
     {
         $session = $this->register();
 
-        // Un élément dans la table générique, sur un AUTRE module.
+        // Une ligne dans la table générique, sur le module « backend ». Depuis
+        // que chaque module a son propre modèle, elle ne doit compter NULLE
+        // PART : la table générique n'est plus qu'un repli pour un module
+        // ajouté en base sans écran dédié.
         $this->call(
             'POST',
             '/api/modules/backend/items',
-            ['title' => 'Une fiche'],
+            ['title' => 'Une fiche orpheline'],
             $this->bearer($session['token']),
         );
 
-        $ouvert = $this->createTicket($session['token'], ['title' => 'Ouvert']);
+        $this->createTicket($session['token'], ['title' => 'Ouvert']);
         $clos = $this->createTicket($session['token'], ['title' => 'Clos']);
         $this->call('PUT', "/api/tickets/{$clos['id']}", ['status' => 'done'], $this->bearer($session['token']));
 
-        $modules = $this->call('GET', '/api/modules', headers: $this->bearer($session['token']))['body']['data'];
+        $bySlug = $this->catalogue($session['token']);
 
-        $bySlug = array_column($modules, null, 'slug');
-
-        // Le compteur du menu doit lire la source de CHAQUE module. Avant
+        // Le compteur du menu lit la source de CHAQUE module. Avant
         // ModuleMetrics, « tickets » affichait son nombre de lignes dans
         // module_items — soit zéro, quel que soit le nombre de tickets.
         $this->assertSame(1, $bySlug['tickets']['items_count'], 'seuls les tickets OUVERTS sont comptés');
-        $this->assertSame('ouverts', $bySlug['tickets']['unit']);
-        $this->assertSame(1, $bySlug['backend']['items_count']);
-        $this->assertSame('élément', $bySlug['backend']['unit']);
+        $this->assertSame(0, $bySlug['backend']['items_count'], 'la ligne générique ne compte plus');
+        $this->assertSame('tables', $bySlug['backend']['unit'], 'backend compte des tables, pas des éléments');
 
-        $this->assertNotSame($ouvert['id'], $clos['id']);
+        // L'unité s'accorde en nombre côté SERVEUR : le laisser au client
+        // obligerait chaque affichage à refaire la règle, et « 1 ouverts »
+        // finirait par ressortir quelque part.
+        $this->assertSame('ouvert', $bySlug['tickets']['unit'], 'un seul ticket : unité au singulier');
+
+        $this->createTicket($session['token'], ['title' => 'Un second ouvert']);
+        $bySlug = $this->catalogue($session['token']);
+
+        $this->assertSame(2, $bySlug['tickets']['items_count']);
+        $this->assertSame('ouverts', $bySlug['tickets']['unit'], 'deux tickets : unité au pluriel');
+    }
+
+    /**
+     * Catalogue des modules, indexé par slug.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function catalogue(string $token): array
+    {
+        return array_column(
+            $this->call('GET', '/api/modules', headers: $this->bearer($token))['body']['data'],
+            null,
+            'slug',
+        );
     }
 
     #[Test]

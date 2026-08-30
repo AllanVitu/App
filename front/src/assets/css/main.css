@@ -42,6 +42,12 @@
   --c-brick: #ff8a7a;
   --c-brick-bg: #2a1512;
 
+  /* Teinte des MARQUES de graphique, distincte de la couleur de statut.
+     « --c-brick » est juste en texte, mais sa clarté (L 0,758 en OKLCH) sort
+     de la bande admise pour un aplat sur fond noir : en surface pleine, elle
+     éblouit. Ce pas plus profond a été retenu en mesurant, pas à l'œil. */
+  --c-chart-alert: #e8604d;
+
   /* Rondeurs : le trait distinctif de cette direction */
   --r-pill: 999px;
   --r-card: 20px;
@@ -67,6 +73,9 @@
   --c-ochre-bg: #f6eeda;
   --c-brick: #b3402c;
   --c-brick-bg: #fbe8e4;
+
+  /* Sur fond clair, la couleur de statut tient déjà comme marque. */
+  --c-chart-alert: #b3402c;
 }
 
 @theme {
@@ -85,6 +94,7 @@
   --color-ochre-bg: var(--c-ochre-bg);
   --color-brick: var(--c-brick);
   --color-brick-bg: var(--c-brick-bg);
+  --color-chart-alert: var(--c-chart-alert);
 
   --radius-pill: var(--r-pill);
   --radius-card: var(--r-card);

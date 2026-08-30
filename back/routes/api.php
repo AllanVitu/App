@@ -13,7 +13,11 @@ declare(strict_types=1);
 
 use App\Controllers\AccountController;
 use App\Controllers\AuthController;
+use App\Controllers\BackendController;
 use App\Controllers\DashboardController;
+use App\Controllers\DeploymentController;
+use App\Controllers\DesignController;
+use App\Controllers\ErrorController;
 use App\Controllers\HealthController;
 use App\Controllers\ItemController;
 use App\Controllers\ModuleController;
@@ -83,5 +87,43 @@ $router->post('/api/tickets', [TicketController::class, 'store'], $auth);
 $router->get('/api/tickets/{id}', [TicketController::class, 'show'], $auth);
 $router->put('/api/tickets/{id}', [TicketController::class, 'update'], $auth);
 $router->delete('/api/tickets/{id}', [TicketController::class, 'destroy'], $auth);
+
+// --- Backend : schémas de données et clés d'API ----------------------------
+$router->get('/api/backend/tables', [BackendController::class, 'index'], $auth);
+$router->post('/api/backend/tables', [BackendController::class, 'store'], $auth);
+$router->get('/api/backend/tables/{id}', [BackendController::class, 'show'], $auth);
+$router->put('/api/backend/tables/{id}', [BackendController::class, 'update'], $auth);
+$router->delete('/api/backend/tables/{id}', [BackendController::class, 'destroy'], $auth);
+
+// Une clé se crée puis se révoque — elle ne se modifie pas : le secret a
+// déjà été distribué, en changer la portée après coup induirait en erreur.
+$router->post('/api/backend/keys', [BackendController::class, 'storeKey'], $auth);
+$router->delete('/api/backend/keys/{id}', [BackendController::class, 'revokeKey'], $auth);
+
+// --- Déploiement -----------------------------------------------------------
+$router->get('/api/deployments', [DeploymentController::class, 'index'], $auth);
+$router->post('/api/deployments', [DeploymentController::class, 'store'], $auth);
+$router->get('/api/deployments/{id}', [DeploymentController::class, 'show'], $auth);
+$router->put('/api/deployments/{id}', [DeploymentController::class, 'update'], $auth);
+$router->delete('/api/deployments/{id}', [DeploymentController::class, 'destroy'], $auth);
+
+// --- Supervision -----------------------------------------------------------
+// Pas de PUT complet : une erreur est REÇUE, pas saisie. Seul son statut de
+// traitement se modifie (cf. ErrorController).
+$router->get('/api/errors', [ErrorController::class, 'index'], $auth);
+$router->post('/api/errors', [ErrorController::class, 'store'], $auth);
+$router->get('/api/errors/{id}', [ErrorController::class, 'show'], $auth);
+$router->put('/api/errors/{id}', [ErrorController::class, 'update'], $auth);
+$router->delete('/api/errors/{id}', [ErrorController::class, 'destroy'], $auth);
+
+// --- Design ----------------------------------------------------------------
+// Une version s'ajoute, ne se modifie ni ne se supprime : c'est ce qui fait
+// d'un historique un historique.
+$router->get('/api/design/files', [DesignController::class, 'index'], $auth);
+$router->post('/api/design/files', [DesignController::class, 'store'], $auth);
+$router->get('/api/design/files/{id}', [DesignController::class, 'show'], $auth);
+$router->put('/api/design/files/{id}', [DesignController::class, 'update'], $auth);
+$router->delete('/api/design/files/{id}', [DesignController::class, 'destroy'], $auth);
+$router->post('/api/design/files/{id}/versions', [DesignController::class, 'storeVersion'], $auth);
 
 return $router;

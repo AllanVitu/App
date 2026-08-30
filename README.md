@@ -7,18 +7,29 @@ et intégration continue.
 
 ## Les modules
 
-Chaque module reçoit progressivement son propre modèle de données et son
-propre écran. La table générique `module_items` (titre, statut, échéance,
-charge utile JSONB) n'est qu'un point de départ : elle permet à un module
-d'exister avant d'être écrit, pas de rester ainsi.
+Les cinq modules ont chacun leur modèle de données, leurs endpoints et leur
+écran. La table générique `module_items` (titre, statut, échéance, charge
+utile JSONB) demeure comme REPLI : un module ajouté en base sans code dédié
+apparaît dans le menu et dispose aussitôt d'un écran, en attendant le sien.
 
-| Module        | Modèle     | Détail                                                 |
-| ------------- | ---------- | ------------------------------------------------------ |
-| `tickets`     | **Propre** | Table `tickets`, endpoints dédiés, écran clavier-first  |
-| `backend`     | Générique  | En attente d'un modèle propre                          |
-| `deploiement` | Générique  | En attente d'un modèle propre                          |
-| `supervision` | Générique  | En attente d'un modèle propre                          |
-| `design`      | Générique  | En attente d'un modèle propre                          |
+| Module        | Tables                              | Ce que l'écran fait                                    |
+| ------------- | ----------------------------------- | ------------------------------------------------------ |
+| `backend`     | `backend_tables`, `backend_api_keys` | Schémas de données, colonnes typées, clés d'API         |
+| `deploiement` | `deployments`                        | Déploiements Git, journaux, relance                     |
+| `tickets`     | `tickets`, `ticket_counters`         | Suivi clavier-first, priorités, cycle de vie            |
+| `supervision` | `error_groups`, `error_events`       | Erreurs groupées, piles d'appels, courbe sur 14 jours   |
+| `design`      | `design_files`, `design_versions`    | Fichiers et historique de versions                      |
+
+Deux services font converger le tout sans que le client connaisse le métier
+d'aucun module : `ModuleMetrics` décide de ce que signifie le chiffre de
+chaque module (tickets ouverts, tables, erreurs non résolues…), et
+`AttentionFeed` hiérarchise les alertes de tous les modules — les faits
+avant les intentions.
+
+Les invariants sont tenus par la BASE, pas par l'application : numérotation
+par compte ou par fichier, dates de clôture dérivées du statut, agrégats
+d'occurrences. Une insertion manuelle en psql produit une ligne aussi
+correcte qu'un passage par l'API.
 
 Le compteur affiché pour un module vient de SA source de données, assemblé
 par `App\Services\ModuleMetrics` — c'est le seul endroit à modifier quand un

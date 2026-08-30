@@ -60,32 +60,14 @@ VALUES (
 ON CONFLICT (email) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
--- Quelques enregistrements de démonstration, répartis sur les modules.
--- Les identifiants sont résolus par sous-requête : aucun UUID en dur.
+-- La table générique module_items n'est PLUS peuplée.
+--
+-- Les cinq modules ont chacun leur propre table : y écrire des lignes de
+-- démonstration créerait des données qu'aucun écran n'affiche, et le fil
+-- d'activité mènerait vers des modules où elles n'existent pas. La table
+-- reste en place — elle sert de repli à un module ajouté en base sans code
+-- dédié — mais elle démarre vide, ce qui est son état normal.
 -- ---------------------------------------------------------------------------
-INSERT INTO module_items (module_id, user_id, title, description, status, data, position)
-SELECT
-    m.id,
-    u.id,
-    v.title,
-    v.description,
-    v.status::item_status,
-    v.data::jsonb,
-    v.position
-FROM (VALUES
-    ('backend',     'Schéma des utilisateurs',   'Table, contraintes et politiques d''accès.',      'active',   '{"priority":"high","tags":["schema"]}', 10),
-    ('backend',     'Stockage des pièces jointes', 'Compartiment à créer, quotas à définir.',       'draft',    '{"priority":"low"}',                    20),
-    ('deploiement', 'Environnement de préproduction', 'Une URL par branche, variables à câbler.',   'active',   '{"branch":"main"}',                     10),
-    ('tickets',     'Refonte de la navigation',  'Découpé en trois lots, premier lot livré.',       'active',   '{"priority":"medium"}',                 10),
-    ('supervision', 'Alerte sur les 500',        'Seuil trop bas : trop de notifications.',         'archived', '{"threshold":5}',                       10),
-    ('design',      'Système de composants',     'Boutons et champs harmonisés, reste les tableaux.', 'active', '{"priority":"high"}',                   10)
-) AS v(module_slug, title, description, status, data, position)
-JOIN modules m ON m.slug = v.module_slug
-CROSS JOIN (SELECT id FROM users WHERE email = 'demo@saas.local') AS u
--- Idempotence par NOT EXISTS, et non par ON CONFLICT : module_items n'a aucune
--- contrainte d'unicité sur (titre, module, utilisateur), donc « ON CONFLICT DO
--- NOTHING » n'attrapait rien et rejouer ce fichier créait des doublons.
-WHERE NOT EXISTS (SELECT 1 FROM module_items i WHERE i.user_id = u.id);
 
 -- ---------------------------------------------------------------------------
 -- Tickets de démonstration.
@@ -158,5 +140,183 @@ CROSS JOIN (SELECT id FROM users WHERE email = 'demo@saas.local') AS u
 -- Idempotence : rejouer le fichier sur une base déjà peuplée n'ajoute rien.
 WHERE NOT EXISTS (SELECT 1 FROM tickets t WHERE t.user_id = u.id)
 ORDER BY v.seq;
+
+
+-- ---------------------------------------------------------------------------
+-- MODULE BACKEND — schémas de données et clés d'API
+--
+-- Une table est volontairement laissée SANS sécurité au niveau ligne : c'est
+-- le seul signal d'alerte du module, et un jeu de démonstration où tout va
+-- bien ne montrerait jamais à quoi ressemble une alerte.
+-- ---------------------------------------------------------------------------
+INSERT INTO backend_tables (user_id, name, description, columns, rls_enabled, row_estimate)
+SELECT u.id, v.name, v.description, v.columns::jsonb, v.rls, v.rows
+FROM (VALUES
+    ('users', 'Comptes applicatifs, adresse unique insensible à la casse.',
+     '[{"name":"id","type":"uuid","nullable":false},
+       {"name":"email","type":"text","nullable":false},
+       {"name":"password_hash","type":"text","nullable":false},
+       {"name":"created_at","type":"timestamptz","nullable":false}]', TRUE, 1240),
+    ('posts', 'Publications, rattachées à leur auteur.',
+     '[{"name":"id","type":"uuid","nullable":false},
+       {"name":"author_id","type":"uuid","nullable":false},
+       {"name":"title","type":"varchar","nullable":false},
+       {"name":"body","type":"text","nullable":true},
+       {"name":"published_at","type":"timestamptz","nullable":true}]', TRUE, 87),
+    ('media', 'Pièces jointes. Politiques d''accès encore à écrire.',
+     '[{"name":"id","type":"uuid","nullable":false},
+       {"name":"path","type":"text","nullable":false},
+       {"name":"size","type":"integer","nullable":false}]', FALSE, 512),
+    ('audit_log', 'Journal des actions sensibles, conservé un an.',
+     '[{"name":"id","type":"uuid","nullable":false},
+       {"name":"actor_id","type":"uuid","nullable":true},
+       {"name":"payload","type":"jsonb","nullable":false},
+       {"name":"occurred_at","type":"timestamptz","nullable":false}]', TRUE, 9302)
+) AS v(name, description, columns, rls, rows)
+CROSS JOIN (SELECT id FROM users WHERE email = 'demo@saas.local') AS u
+WHERE NOT EXISTS (SELECT 1 FROM backend_tables b WHERE b.user_id = u.id);
+
+-- Clés d'API. Les empreintes sont aléatoires : aucune clé de démonstration
+-- ne doit être devinable, même dans un jeu de développement.
+INSERT INTO backend_api_keys (user_id, label, scope, token_prefix, token_hash, revoked_at, last_used_at)
+SELECT
+    u.id,
+    v.label,
+    v.scope::api_key_scope,
+    v.prefix,
+    encode(sha256(gen_random_uuid()::text::bytea), 'hex'),
+    CASE WHEN v.revoked THEN NOW() - INTERVAL '3 days' ELSE NULL END,
+    CASE WHEN v.revoked THEN NULL ELSE NOW() - INTERVAL '2 hours' END
+FROM (VALUES
+    ('Client web',        'anon',    'pk_9f3c1a7d', FALSE),
+    ('Tâches planifiées', 'service', 'sk_4b8e2c05', FALSE),
+    ('Ancienne intégration', 'service', 'sk_1d7a93f2', TRUE)
+) AS v(label, scope, prefix, revoked)
+CROSS JOIN (SELECT id FROM users WHERE email = 'demo@saas.local') AS u
+WHERE NOT EXISTS (SELECT 1 FROM backend_api_keys k WHERE k.user_id = u.id);
+
+
+-- ---------------------------------------------------------------------------
+-- MODULE DÉPLOIEMENT
+--
+-- created_at ET finished_at sont fournis explicitement : le trigger conserve
+-- une date de fin déjà posée et en déduit la durée. Les laisser à NOW()
+-- donnerait à tous les déploiements une durée de quelques millisecondes.
+-- ---------------------------------------------------------------------------
+INSERT INTO deployments (
+    user_id, environment, branch, commit_sha, commit_message, status, url, log, created_at, finished_at
+)
+SELECT
+    u.id,
+    v.env::deployment_env,
+    v.branch,
+    v.sha,
+    v.message,
+    v.status::deployment_status,
+    v.url,
+    v.log,
+    NOW() - make_interval(mins => v.ago_min),
+    CASE
+        WHEN v.status IN ('queued', 'building') THEN NULL
+        ELSE NOW() - make_interval(mins => v.ago_min) + make_interval(secs => v.secs)
+    END
+FROM (VALUES
+    ('production', 'main',            'a3f9c1d8b2e4', 'Module Tickets : modèle métier propre',
+     'ready',    'https://app.exemple.dev',              E'Installation des dépendances…\nCompilation…\nDéploiement terminé.', 42,  74),
+    ('preview',    'feat/spirale',     '7e21b4c9f0aa', 'Galerie des modules : spirale ou liste',
+     'ready',    'https://spirale.preview.exemple.dev',  E'Compilation…\nDéploiement terminé.',                                180, 61),
+    ('preview',    'fix/refresh-token', 'c40d8e1a5b73', 'Détection de réutilisation des jetons',
+     'error',    NULL,                                   E'Compilation…\nÉchec : 2 tests en échec.\n  AuthTest::rotation',     95,  38),
+    ('production', 'main',            'b18f6d3c9e02', 'En-têtes de sécurité en production',
+     'ready',    'https://app.exemple.dev',              E'Compilation…\nDéploiement terminé.',                                1440, 68),
+    ('preview',    'feat/geist',       'd92a7f04c1bb', 'Typographie : Geist et Geist Mono',
+     'building', NULL,                                   E'Installation des dépendances…',                                     3,   0),
+    ('preview',    'chore/seed',       'f5b0c28e7d41', 'Ordre de chargement de la base',
+     'canceled', NULL,                                   E'Annulé par un nouveau déploiement sur la même branche.',            310, 12),
+    ('production', 'main',            'e73c1b9a4d02', 'Consentement aux conditions générales',
+     'ready',    'https://app.exemple.dev',              E'Compilation…\nDéploiement terminé.',                                4320, 71)
+) AS v(env, branch, sha, message, status, url, log, ago_min, secs)
+CROSS JOIN (SELECT id FROM users WHERE email = 'demo@saas.local') AS u
+WHERE NOT EXISTS (SELECT 1 FROM deployments d WHERE d.user_id = u.id);
+
+
+-- ---------------------------------------------------------------------------
+-- MODULE SUPERVISION
+--
+-- Les groupes sont créés d'abord, leurs occurrences ensuite : c'est le
+-- trigger qui incrémente le compteur et remonte la date de dernière vue.
+-- Écrire ces valeurs à la main les ferait diverger du contenu réel.
+-- ---------------------------------------------------------------------------
+INSERT INTO error_groups (user_id, fingerprint, title, culprit, level, first_seen_at)
+SELECT u.id, v.fingerprint, v.title, v.culprit, v.level::error_level,
+       NOW() - make_interval(days => v.first_days)
+FROM (VALUES
+    ('a1f0c3d29b47', 'TypeError: Cannot read properties of undefined (reading ''slug'')',
+     'ModuleGallery.vue:247', 'error',   6),
+    ('b7e21d84a0c9', 'PDOException: SQLSTATE[42703] column "terms_accepted_at" does not exist',
+     'UserRepository::create', 'fatal',  2),
+    ('c39a5f7e1b02', 'RangeError: Maximum call stack size exceeded',
+     'useGsapContext.js:34',  'error',   9),
+    ('d02b6c1a8f35', 'Warning: la police Geist Mono n''a pas pu être chargée',
+     'main.css',              'warning', 1)
+) AS v(fingerprint, title, culprit, level, first_days)
+CROSS JOIN (SELECT id FROM users WHERE email = 'demo@saas.local') AS u
+WHERE NOT EXISTS (SELECT 1 FROM error_groups g WHERE g.user_id = u.id);
+
+-- Occurrences : generate_series produit N répétitions par groupe, réparties
+-- sur les jours précédents pour que la courbe ait un relief.
+INSERT INTO error_events (group_id, user_id, message, stack, context, occurred_at)
+SELECT
+    g.id,
+    g.user_id,
+    g.title,
+    E'at ' || g.culprit || E'\n  at handler (app.js:118)\n  at dispatch (kernel.js:42)',
+    jsonb_build_object('release', 'v1.0.0', 'occurrence', n),
+    NOW() - make_interval(hours => (n * 7) % 240)
+FROM error_groups g
+CROSS JOIN LATERAL generate_series(
+    1,
+    CASE g.level WHEN 'fatal' THEN 23 WHEN 'error' THEN 11 ELSE 4 END
+) AS n
+WHERE g.user_id = (SELECT id FROM users WHERE email = 'demo@saas.local')
+  AND NOT EXISTS (SELECT 1 FROM error_events e WHERE e.group_id = g.id);
+
+-- Une erreur résolue, pour que les trois statuts existent dans la démo.
+-- Faite APRÈS les occurrences : le trigger rouvre tout groupe résolu qui
+-- reçoit une nouvelle occurrence, l'ordre inverse annulerait ce statut.
+UPDATE error_groups
+   SET status = 'resolved'
+ WHERE fingerprint = 'c39a5f7e1b02'
+   AND user_id = (SELECT id FROM users WHERE email = 'demo@saas.local');
+
+
+-- ---------------------------------------------------------------------------
+-- MODULE DESIGN
+--
+-- Le numéro de version est posé PAR FICHIER par un trigger : les versions
+-- sont donc insérées sans numéro, dans l'ordre voulu.
+-- ---------------------------------------------------------------------------
+INSERT INTO design_files (user_id, name, kind, description, accent)
+SELECT u.id, v.name, v.kind::design_kind, v.description, v.accent
+FROM (VALUES
+    ('Poste de travail',      'maquette',  'Cadre général : menu, chemin, contenu, barre d''état.', '#7ee2a8'),
+    ('Système de composants', 'systeme',   'Boutons, champs, pastilles et états de saisie.',        '#d8b26a'),
+    ('Suivi de tickets',      'prototype', 'Parcours clavier complet, de la création à la clôture.', '#8ab4f8'),
+    ('Écrans publics',        'maquette',  'Connexion, inscription, mot de passe oublié.',          '#c98a7a')
+) AS v(name, kind, description, accent)
+CROSS JOIN (SELECT id FROM users WHERE email = 'demo@saas.local') AS u
+WHERE NOT EXISTS (SELECT 1 FROM design_files f WHERE f.user_id = u.id);
+
+INSERT INTO design_versions (file_id, user_id, label, notes, created_at)
+SELECT f.id, f.user_id, v.label, v.notes, NOW() - make_interval(days => v.ago)
+FROM design_files f
+CROSS JOIN (VALUES
+    ('Première intention', 'Structure posée, sans couleur.',            12),
+    ('Passe typographique', 'Échelle de titres, interlettrage resserré.', 5),
+    ('Thème sombre',       'Transposition complète, contrastes vérifiés.', 1)
+) AS v(label, notes, ago)
+WHERE f.user_id = (SELECT id FROM users WHERE email = 'demo@saas.local')
+  AND NOT EXISTS (SELECT 1 FROM design_versions dv WHERE dv.file_id = f.id)
+ORDER BY v.ago DESC;
 
 COMMIT;

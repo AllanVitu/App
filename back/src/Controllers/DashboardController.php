@@ -6,9 +6,9 @@ namespace App\Controllers;
 
 use App\Core\Request;
 use App\Core\Response;
-use App\Models\ModuleItemRepository;
 use App\Models\ModuleRepository;
-use App\Models\TicketRepository;
+use App\Services\ActivityFeed;
+use App\Services\AttentionFeed;
 use App\Services\ModuleMetrics;
 
 /**
@@ -40,9 +40,14 @@ final class DashboardController
         $modules = (new ModuleRepository())->listForUser($userId);
 
         Response::json([
-            'attention' => (new TicketRepository())->needsAttention($userId, 5),
+            // Tous modules confondus, et hiérarchisé : un déploiement en
+            // échec passe avant un ticket marqué urgent (cf. AttentionFeed).
+            'attention' => (new AttentionFeed())->forUser($userId, 5),
             'modules'   => (new ModuleMetrics())->decorate($modules, $userId),
-            'recent'    => (new ModuleItemRepository())->recentForUser($userId, 6),
+            // Transversale elle aussi : chaque module ayant sa propre table,
+            // lire module_items montrerait des lignes qu'aucun écran
+            // n'affiche plus.
+            'recent'    => (new ActivityFeed())->forUser($userId, 8),
         ]);
     }
 }

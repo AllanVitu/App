@@ -30,10 +30,12 @@ import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { ticketsApi } from '@/services/api'
 import { play } from '@/services/sound'
+import { useWriteQueue } from '@/composables/useWriteQueue'
 import { useUiStore } from '@/stores/ui'
 import { BOARD_ORDER, PRIORITIES, advanceStatus } from '@/utils/tickets'
 
 const ui = useUiStore()
+const { enqueue } = useWriteQueue()
 
 const tickets = ref([])
 const stats = ref(null)
@@ -74,10 +76,21 @@ async function load({ silent = false } = {}) {
 }
 
 /**
- * Rafraîchissement des compteurs après une écriture.
+ * Rafraîchissement des COMPTEURS après une écriture — et d'eux seuls.
  *
- * Un garde-fou d'appel en vol suffit : enchaîner les raccourcis déclencherait
- * sinon une requête par frappe, et c'est toujours la dernière qui compte.
+ * Les lignes ne sont volontairement PAS remplacées ici. Un rechargement
+ * complet lit un instantané pris avant l'écriture suivante ; s'il revient en
+ * dernier, il écrase une donnée plus récente. Le symptôme observé : on
+ * renseignait le projet puis on tapait des étiquettes, et le rafraîchissement
+ * déclenché par le projet effaçait les étiquettes qu'on venait d'enregistrer.
+ *
+ * Les lignes n'en ont pas besoin : chaque écriture renvoie déjà sa version à
+ * jour. Seuls les agrégats — qui portent sur l'ensemble du compte, au-delà du
+ * plafond de chargement — doivent être relus.
+ *
+ * Un garde-fou d'appel en vol suffit pour le reste : enchaîner les raccourcis
+ * déclencherait sinon une requête par frappe, et c'est toujours la dernière
+ * qui compte.
  */
 let refreshing = false
 
@@ -87,7 +100,13 @@ async function refresh() {
   refreshing = true
 
   try {
-    await load({ silent: true })
+    const { meta } = await ticketsApi.list()
+
+    stats.value = meta.stats
+    projects.value = meta.projects
+  } catch {
+    // Un compteur périmé n'est pas une raison d'alerter : l'écriture qui
+    // vient d'aboutir, elle, a bien eu lieu.
   } finally {
     refreshing = false
   }
@@ -179,11 +198,30 @@ async function scrollActiveIntoView() {
 
 // --- Écritures ---------------------------------------------------------------
 
+/** Place une ligne à jour dans la liste, où qu'elle se trouve désormais. */
+function replaceRow(id, row) {
+  const index = tickets.value.findIndex((entry) => entry.id === id)
+
+  if (index !== -1) tickets.value[index] = row
+}
+
 /**
  * Mise à jour optimiste : la ligne change à l'écran avant la réponse du
  * serveur, et revient à son état antérieur si l'appel échoue. Sans cela, un
  * raccourci clavier donnerait l'impression de n'avoir rien fait le temps de
  * l'aller-retour.
+ *
+ * L'appel réseau passe par la FILE D'ÉCRITURES (cf. useWriteQueue) : les
+ * champs s'enregistrent un par un, donc deux requêtes peuvent viser le même
+ * ticket en même temps. Chaque réponse contenant le ticket ENTIER tel que le
+ * serveur le voyait, celle qui revient en dernier gagne — et ce n'est pas
+ * forcément la dernière partie. Observé : on renseigne le projet, on passe
+ * aux étiquettes, on valide ; la réponse du projet arrive après et réécrit le
+ * ticket sans les étiquettes, qui disparaissent de l'écran alors qu'elles
+ * sont bien en base.
+ *
+ * L'index est RECHERCHÉ À NOUVEAU après l'attente : la liste a pu être
+ * rechargée entre-temps, et l'index d'avant ne désignerait plus la même ligne.
  */
 async function patch(ticket, changes) {
   const index = tickets.value.findIndex((row) => row.id === ticket.id)
@@ -196,11 +234,13 @@ async function patch(ticket, changes) {
   saving.value = true
 
   try {
-    tickets.value[index] = await ticketsApi.update(ticket.id, changes)
+    const updated = await enqueue(ticket.id, () => ticketsApi.update(ticket.id, changes))
+
+    replaceRow(ticket.id, updated)
     play('tick')
     refresh()
   } catch (error) {
-    tickets.value[index] = previous
+    replaceRow(ticket.id, previous)
     ui.notify(error.message, 'error')
   } finally {
     saving.value = false

@@ -30,51 +30,59 @@ export const test = base.extend({
 
 export { expect }
 
+/** Une seule tentative supplémentaire — voir le commentaire de login(). */
+const LOGIN_ATTEMPTS = 2
+
 /**
  * Ouvre une session via l'interface, pas par un raccourci API : le parcours
  * de connexion est lui-même ce que l'on veut voir fonctionner.
+ *
+ * UNE seule nouvelle tentative est accordée, et uniquement sur un DÉLAI
+ * DÉPASSÉ côté client — jamais sur un refus d'identifiants, qui reste une
+ * erreur franche.
+ *
+ * La raison n'est pas de masquer une lenteur de l'application : mesurée, la
+ * connexion tient en 0,5 à 1,1 s (bcrypt au coût 12, volontairement). Mais la
+ * suite complète enchaîne près de trente sessions sur un poste où le serveur
+ * de développement recompile en même temps, et le client abandonne à 15 s.
+ * Ouvrir la session est un PRÉALABLE à chaque test, jamais son objet : la
+ * rejouer une fois ne rend donc aucun test complaisant, là où « retries » au
+ * niveau de la suite masquerait de vraies régressions (cf. playwright.config).
  */
 export async function login(page, credentials = DEMO) {
-  await page.goto('/connexion')
+  for (let attempt = 1; attempt <= LOGIN_ATTEMPTS; attempt += 1) {
+    await page.goto('/connexion')
 
-  await page.getByLabel(/adresse e-mail/i).fill(credentials.email)
-  await page.getByLabel(/mot de passe/i).fill(credentials.password)
-  await page.getByRole('button', { name: /se connecter/i }).click()
+    await page.getByLabel(/adresse e-mail/i).fill(credentials.email)
+    await page.getByLabel(/mot de passe/i).fill(credentials.password)
+    await page.getByRole('button', { name: /se connecter/i }).click()
 
-  await expect(page).toHaveURL('/')
-  await expect(page.getByRole('heading', { name: /bonjour/i })).toBeVisible()
-}
+    // Course entre l'arrivée sur le tableau de bord et le message d'erreur :
+    // attendre l'un puis l'autre ferait patienter tout le délai d'expiration
+    // avant de découvrir que la page affichait l'erreur depuis le début.
+    const arrive = await Promise.race([
+      page
+        .waitForURL('/', { timeout: 20_000 })
+        .then(() => true)
+        .catch(() => false),
+      page
+        .getByRole('alert')
+        .waitFor({ state: 'visible', timeout: 20_000 })
+        .then(() => false)
+        .catch(() => false),
+    ])
 
-/**
- * Crée un élément dans un module et renvoie son titre.
- * Le titre porte un suffixe aléatoire : deux exécutions successives ne
- * peuvent pas se confondre si un nettoyage a échoué.
- */
-export async function createItem(page, slug, { title, status = 'active' } = {}) {
-  const unique = title ?? `Recette ${Math.random().toString(36).slice(2, 8)}`
+    if (arrive) {
+      await expect(page.getByRole('heading', { name: /bonjour/i })).toBeVisible()
 
-  await page.goto(`/modules/${slug}`)
-  await page.getByRole('button', { name: /nouvel élément/i }).click()
+      return
+    }
 
-  const dialog = page.getByRole('dialog')
-  await expect(dialog).toBeVisible()
+    const message = (await page.getByRole('alert').textContent()) ?? ''
 
-  await dialog.getByLabel(/titre/i).fill(unique)
-  await dialog.getByLabel(/statut/i).selectOption(status)
-  await dialog.getByRole('button', { name: /^créer$/i }).click()
-
-  await expect(dialog).toBeHidden()
-  await expect(page.getByText(unique, { exact: true })).toBeVisible()
-
-  return unique
-}
-
-/** Supprime un élément par son titre, en confirmant la boîte de dialogue. */
-export async function deleteItem(page, title) {
-  const row = page.locator('li').filter({ hasText: title })
-
-  await row.getByRole('button', { name: /^supprimer/i }).click()
-  await page.getByRole('dialog').getByRole('button', { name: /^supprimer$/i }).click()
-
-  await expect(page.getByText(title, { exact: true })).toBeHidden()
+    // Un refus d'identifiants ne se rejoue pas : il dit quelque chose de vrai.
+    if (!/trop de temps/i.test(message) || attempt === LOGIN_ATTEMPTS) {
+      throw new Error(`Connexion impossible : ${message.trim() || 'aucun message'}`)
+    }
+  }
 }

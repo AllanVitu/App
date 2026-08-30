@@ -87,6 +87,73 @@ export const ticketsApi = {
   remove: (id) => http.delete(`/tickets/${id}`),
 }
 
+// --- Backend : schémas de données et clés d'API -----------------------------
+
+export const backendApi = {
+  list: (params = {}, signal) =>
+    http.get('/backend/tables', { params, signal }).then((response) => ({
+      tables: response.data.data,
+      meta: response.data.meta,
+    })),
+
+  create: (payload) => http.post('/backend/tables', payload).then(unwrap),
+  update: (id, payload) => http.put(`/backend/tables/${id}`, payload).then(unwrap),
+  remove: (id) => http.delete(`/backend/tables/${id}`),
+
+  /**
+   * Renvoie { key, token, notice }. Le jeton en clair n'est transmis QU'ICI :
+   * la base n'en garde que l'empreinte, il n'est pas récupérable ensuite.
+   */
+  createKey: (payload) => http.post('/backend/keys', payload).then(unwrap),
+  revokeKey: (id) => http.delete(`/backend/keys/${id}`),
+}
+
+// --- Déploiement ------------------------------------------------------------
+
+export const deploymentsApi = {
+  list: (params = {}, signal) =>
+    http.get('/deployments', { params, signal }).then((response) => ({
+      deployments: response.data.data,
+      meta: response.data.meta,
+    })),
+
+  create: (payload) => http.post('/deployments', payload).then(unwrap),
+  update: (id, payload) => http.put(`/deployments/${id}`, payload).then(unwrap),
+  remove: (id) => http.delete(`/deployments/${id}`),
+}
+
+// --- Supervision ------------------------------------------------------------
+
+export const errorsApi = {
+  list: (params = {}, signal) =>
+    http.get('/errors', { params, signal }).then((response) => ({
+      groups: response.data.data,
+      meta: response.data.meta,
+    })),
+
+  find: (id) => http.get(`/errors/${id}`).then(unwrap),
+  /** Seul le statut se modifie : une erreur est reçue, pas saisie. */
+  setStatus: (id, status) => http.put(`/errors/${id}`, { status }).then(unwrap),
+  remove: (id) => http.delete(`/errors/${id}`),
+}
+
+// --- Design -----------------------------------------------------------------
+
+export const designApi = {
+  list: (params = {}, signal) =>
+    http.get('/design/files', { params, signal }).then((response) => ({
+      files: response.data.data,
+      meta: response.data.meta,
+    })),
+
+  find: (id) => http.get(`/design/files/${id}`).then(unwrap),
+  create: (payload) => http.post('/design/files', payload).then(unwrap),
+  update: (id, payload) => http.put(`/design/files/${id}`, payload).then(unwrap),
+  remove: (id) => http.delete(`/design/files/${id}`),
+  /** Une version s'ajoute ; elle ne se modifie ni ne se supprime. */
+  addVersion: (id, payload) => http.post(`/design/files/${id}/versions`, payload).then(unwrap),
+}
+
 // --- Profil -----------------------------------------------------------------
 
 export const profileApi = {

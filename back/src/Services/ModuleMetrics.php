@@ -4,20 +4,27 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\BackendRepository;
+use App\Models\DeploymentRepository;
+use App\Models\DesignRepository;
+use App\Models\ErrorRepository;
 use App\Models\TicketRepository;
 
 /**
  * État réel de chaque module.
  *
- * Les modules ne partagent plus une table unique : « tickets » a la sienne,
- * les autres suivront. Le compteur du menu ne peut donc plus se lire dans
- * module_items pour tout le monde — c'est ce qui faisait afficher « tickets 1 »
- * alors que le module en contenait quatorze.
+ * Les modules ne partagent plus une table unique : chacun a la sienne. Le
+ * compteur du menu ne peut donc pas se lire dans module_items pour tout le
+ * monde — c'est ce qui faisait afficher « tickets 1 » alors que le module en
+ * contenait quatorze.
  *
  * Ce service est le SEUL endroit où l'on décide, module par module, ce que
- * son chiffre signifie. Quand le prochain module recevra son propre modèle,
- * il s'ajoutera ici, et le menu comme le tableau de bord suivront sans
- * modification.
+ * son chiffre signifie. Le menu, le tableau de bord et la barre d'état en
+ * découlent sans rien savoir du métier de chacun.
+ *
+ * Le chiffre mis en avant est toujours celui du TRAVAIL RESTANT, jamais un
+ * total cumulé : afficher le total ferait grossir le compteur à chaque tâche
+ * terminée, c'est-à-dire chaque fois que la situation s'améliore.
  *
  * La sortie est volontairement générique — un nombre, son unité, et les
  * signaux qui demandent attention — pour que le client affiche n'importe
@@ -25,12 +32,16 @@ use App\Models\TicketRepository;
  */
 final class ModuleMetrics
 {
-    private TicketRepository $tickets;
-
-    public function __construct()
-    {
-        $this->tickets = new TicketRepository();
-    }
+    /**
+     * Indicateurs déjà calculés pendant cette requête.
+     *
+     * Le catalogue est parcouru une fois, mais mieux vaut ne pas dépendre de
+     * l'ordre : la mémoïsation garantit une requête par module, quel que soit
+     * le nombre d'appels.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private array $cache = [];
 
     /**
      * Enrichit le catalogue avec l'état de chaque module.
@@ -40,18 +51,21 @@ final class ModuleMetrics
      */
     public function decorate(array $modules, string $userId): array
     {
-        // Une seule requête pour les tickets, quel que soit le nombre de
-        // modules : la calculer dans la boucle la rejouerait inutilement.
-        $ticketStats = null;
-
         foreach ($modules as $index => $module) {
-            $state = $module['slug'] === 'tickets'
-                ? $this->ticketState($ticketStats ??= $this->tickets->statsForUser($userId))
-                : $this->genericState($module);
+            $state = match ($module['slug']) {
+                'tickets'     => $this->ticketState($userId),
+                'backend'     => $this->backendState($userId),
+                'deploiement' => $this->deploymentState($userId),
+                'supervision' => $this->errorState($userId),
+                'design'      => $this->designState($userId),
+                // Module ajouté en base sans code dédié : il reste adossé à la
+                // table générique, et le catalogue continue de fonctionner.
+                default       => $this->genericState($module),
+            };
 
             // array_merge et non « + » : l'opérateur conserve la valeur de
-            // GAUCHE en cas de clé commune, et items_count serait alors
-            // corrigé pour tous les modules SAUF ceux qui en avaient besoin.
+            // GAUCHE en cas de clé commune, et items_count ne serait alors
+            // jamais corrigé.
             $merged = array_merge($module, $state);
 
             // Chiffre intermédiaire, déjà consommé : le sortir de la réponse
@@ -65,15 +79,23 @@ final class ModuleMetrics
     }
 
     /**
-     * Un suivi de tickets se juge sur ce qui reste OUVERT : afficher le total
-     * ferait grossir le chiffre à chaque ticket terminé, c'est-à-dire à chaque
-     * fois que la situation s'améliore.
-     *
-     * @param  array<string, int> $stats
+     * @param  callable(): array<string, mixed> $compute
      * @return array<string, mixed>
      */
-    private function ticketState(array $stats): array
+    private function stats(string $key, string $userId, callable $compute): array
     {
+        return $this->cache[$key . ':' . $userId] ??= $compute();
+    }
+
+    /**
+     * Tickets : ce qui reste OUVERT.
+     *
+     * @return array<string, mixed>
+     */
+    private function ticketState(string $userId): array
+    {
+        $stats = $this->stats('tickets', $userId, fn (): array => (new TicketRepository())->statsForUser($userId));
+
         $signals = [];
 
         if ($stats['urgent'] > 0) {
@@ -81,11 +103,9 @@ final class ModuleMetrics
         }
 
         if ($stats['overdue'] > 0) {
-            // « en retard » est invariable : les deux formes sont identiques.
             $signals[] = $this->signal('en retard', 'en retard', $stats['overdue'], 'alert');
         }
 
-        // Rien d'alarmant : on montre l'activité plutôt qu'une tuile vide.
         if ($signals === [] && $stats['in_progress'] > 0) {
             $signals[] = $this->signal('en cours', 'en cours', $stats['in_progress'], 'neutral');
         }
@@ -94,11 +114,110 @@ final class ModuleMetrics
             $signals[] = $this->signal('terminé', 'terminés', $stats['done'], 'good');
         }
 
-        return [
-            'items_count' => $stats['open'],
-            'unit'        => 'ouverts',
-            'signals'     => $signals,
-        ];
+        return $this->state($stats['open'], 'ouvert', 'ouverts', $signals);
+    }
+
+    /**
+     * Backend : le nombre de schémas conçus.
+     *
+     * L'alerte porte sur les tables sans sécurité au niveau ligne — le seul
+     * chiffre du module qui décrive un risque plutôt qu'un volume.
+     *
+     * @return array<string, mixed>
+     */
+    private function backendState(string $userId): array
+    {
+        $stats = $this->stats('backend', $userId, fn (): array => (new BackendRepository())->statsForUser($userId));
+
+        $signals = [];
+
+        if ($stats['unprotected'] > 0) {
+            $signals[] = $this->signal('sans RLS', 'sans RLS', $stats['unprotected'], 'alert');
+        }
+
+        if ($stats['active_keys'] > 0) {
+            $signals[] = $this->signal('clé active', 'clés actives', $stats['active_keys'], 'neutral');
+        }
+
+        return $this->state($stats['tables'], 'table', 'tables', $signals);
+    }
+
+    /**
+     * Déploiement : le volume déployé, avec les échecs en alerte.
+     *
+     * @return array<string, mixed>
+     */
+    private function deploymentState(string $userId): array
+    {
+        $stats = $this->stats(
+            'deploiement',
+            $userId,
+            fn (): array => (new DeploymentRepository())->statsForUser($userId),
+        );
+
+        $signals = [];
+
+        if ($stats['failed'] > 0) {
+            $signals[] = $this->signal('en échec', 'en échec', $stats['failed'], 'alert');
+        }
+
+        if ($stats['running'] > 0) {
+            $signals[] = $this->signal('en cours', 'en cours', $stats['running'], 'neutral');
+        }
+
+        if ($signals === [] && $stats['ready'] > 0) {
+            $signals[] = $this->signal('réussi', 'réussis', $stats['ready'], 'good');
+        }
+
+        return $this->state($stats['total'], 'déploiement', 'déploiements', $signals);
+    }
+
+    /**
+     * Supervision : ce qui n'est PAS résolu.
+     *
+     * @return array<string, mixed>
+     */
+    private function errorState(string $userId): array
+    {
+        $stats = $this->stats('supervision', $userId, fn (): array => (new ErrorRepository())->statsForUser($userId));
+
+        $signals = [];
+
+        if ($stats['fatal'] > 0) {
+            $signals[] = $this->signal('fatale', 'fatales', $stats['fatal'], 'alert');
+        }
+
+        if ($stats['events_24h'] > 0) {
+            $signals[] = $this->signal('sur 24 h', 'sur 24 h', $stats['events_24h'], 'neutral');
+        }
+
+        if ($signals === [] && $stats['resolved'] > 0) {
+            $signals[] = $this->signal('résolue', 'résolues', $stats['resolved'], 'good');
+        }
+
+        return $this->state($stats['unresolved'], 'non résolue', 'non résolues', $signals);
+    }
+
+    /**
+     * Design : les fichiers, et l'épaisseur de leur historique.
+     *
+     * @return array<string, mixed>
+     */
+    private function designState(string $userId): array
+    {
+        $stats = $this->stats('design', $userId, fn (): array => (new DesignRepository())->statsForUser($userId));
+
+        $signals = [];
+
+        if ($stats['versions'] > 0) {
+            $signals[] = $this->signal('version', 'versions', $stats['versions'], 'neutral');
+        }
+
+        if ($stats['updated_this_week'] > 0) {
+            $signals[] = $this->signal('cette semaine', 'cette semaine', $stats['updated_this_week'], 'good');
+        }
+
+        return $this->state($stats['files'], 'fichier', 'fichiers', $signals);
     }
 
     /**
@@ -112,12 +231,27 @@ final class ModuleMetrics
         $total  = (int) ($module['items_count'] ?? 0);
         $active = (int) ($module['active_count'] ?? 0);
 
+        return $this->state(
+            $total,
+            'élément',
+            'éléments',
+            $active > 0 ? [$this->signal('actif', 'actifs', $active, 'neutral')] : [],
+        );
+    }
+
+    /**
+     * @param  list<array{label: string, value: int, tone: string}> $signals
+     * @return array<string, mixed>
+     */
+    private function state(int $count, string $singular, string $plural, array $signals): array
+    {
         return [
-            'items_count' => $total,
-            'unit'        => $total === 1 ? 'élément' : 'éléments',
-            'signals'     => $active > 0
-                ? [$this->signal('actif', 'actifs', $active, 'neutral')]
-                : [],
+            'items_count' => $count,
+            'unit'        => $count === 1 ? $singular : $plural,
+            // Deux signaux au plus : une tuile de tableau de bord qui en
+            // affiche cinq ne se lit plus d'un coup d'œil, ce qui est
+            // pourtant sa seule raison d'être.
+            'signals'     => array_slice($signals, 0, 2),
         ];
     }
 

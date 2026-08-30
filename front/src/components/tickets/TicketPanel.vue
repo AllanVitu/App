@@ -33,20 +33,37 @@ const draftProject = ref('')
 const draftLabels = ref('')
 
 /**
+ * Champ en cours de saisie, s'il y en a un.
+ *
+ * Les enregistrements partent champ par champ, donc une réponse du serveur
+ * peut arriver PENDANT qu'on saisit un autre champ. Sans ce garde-fou, la
+ * resynchronisation qui suit écrasait la saisie en cours : on tapait des
+ * étiquettes, l'enregistrement du projet aboutissait, et le texte tapé
+ * disparaissait sous les doigts.
+ */
+const editing = ref(null)
+
+/**
  * Les brouillons se resynchronisent quand on change de ticket, mais AUSSI
  * quand le ticket courant revient modifié du serveur — sinon un champ
- * garderait la valeur d'avant l'enregistrement.
+ * garderait la valeur d'avant l'enregistrement, et la normalisation faite
+ * côté serveur (minuscules, doublons) ne se verrait jamais.
+ *
+ * Le champ en cours de saisie est le seul épargné : lui seul a une valeur
+ * plus récente que celle du serveur.
  */
 watch(
   () => props.ticket,
   (ticket) => {
-    draftTitle.value = ticket.title
-    draftDescription.value = ticket.description ?? ''
-    draftProject.value = ticket.project ?? ''
-    draftLabels.value = ticket.labels.join(', ')
+    if (editing.value !== 'title') draftTitle.value = ticket.title
+    if (editing.value !== 'description') draftDescription.value = ticket.description ?? ''
+    if (editing.value !== 'project') draftProject.value = ticket.project ?? ''
+    if (editing.value !== 'labels') draftLabels.value = ticket.labels.join(', ')
   },
   { immediate: true, deep: true },
 )
+
+const beginEdit = (field) => (editing.value = field)
 
 const due = computed(() => formatDue(props.ticket))
 const overdue = computed(() => isOverdue(props.ticket))
@@ -100,6 +117,22 @@ function commitLabels() {
   commit('labels', parsed)
 }
 
+/**
+ * Fin de saisie : on enregistre, PUIS on rend la main au serveur.
+ *
+ * L'ordre compte. Libérer le champ avant l'enregistrement laisserait la
+ * réponse écraser la valeur qu'on vient tout juste de valider ; le libérer
+ * après permet à la version normalisée par le serveur de revenir s'afficher.
+ */
+function endEdit(field) {
+  if (field === 'title') commitTitle()
+  else if (field === 'description') commit('description', draftDescription.value.trim() || null)
+  else if (field === 'project') commit('project', draftProject.value.trim() || null)
+  else if (field === 'labels') commitLabels()
+
+  editing.value = null
+}
+
 /** Appelée par la vue quand le panneau vient de s'ouvrir en mode édition. */
 async function focusTitle() {
   await nextTick()
@@ -149,8 +182,9 @@ defineExpose({ focusTitle })
         v-model="draftTitle"
         class="w-full resize-none border-0 bg-transparent p-0 text-[1rem] font-semibold text-ink outline-none placeholder:text-ink-3"
         placeholder="Titre du ticket"
-        @blur="commitTitle"
-        @keydown.enter.prevent="commitTitle"
+        @focus="beginEdit('title')"
+        @blur="endEdit('title')"
+        @keydown.enter.prevent="endEdit('title')"
       />
 
       <!-- Statut -->
@@ -208,7 +242,8 @@ defineExpose({ focusTitle })
           rows="5"
           class="input-field resize-y"
           placeholder="Contexte, reproduction, décision…"
-          @blur="commit('description', draftDescription.trim() || null)"
+          @focus="beginEdit('description')"
+          @blur="endEdit('description')"
         />
       </div>
 
@@ -223,7 +258,8 @@ defineExpose({ focusTitle })
           class="input-field"
           list="ticket-projects"
           placeholder="Aucun"
-          @blur="commit('project', draftProject.trim() || null)"
+          @focus="beginEdit('project')"
+          @blur="endEdit('project')"
         />
         <datalist id="ticket-projects">
           <option v-for="project in projects" :key="project" :value="project" />
@@ -238,8 +274,9 @@ defineExpose({ focusTitle })
           v-model="draftLabels"
           class="input-field"
           placeholder="séparées par des virgules"
-          @blur="commitLabels"
-          @keydown.enter.prevent="commitLabels"
+          @focus="beginEdit('labels')"
+          @blur="endEdit('labels')"
+          @keydown.enter.prevent="endEdit('labels')"
         />
       </div>
 
