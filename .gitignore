@@ -36,3 +36,10 @@ docker/**/data/
 !.vscode/extensions.json
 .DS_Store
 Thumbs.db
+
+# Manifestes npm créés PAR ERREUR à la racine.
+# Le client vit dans front/ et y a son propre package.json ; un « npm install »
+# lancé depuis la racine produit ces deux fichiers plus un node_modules, sans
+# rapport avec le projet. Les ignorer évite de les committer par mégarde.
+/package.json
+/package-lock.json
