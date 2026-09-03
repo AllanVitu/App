@@ -1,0 +1,63 @@
+# ============================================================================
+#  Fins de ligne
+#
+#  Git sous Windows convertit par défaut les fins de ligne en CRLF à
+#  l'extraction. Pour du code source, c'est sans conséquence. Pour un fichier
+#  EXÉCUTÉ PAR LINUX, c'est fatal et silencieux.
+#
+#  Le cas rencontré : `back/database/init/09_seed.sh` extrait en CRLF. Son
+#  shebang devient « #!/bin/sh\r », et le noyau cherche un interpréteur
+#  littéralement nommé « /bin/sh\r » :
+#
+#      09_seed.sh: /bin/sh^M: bad interpreter: No such file or directory
+#
+#  Le conteneur PostgreSQL abandonnait alors son initialisation, redémarrait,
+#  trouvait un répertoire de données déjà peuplé et démarrait « normalement »
+#  — sans jamais avoir chargé le jeu de démonstration. Aucune erreur visible
+#  côté application : simplement une base vide.
+#
+#  Le même clone révélait un second effet, plus discret : PHP-CS-Fixer
+#  signalait « 53 fichiers sur 53 » à reformater, et Prettier 67. Aucun code
+#  n'avait changé — seulement leurs fins de ligne. Les deux outils exigent du
+#  LF, et la vérification de style échouait donc sur tout clone neuf sous
+#  Windows.
+#
+#  D'où le parti pris : LF PARTOUT, dans le dépôt comme à l'extraction. Le
+#  runtime de ce projet est une pile de conteneurs Linux, son outillage attend
+#  du LF, et les éditeurs Windows lisent le LF sans difficulté depuis
+#  longtemps. Laisser la conversion automatique décider revenait à faire
+#  dépendre la réussite des tests du système d'exploitation du développeur.
+# ============================================================================
+
+# Normalisation par défaut : LF dans le dépôt.
+* text=auto eol=lf
+
+# --- Explicites, parce que ce sont eux qui cassaient -----------------------
+*.sh            text eol=lf
+*.sql           text eol=lf
+Dockerfile      text eol=lf
+*.dockerfile    text eol=lf
+*.conf          text eol=lf
+*.ini           text eol=lf
+*.php           text eol=lf
+*.js            text eol=lf
+*.vue           text eol=lf
+*.css           text eol=lf
+*.json          text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.md            text eol=lf
+*.neon          text eol=lf
+*.xml           text eol=lf
+.env.example    text eol=lf
+.env.production.example text eol=lf
+
+# --- Binaires : aucune conversion ------------------------------------------
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.woff          binary
+*.woff2         binary
+*.pdf           binary
