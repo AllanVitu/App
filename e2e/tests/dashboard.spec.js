@@ -1,7 +1,7 @@
 import { expect, login, test } from './support.js'
 
 /**
- * Tableau de bord et galerie des modules.
+ * Tableau de bord.
  *
  * Ce fichier remplace les anciens parcours de CRUD générique : les cinq
  * modules du catalogue ont désormais chacun leur écran, et la table générique
@@ -13,49 +13,25 @@ test.describe('tableau de bord', () => {
     await login(page)
   })
 
-  test('la galerie bascule entre spirale et liste, et retient le choix', async ({ page }) => {
-    const gallery = page.locator('section', {
-      has: page.getByRole('group', { name: /disposition/i }),
+  test('les cinq modules sont en grille, chacun lien vers le sien', async ({ page }) => {
+    const grille = page.locator('section', {
+      has: page.getByRole('heading', { name: 'état des modules' }),
     })
-    const tiles = gallery.locator('[data-tile]')
+    const tuiles = grille.getByRole('link')
 
-    // Les cinq modules sont présents dans les deux dispositions : seule leur
-    // mise en page change, jamais leur nombre.
-    await expect(tiles).toHaveCount(5)
+    await expect(tuiles).toHaveCount(5)
 
-    await gallery.getByRole('button', { name: 'liste', exact: true }).click()
-    await expect(gallery.getByRole('button', { name: 'liste', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-    await expect(tiles).toHaveCount(5)
-
-    // Le choix est une préférence, pas un état de page : il survit au
-    // rechargement.
-    await page.reload()
-    await expect(gallery.getByRole('button', { name: 'liste', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-
-    await gallery.getByRole('button', { name: 'spirale', exact: true }).click()
-    await expect(gallery.getByRole('button', { name: 'spirale', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-    await expect(tiles).toHaveCount(5)
-
-    // La spirale n'est qu'un arrangement visuel : les tuiles restent des
-    // liens, dans l'ordre du catalogue.
-    await expect(tiles.first()).toHaveAttribute('href', /backend/)
+    // La grille a remplacé une spirale avec bascule spirale/liste : la
+    // position d'une tuile y est stable d'une visite à l'autre, il n'y a donc
+    // plus de préférence de disposition à retenir. L'ordre reste celui du
+    // catalogue.
+    await expect(tuiles.first()).toHaveAttribute('href', /backend/)
   })
 
   test('chaque tuile porte l état de son module, pas seulement son nom', async ({ page }) => {
-    const gallery = page.locator('section', {
-      has: page.getByRole('group', { name: /disposition/i }),
+    const grille = page.locator('section', {
+      has: page.getByRole('heading', { name: 'état des modules' }),
     })
-
-    await gallery.getByRole('button', { name: 'liste', exact: true }).click()
 
     // Le tableau de bord n'est pas un second menu : chaque tuile dit où en
     // est son module, avec l'unité qui a un sens chez lui.
@@ -63,10 +39,44 @@ test.describe('tableau de bord', () => {
     // Motifs INSENSIBLES À LA CASSE : le nom vient de la base (« Backend »),
     // et la mise en minuscules est purement visuelle — le nom accessible,
     // lui, garde la capitale.
-    await expect(gallery.getByRole('link', { name: /backend/i })).toContainText('tables')
-    await expect(gallery.getByRole('link', { name: /tickets/i })).toContainText('ouverts')
-    await expect(gallery.getByRole('link', { name: /supervision/i })).toContainText('non résolue')
-    await expect(gallery.getByRole('link', { name: /design/i })).toContainText('fichiers')
+    await expect(grille.getByRole('link', { name: /backend/i })).toContainText('tables')
+    await expect(grille.getByRole('link', { name: /tickets/i })).toContainText('ouverts')
+    await expect(grille.getByRole('link', { name: /supervision/i })).toContainText('non résolue')
+    await expect(grille.getByRole('link', { name: /design/i })).toContainText('fichiers')
+  })
+
+  /**
+   * Les quatre chiffres de tête.
+   *
+   * Le point qui compte n'est pas qu'ils s'affichent, c'est que « tickets
+   * ouverts » N'AFFICHE PAS de comparaison : c'est un état, pas un flux.
+   * « 11 tickets ouverts, +3 » laisserait croire qu'il s'en est créé trois,
+   * alors que le nombre peut avoir monté parce qu'on en a fermé moins.
+   */
+  test('les chiffres de tête ne comparent que ce qui est comparable', async ({ page }) => {
+    const entete = page.locator('section', { has: page.getByText('déploiements', { exact: true }) })
+
+    const flux = entete.locator('div', { hasText: /^erreurs/ }).first()
+    await expect(flux).toContainText('7 j préc.')
+
+    const etat = entete.locator('div', { hasText: /^tickets ouverts/ }).first()
+    await expect(etat).not.toContainText('7 j préc.')
+  })
+
+  /**
+   * Les deux séries ont des ordres de grandeur incompatibles — quelques
+   * déploiements par jour contre plusieurs dizaines d'erreurs. Les réunir
+   * dans un seul cadre écraserait la première contre l'axe.
+   */
+  test('les tendances sont tracées dans deux cadres distincts', async ({ page }) => {
+    const cadres = page.locator('figure')
+
+    await expect(cadres).toHaveCount(2)
+
+    // Chaque cadre porte l'équivalent textuel de sa courbe : une ligne
+    // brisée n'est pas lisible au lecteur d'écran.
+    await expect(cadres.first().locator('table caption')).toContainText('par jour')
+    await expect(cadres.nth(1).locator('table tbody tr')).toHaveCount(14)
   })
 
   test('les alertes de tous les modules remontent, hiérarchisées', async ({ page }) => {
