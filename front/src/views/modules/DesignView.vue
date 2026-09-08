@@ -2,21 +2,33 @@
 /**
  * Module « Design » : fichiers et historique de versions.
  *
- * Une grille plutôt qu'une liste : les fichiers de design se reconnaissent à
+ * Des cartes plutôt qu'une liste : les fichiers de design se reconnaissent à
  * leur allure avant leur nom, et une vignette colorée retrouve plus vite
  * qu'une ligne de texte.
+ *
+ * Elles sont rangées en colonnes par TYPE — maquette, prototype, système. Ces
+ * colonnes ne portent pas un cycle de vie, contrairement à celles des tickets
+ * ou de la supervision : on ne fait pas « avancer » une maquette vers un
+ * système de composants. C'est une classification. Le glissement reste
+ * néanmoins autorisé, parce qu'il correspond à un geste réel — reclasser un
+ * fichier — et que le type est un champ modifiable comme un autre.
  *
  * Une version s'AJOUTE ; elle ne se modifie ni ne se supprime. Pouvoir
  * réécrire une version passée reviendrait à effacer une décision de
  * conception après coup, et l'intérêt du module — voir comment le travail a
  * évolué — disparaîtrait avec elle.
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 
 import AppIcon from '@/components/AppIcon.vue'
+import BoardColumns from '@/components/board/BoardColumns.vue'
+import DesignCard from '@/components/modules/DesignCard.vue'
 import ModuleHeader from '@/components/modules/ModuleHeader.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
+import TruncationNotice from '@/components/ui/TruncationNotice.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import { appEnter, prefersReducedMotion } from '@/animations/motion'
+import { createLayout } from '@/animations/layout'
 import { designApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useWriteQueue } from '@/composables/useWriteQueue'
@@ -28,12 +40,16 @@ const { enqueue } = useWriteQueue()
 
 const files = ref([])
 const stats = ref(null)
+// Compte SERVEUR, filtres compris : il voit au-delà du plafond de chargement,
+// contrairement à la liste reçue (cf. ui/TruncationNotice.vue).
+const total = ref(null)
 const loading = ref(true)
 const busy = ref(false)
 
 const search = ref('')
 const kindFilter = ref(null)
 const openId = ref(null)
+const board = ref(null)
 const detail = ref(null)
 const detailLoading = ref(false)
 
@@ -53,8 +69,6 @@ const KINDS = [
 /** Palette proposée : des teintes qui tiennent sur les deux thèmes. */
 const ACCENTS = ['#7ee2a8', '#d8b26a', '#8ab4f8', '#c98a7a', '#b39ddb', '#7ecfd8']
 
-const kindOf = (value) => KINDS.find((kind) => kind.value === value) ?? KINDS[0]
-
 async function load({ silent = false } = {}) {
   if (!silent) loading.value = true
 
@@ -63,6 +77,7 @@ async function load({ silent = false } = {}) {
 
     files.value = rows
     stats.value = meta.stats
+    total.value = meta.total ?? null
   } catch (error) {
     ui.notify(error.message, 'error')
   } finally {
@@ -99,6 +114,74 @@ const headerStats = computed(() => {
 
   return list
 })
+
+/** Le filtre réduit le tableau à une colonne au lieu de vider les autres. */
+const visibleColumns = computed(() =>
+  kindFilter.value ? KINDS.filter((kind) => kind.value === kindFilter.value) : KINDS,
+)
+
+/**
+ * Moteur de mise en page : un fichier reclassé GLISSE vers sa nouvelle
+ * colonne. Mesuré au moment du changement de type, et pas sur chaque
+ * modification de la liste : le faire à chaque frappe dans la recherche
+ * forcerait un recalcul de mise en page par caractère.
+ */
+let layout = null
+
+function recordLayout() {
+  const element = board.value?.root
+
+  if (prefersReducedMotion() || !element) return false
+
+  layout ??= createLayout(element, { children: '[role="option"]' })
+  layout.record()
+
+  return true
+}
+
+/**
+ * Reclassement par glissement.
+ *
+ * Passe par la MÊME file d'écritures que le panneau de détail : on peut
+ * glisser une carte puis changer son type dans le panneau plus vite qu'un
+ * aller-retour, et chaque réponse contient le fichier entier. Sans file,
+ * c'est la réponse la plus lente qui gagnerait, pas le dernier geste.
+ */
+async function reclassify(file, kind) {
+  const index = files.value.findIndex((entry) => entry.id === file.id)
+
+  if (index === -1) return
+
+  const previous = files.value[index]
+  const measured = recordLayout()
+
+  files.value[index] = { ...previous, kind }
+
+  if (measured) {
+    await nextTick()
+
+    layout.animate({
+      duration: 420,
+      ease: appEnter,
+      enterFrom: { opacity: 0 },
+      leaveTo: { opacity: 0 },
+    })
+  }
+
+  try {
+    const updated = await enqueue(file.id, () => designApi.update(file.id, { kind }))
+
+    replaceRow(file.id, updated)
+
+    if (openId.value === file.id) detail.value = updated
+
+    play('tick')
+    refresh()
+  } catch (error) {
+    replaceRow(file.id, previous)
+    ui.notify(error.message, 'error')
+  }
+}
 
 /** L'historique est chargé à l'ouverture : il n'intéresse que le fichier
  *  qu'on regarde, et le charger pour toute la grille serait du gâchis. */
@@ -305,6 +388,13 @@ onMounted(load)
       </template>
     </ModuleHeader>
 
+    <TruncationNotice
+      :loaded="files.length"
+      :total="total"
+      unit="fichiers"
+      hint="Filtrez par type, ou cherchez un nom."
+    />
+
     <form v-if="composing" class="card shrink-0 p-4" @submit.prevent="createFile">
       <div class="grid gap-3 sm:grid-cols-3">
         <label class="block sm:col-span-2">
@@ -370,57 +460,36 @@ onMounted(load)
     </div>
 
     <div v-else class="flex min-h-0 flex-1 gap-5">
-      <!-- Grille -->
-      <div class="min-w-0 flex-1 overflow-y-auto">
+      <!-- Le tableau, en colonnes par TYPE.
+           Ici les colonnes ne portent pas un cycle de vie mais une
+           CLASSIFICATION : on ne fait pas « avancer » une maquette vers un
+           système de composants. Le glissement reste néanmoins autorisé,
+           parce qu'il correspond à un geste réel — reclasser un fichier — et
+           que le type est un champ modifiable comme un autre. -->
+      <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
         <EmptyState
           v-if="filtered.length === 0"
           :title="files.length ? 'Aucun fichier ne correspond' : 'Aucun fichier'"
           description="Une maquette, un prototype ou un système de composants."
         />
 
-        <div v-else class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <button
-            v-for="file in filtered"
-            :key="file.id"
-            type="button"
-            class="card overflow-hidden p-0 text-left transition-colors hover:border-ink-3"
-            :class="openId === file.id ? 'border-ink' : ''"
-            @click="open(file)"
-          >
-            <!-- Vignette : un dégradé de la couleur du fichier. Deux teintes
-                 suffisent à rendre une carte reconnaissable sans stocker
-                 d'image — le module documente le travail, il ne l'héberge
-                 pas. -->
-            <span
-              class="block h-20 w-full"
-              :style="{
-                background: `linear-gradient(135deg, ${file.accent} 0%, ${file.accent}33 100%)`,
-              }"
-              aria-hidden="true"
-            />
-
-            <span class="block p-3.5">
-              <span class="flex items-center gap-2">
-                <span class="min-w-0 flex-1 truncate text-[0.88rem] font-semibold">
-                  {{ file.name }}
-                </span>
-                <span class="chip shrink-0 border-line text-[0.66rem] text-ink-3">
-                  {{ kindOf(file.kind).label }}
-                </span>
-              </span>
-
-              <span class="mt-1 line-clamp-2 block text-[0.76rem] text-ink-2">
-                {{ file.description ?? '—' }}
-              </span>
-
-              <span class="mt-2.5 flex items-center gap-2 text-[0.7rem] text-ink-3">
-                <span class="tabular-nums">v{{ file.versions }}</span>
-                <span aria-hidden="true">·</span>
-                <span>{{ formatRelative(file.updated_at) }}</span>
-              </span>
-            </span>
-          </button>
-        </div>
+        <BoardColumns
+          v-else
+          ref="board"
+          label="Fichiers de design"
+          id-prefix="fichier"
+          status-key="kind"
+          draggable
+          :columns="visibleColumns"
+          :items="filtered"
+          :active-id="openId"
+          @select="open"
+          @move="reclassify"
+        >
+          <template #card="{ item }">
+            <DesignCard :file="item" />
+          </template>
+        </BoardColumns>
       </div>
 
       <!-- Historique -->

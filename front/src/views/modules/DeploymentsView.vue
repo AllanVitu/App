@@ -15,8 +15,13 @@
 import { computed, onMounted, ref } from 'vue'
 
 import AppIcon from '@/components/AppIcon.vue'
+import BoardColumns from '@/components/board/BoardColumns.vue'
+import BranchPreviews from '@/components/modules/BranchPreviews.vue'
+import DeploymentCard from '@/components/modules/DeploymentCard.vue'
 import ModuleHeader from '@/components/modules/ModuleHeader.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
+import TruncationNotice from '@/components/ui/TruncationNotice.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { deploymentsApi } from '@/services/api'
 import { play } from '@/services/sound'
@@ -27,6 +32,9 @@ const ui = useUiStore()
 
 const deployments = ref([])
 const stats = ref(null)
+// Compte SERVEUR, filtres compris : il voit au-delà du plafond de chargement,
+// contrairement à la liste reçue (cf. ui/TruncationNotice.vue).
+const total = ref(null)
 const branches = ref([])
 const loading = ref(true)
 const busy = ref(false)
@@ -64,6 +72,7 @@ async function load({ silent = false } = {}) {
 
     deployments.value = rows
     stats.value = meta.stats
+    total.value = meta.total ?? null
     branches.value = meta.branches
   } catch (error) {
     ui.notify(error.message, 'error')
@@ -121,11 +130,22 @@ function formatDuration(ms) {
   return seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`
 }
 
-const opened = computed(() => filtered.value.find((row) => row.id === openId.value) ?? null)
+const opened = computed(() => deployments.value.find((row) => row.id === openId.value) ?? null)
 
-function toggle(row) {
-  openId.value = openId.value === row.id ? null : row.id
-  if (openId.value) play('open')
+/**
+ * Colonnes affichées.
+ *
+ * Le filtre de statut réduit le tableau à une colonne, il ne vide plus les
+ * autres : quatre colonnes vides se lisent comme une panne, pas comme un
+ * filtre actif.
+ */
+const visibleColumns = computed(() =>
+  statusFilter.value ? STATUSES.filter((status) => status.value === statusFilter.value) : STATUSES,
+)
+
+function openDetail(row) {
+  openId.value = row.id
+  play('open')
 }
 
 /**
@@ -272,6 +292,18 @@ onMounted(load)
       </template>
     </ModuleHeader>
 
+    <!-- L'état par branche AVANT le tableau : « où est ma branche » est la
+         question qu'on se pose en arrivant ; « que s'est-il passé » vient
+         ensuite. -->
+    <BranchPreviews :deployments="deployments" :statuses="STATUSES" />
+
+    <TruncationNotice
+      :loaded="deployments.length"
+      :total="total"
+      unit="déploiements"
+      hint="Filtrez par environnement, par statut, ou cherchez une branche."
+    />
+
     <!-- Nouveau déploiement -->
     <form v-if="composing" class="card shrink-0 p-4" @submit.prevent="createDeployment">
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -347,100 +379,92 @@ onMounted(load)
         "
       />
 
-      <ul v-else class="flex-1 divide-y divide-line overflow-y-auto">
-        <li v-for="row in filtered" :key="row.id">
-          <button
-            type="button"
-            class="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-raised"
-            :aria-expanded="openId === row.id"
-            @click="toggle(row)"
-          >
+      <!-- Le tableau. NON glissable, et c'est le point : un déploiement est un
+           ÉVÉNEMENT constaté, pas une tâche qu'on fait avancer. Le tirer de
+           « en échec » vers « en ligne » réécrirait l'histoire au lieu de la
+           corriger. Pour repartir, il y a « relancer » — qui crée un vrai
+           nouveau passage en file (cf. BoardColumns). -->
+      <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden p-2">
+        <BoardColumns
+          label="Déploiements"
+          id-prefix="deploiement"
+          :columns="visibleColumns"
+          :items="filtered"
+          @select="openDetail"
+        >
+          <template #card="{ item }">
+            <DeploymentCard :deployment="item" :duration="formatDuration(item.duration_ms)" />
+          </template>
+        </BoardColumns>
+      </div>
+    </div>
+
+    <!-- Détail : le journal, et les seules actions légitimes. En fenêtre, car
+         un journal de compilation est large par nature. -->
+    <BaseModal
+      :open="Boolean(opened)"
+      :title="opened?.commit_message ?? 'Déploiement'"
+      size="lg"
+      @close="openId = null"
+    >
+      <div v-if="opened" class="space-y-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="chip border-line" :class="statusOf(opened.status).tone">
             <span
-              class="size-2 shrink-0 rounded-pill"
-              :class="statusOf(row.status).dot"
+              class="size-1.5 rounded-pill"
+              :class="statusOf(opened.status).dot"
               aria-hidden="true"
             />
-            <span class="w-20 shrink-0 text-[0.72rem]" :class="statusOf(row.status).tone">
-              {{ statusOf(row.status).label }}
-            </span>
+            {{ statusOf(opened.status).label }}
+          </span>
 
-            <span
-              class="hidden w-24 shrink-0 text-[0.7rem] sm:block"
-              :class="row.environment === 'production' ? 'text-ink' : 'text-ink-3'"
-            >
-              {{ row.environment === 'production' ? 'production' : 'prévisu.' }}
-            </span>
+          <span class="font-mono text-[0.72rem] text-ink-3">
+            {{ opened.branch }}@{{ opened.commit_sha.slice(0, 7) }}
+          </span>
 
-            <span class="min-w-0 flex-1">
-              <span class="block truncate text-[0.84rem]">
-                {{ row.commit_message ?? 'Sans message' }}
-              </span>
-              <span class="mt-0.5 block truncate font-mono text-[0.7rem] text-ink-3">
-                {{ row.branch }}@{{ row.commit_sha.slice(0, 7) }}
-              </span>
-            </span>
+          <span class="text-[0.72rem] text-ink-3">
+            {{ formatDuration(opened.duration_ms) }} · {{ formatRelative(opened.created_at) }}
+          </span>
+        </div>
 
-            <span class="w-20 shrink-0 text-right text-[0.72rem] tabular-nums text-ink-3">
-              {{ formatDuration(row.duration_ms) }}
-            </span>
+        <div class="flex flex-wrap items-center gap-2">
+          <a
+            v-if="opened.url"
+            :href="opened.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="chip border-line text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
+          >
+            ouvrir l'URL
+          </a>
 
-            <span class="hidden w-28 shrink-0 text-right text-[0.72rem] text-ink-3 md:block">
-              {{ formatRelative(row.created_at) }}
-            </span>
-
-            <AppIcon
-              name="chevron-down"
-              :size="15"
-              class="shrink-0 text-ink-3 transition-transform"
-              :class="openId === row.id ? 'rotate-180' : ''"
-            />
+          <button
+            type="button"
+            class="chip border-line text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
+            :disabled="busy"
+            @click="relaunch(opened)"
+          >
+            relancer
           </button>
 
-          <!-- Détail : le journal, et les seules actions légitimes. -->
-          <div
-            v-if="openId === row.id && opened"
-            class="border-t border-line bg-raised/40 px-4 py-3"
+          <span class="flex-1" />
+
+          <button
+            type="button"
+            class="chip border-line text-ink-3 transition-colors hover:border-brick hover:text-brick"
+            @click="removeDeployment(opened)"
           >
-            <div class="mb-3 flex flex-wrap items-center gap-2">
-              <a
-                v-if="opened.url"
-                :href="opened.url"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="chip border-line text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
-              >
-                ouvrir l'URL
-              </a>
+            <AppIcon name="trash" :size="13" />
+            supprimer
+          </button>
+        </div>
 
-              <button
-                type="button"
-                class="chip border-line text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
-                :disabled="busy"
-                @click="relaunch(opened)"
-              >
-                relancer
-              </button>
-
-              <span class="flex-1" />
-
-              <button
-                type="button"
-                class="chip border-line text-ink-3 transition-colors hover:border-brick hover:text-brick"
-                @click="removeDeployment(opened)"
-              >
-                <AppIcon name="trash" :size="13" />
-                supprimer
-              </button>
-            </div>
-
-            <pre
-              v-if="opened.log"
-              class="max-h-52 overflow-auto whitespace-pre-wrap rounded-field border border-line bg-panel p-3 font-mono text-[0.72rem] leading-relaxed text-ink-2"
-              >{{ opened.log }}</pre>
-            <p v-else class="text-[0.76rem] text-ink-3">Aucun journal pour ce déploiement.</p>
-          </div>
-        </li>
-      </ul>
-    </div>
+        <pre
+          v-if="opened.log"
+          class="max-h-72 overflow-auto whitespace-pre-wrap rounded-field border border-line bg-raised p-3 font-mono text-[0.72rem] leading-relaxed text-ink-2"
+          >{{ opened.log }}</pre>
+        <p v-else class="text-[0.76rem] text-ink-3">Aucun journal pour ce déploiement.</p>
+      </div>
+    </BaseModal>
   </div>
 </template>

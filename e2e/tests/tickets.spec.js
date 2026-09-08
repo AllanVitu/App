@@ -137,4 +137,96 @@ test.describe('tickets', () => {
     await expect(termines.first()).toBeVisible()
     await expect(termines.getByText(/de retard/)).toHaveCount(0)
   })
+
+  /**
+   * Le glissement d'une colonne à l'autre.
+   *
+   * Il est écrit en événements pointeur natifs, sans bibliothèque : ce test
+   * est donc le seul filet. Il rejoue le geste réel — appuyer, franchir le
+   * seuil de reconnaissance, se déplacer, relâcher — et non un raccourci.
+   *
+   * L'assertion porte sur le SERVEUR, pas sur l'écran : un rechargement de
+   * page vérifie que le déplacement a bien été enregistré, là où une simple
+   * vérification visuelle passerait aussi sur une mise à jour optimiste que
+   * l'API aurait refusée.
+   */
+  test('glisser une carte dans une autre colonne change son statut', async ({ page }) => {
+    const titre = nouveauTitre()
+
+    await page.keyboard.press('c')
+    await page.getByPlaceholder(/Entrée pour créer/i).fill(titre)
+
+    // ATTENDRE QUE L'APPLICATION AIT FINI DE RÉAGIR À LA CRÉATION.
+    //
+    // « createTicket » lance un rafraîchissement des compteurs SANS
+    // l'attendre — c'est voulu : la carte ne doit pas attendre le réseau pour
+    // apparaître. Mais la réponse redessine l'en-tête quand elle arrive, et si
+    // cela tombe entre la mesure de la carte et l'appui, le pointeur atterrit
+    // à côté. Le glissement n'a alors tout simplement pas lieu, et le test
+    // échoue sur une interface pourtant correcte.
+    //
+    // Le guetteur est posé AVANT la frappe qui déclenche l'appel : posé après,
+    // la réponse pourrait être déjà revenue et l'attente ne finirait jamais.
+    const compteursRelus = page.waitForResponse(
+      (reponse) =>
+        reponse.url().includes('/api/tickets') && reponse.request().method() === 'GET',
+    )
+
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Escape')
+    await compteursRelus
+
+    const carte = page.getByRole('option').filter({ hasText: titre })
+    await expect(carte).toBeVisible()
+
+    // LE GESTE EST JOUÉ AVEC « hover », PAS AVEC DES COORDONNÉES CALCULÉES.
+    //
+    // « hover » remesure la cible au moment où il agit et attend qu'elle soit
+    // STABLE — deux images consécutives au même endroit. Des coordonnées
+    // relevées à l'avance, elles, vieillissent : la moindre recomposition
+    // entre le relevé et l'appui fait tomber le pointeur à côté, et le
+    // glissement n'a pas lieu du tout.
+    await carte.hover()
+
+    const depart = await carte.boundingBox()
+
+    await page.mouse.down()
+
+    // Franchir le seuil qui distingue un glissement d'un clic. Relatif à la
+    // position courante du pointeur, donc insensible à un décalage de la page.
+    await page.mouse.move(depart.x + depart.width / 2 - 45, depart.y + depart.height / 2 - 10, {
+      steps: 5,
+    })
+
+    // L'ÉCRITURE EST GUETTÉE AVANT LE GESTE.
+    //
+    // Le module met à jour la carte OPTIMISTEMENT, sans attendre le serveur —
+    // c'est ce qui rend le tableau réactif. L'assertion visuelle ci-dessous
+    // passe donc pendant que la requête est encore en vol, et un rechargement
+    // immédiat l'abandonnerait : le statut vérifié en base serait alors celui
+    // d'avant, sur une application qui n'a pourtant rien fait de mal.
+    const ecriturePartie = page.waitForResponse(
+      (reponse) =>
+        /\/api\/tickets\/[0-9a-f-]{36}$/.test(reponse.url()) &&
+        reponse.request().method() === 'PUT',
+    )
+
+    // Puis la cible, remesurée par Playwright à cet instant précis.
+    await page.locator('[data-column="in_progress"]').hover()
+    await page.mouse.up()
+
+    await expect(carte.getByRole('img', { name: 'en cours' })).toBeVisible()
+
+    // La preuve : après rechargement, le statut vient de la base. Le
+    // rechargement n'a lieu qu'une fois l'écriture réellement aboutie.
+    await ecriturePartie
+    await page.reload()
+    const rechargee = page.getByRole('option').filter({ hasText: titre })
+    await expect(rechargee.getByRole('img', { name: 'en cours' })).toBeVisible()
+
+    // Ménage
+    await rechargee.click()
+    await page.keyboard.press('Backspace')
+    await expect(page.getByText(titre, { exact: true })).toBeHidden()
+  })
 })

@@ -77,29 +77,66 @@ test.describe('modules', () => {
 
   // ------------------------------------------------------------ déploiement
 
-  test('relancer un déploiement efface sa durée précédente', async ({ page }) => {
+  /**
+   * UN DÉPLOIEMENT NE SE GLISSE PAS.
+   *
+   * C'est une règle de domaine, pas un oubli : un déploiement est un
+   * ÉVÉNEMENT constaté. Le tirer de « en échec » vers « en ligne »
+   * réécrirait l'histoire au lieu de la corriger — pour repartir, il y a
+   * « relancer », qui crée un vrai nouveau passage en file d'attente.
+   *
+   * Rien d'autre ne protège cette règle : `draggable` est un booléen que
+   * l'uniformisation avec les deux autres tableaux ferait passer à vrai sans
+   * y penser, et l'écran continuerait de fonctionner — en mentant.
+   *
+   * (L'effacement de la durée par le trigger est couvert côté serveur, sur
+   * des données jetables : back/tests/Integration/ModulesTest. Le vérifier
+   * ici obligeait à relancer un déploiement du jeu de démonstration, sans
+   * moyen de l'y remettre — l'écran n'offre AUCUNE action pour cela, et c'est
+   * exactement le point de ce test.)
+   */
+  test('un déploiement ne se glisse pas d une colonne à l autre', async ({ page }) => {
     await page.goto('/modules/deploiement')
     await expect(page.getByRole('heading', { name: 'déploiement' })).toBeVisible()
 
-    // Le jeu de démonstration contient un déploiement terminé, donc chiffré.
-    // On cible une LIGNE de liste : les pastilles de filtre portent les mêmes
-    // libellés de statut et seraient sinon retenues en premier.
-    const enLigne = page.getByRole('listitem').filter({ hasText: 'en ligne' }).first()
-    await expect(enLigne).toContainText(/\d+ (s|min)/)
+    const enEchec = page.locator('[data-column="error"]')
+    const enLigne = page.locator('[data-column="ready"]')
 
-    // La ligne est ensuite désignée par son MESSAGE, pas par son statut : un
-    // locateur fondé sur « en ligne » se rattacherait à une autre ligne dès
-    // que celle-ci change de statut, et le test vérifierait le mauvais objet.
-    const message = (await enLigne.locator('span').filter({ hasText: /\S/ }).nth(2).textContent()) ?? ''
-    const ligne = page.getByRole('listitem').filter({ hasText: message.trim() }).first()
+    const carte = enEchec.getByRole('option').first()
+    await expect(carte).toBeVisible()
+    // Voir tickets.spec.js : « hover » attend la stabilité, « boundingBox » non.
+    await carte.hover()
 
-    await ligne.getByRole('button').first().click()
-    await ligne.getByRole('button', { name: /^relancer$/i }).click()
+    const avant = await enLigne.getByRole('option').count()
 
-    // Sans effacement, le déploiement relancé afficherait la durée de sa
-    // tentative précédente — pire qu'une durée absente.
-    await expect(ligne).toContainText('en file')
-    await expect(ligne).toContainText('—')
+    const depart = await carte.boundingBox()
+    const cible = await enLigne.boundingBox()
+
+    await page.mouse.move(depart.x + depart.width / 2, depart.y + depart.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(depart.x + 40, depart.y + 20, { steps: 5 })
+    await page.mouse.move(cible.x + cible.width / 2, cible.y + 60, { steps: 10 })
+    await page.mouse.up()
+
+    // Rien n'a bougé, ni à l'écran ni en base.
+    await expect(enEchec.getByRole('option')).toHaveCount(1)
+    await expect(enLigne.getByRole('option')).toHaveCount(avant)
+
+    await page.reload()
+    await expect(page.locator('[data-column="error"]').getByRole('option')).toHaveCount(1)
+  })
+
+  test('le journal d un déploiement s ouvre en fenêtre', async ({ page }) => {
+    await page.goto('/modules/deploiement')
+
+    // Une trace de compilation est large par nature : la déplier dans une
+    // colonne de 13 rem la réduirait à une bouillie de retours à la ligne.
+    await page.locator('[data-column="error"]').getByRole('option').first().click()
+
+    const fenetre = page.getByRole('dialog')
+    await expect(fenetre).toBeVisible()
+    await expect(fenetre.getByText(/Échec : 2 tests en échec/)).toBeVisible()
+    await expect(fenetre.getByRole('button', { name: /^relancer$/i })).toBeVisible()
   })
 
   test('un déploiement refuse une empreinte de commit invalide', async ({ page }) => {
@@ -117,35 +154,49 @@ test.describe('modules', () => {
 
   // ------------------------------------------------------------ supervision
 
-  test('les erreurs sont groupées et leur statut se change', async ({ page }) => {
+  test('les erreurs sont groupées, et changer de statut change de colonne', async ({ page }) => {
     await page.goto('/modules/supervision')
     await expect(page.getByRole('heading', { name: 'supervision' })).toBeVisible()
 
-    // « toutes » plutôt que le filtre par défaut : sans cela, changer le
-    // statut ferait sortir la ligne de la liste en cours de test, et le
-    // panneau ouvert disparaîtrait sous le curseur.
-    await page.getByRole('button', { name: 'toutes', exact: true }).click()
+    // Le tableau n'a plus de filtre par défaut : les trois colonnes sont
+    // visibles d'emblée, et c'est le tableau lui-même qui sépare les statuts.
+    const nonResolues = page.locator('[data-column="unresolved"]')
+    const ignorees = page.locator('[data-column="ignored"]')
+
+    // La carte est cherchée SUR TOUT LE TABLEAU, sans présumer de sa colonne
+    // de départ : ce test déplace une erreur, et une exécution interrompue en
+    // son milieu la laisserait ailleurs. Il doit alors se rejouer, pas
+    // échouer sur l'état que lui-même a laissé.
+    const fatale = page.getByRole('option').filter({ hasText: 'fatale' }).first()
 
     // Une exception vue 23 fois est UN problème, pas 23 lignes.
-    const fatale = page.getByRole('listitem').filter({ hasText: 'fatale' }).first()
     await expect(fatale).toContainText('23')
 
-    await fatale.getByRole('button').first().click()
+    await fatale.click()
 
-    // Les boutons de statut sont cherchés DANS la ligne : les pastilles de
+    // Le détail s'ouvre en fenêtre : une pile d'appels est trop large pour
+    // une colonne. Les boutons de statut y sont cherchés — les pastilles de
     // filtre en haut d'écran portent exactement les mêmes libellés.
-    await fatale.getByRole('button', { name: 'ignorées', exact: true }).click()
-    await expect(fatale.getByRole('button', { name: 'ignorées', exact: true })).toHaveAttribute(
+    const fenetre = page.getByRole('dialog')
+    await expect(fenetre).toBeVisible()
+
+    await fenetre.getByRole('button', { name: 'ignorées', exact: true }).click()
+    await expect(fenetre.getByRole('button', { name: 'ignorées', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
+
+    // Ce qui compte vraiment sur un tableau : la carte a CHANGÉ DE COLONNE.
+    await expect(ignorees.getByRole('option').filter({ hasText: 'fatale' })).toHaveCount(1)
 
     // Remise en état : la base de développement doit se retrouver comme avant.
-    await fatale.getByRole('button', { name: 'non résolues', exact: true }).click()
-    await expect(fatale.getByRole('button', { name: 'non résolues', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    await fenetre.getByRole('button', { name: 'non résolues', exact: true }).click()
+    await expect(
+      fenetre.getByRole('button', { name: 'non résolues', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true')
+
+    await page.keyboard.press('Escape')
+    await expect(nonResolues.getByRole('option').filter({ hasText: 'fatale' })).toHaveCount(1)
   })
 
   test('la courbe des occurrences reste lisible par un lecteur d écran', async ({ page }) => {
@@ -169,7 +220,11 @@ test.describe('modules', () => {
     await page.getByLabel('nom', { exact: true }).fill(nom)
     await page.getByRole('button', { name: /^créer$/i }).click()
 
-    const carte = page.getByRole('button').filter({ hasText: nom })
+    // Le fichier naît « maquette » : c'est le type par défaut du formulaire,
+    // donc la colonne où il doit apparaître.
+    const carte = page.locator('[data-column="maquette"]').getByRole('option').filter({
+      hasText: nom,
+    })
     await expect(carte).toBeVisible()
 
     // Un fichier naît avec sa v1 : sans version, il ne documenterait rien.

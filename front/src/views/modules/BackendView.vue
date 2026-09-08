@@ -23,6 +23,7 @@ import { backendApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useWriteQueue } from '@/composables/useWriteQueue'
 import { useUiStore } from '@/stores/ui'
+import { modulePath } from '@/utils/modules'
 import { formatRelative } from '@/utils/format'
 
 const ui = useUiStore()
@@ -548,6 +549,15 @@ onMounted(load)
               <option value="anon">publique (anon)</option>
               <option value="service">service</option>
             </select>
+            <!-- La distinction n'était nulle part expliquée, alors qu'elle
+                 décide de ce que la clé peut faire. -->
+            <span class="mt-1.5 block text-[0.7rem] text-ink-3">
+              {{
+                keyScope === 'service'
+                  ? 'Écriture autorisée. À garder côté serveur.'
+                  : 'Lecture seule. Destinée au navigateur, donc publique.'
+              }}
+            </span>
           </label>
 
           <button
@@ -561,12 +571,31 @@ onMounted(load)
         </div>
       </form>
 
+      <!-- CE QU'UNE CLÉ OUVRE, dit ici.
+           Les clés se créaient, s'affichaient une fois et se révoquaient sans
+           que rien n'indique jamais à quoi elles servaient. Elles authentifient
+           l'ingestion d'erreurs du module Supervision — la seule chose qu'un
+           serveur puisse faire sans session. -->
+      <p
+        class="flex flex-wrap items-center gap-2 rounded-field border border-line bg-raised px-3 py-2 text-[0.78rem] text-ink-2"
+      >
+        <AppIcon name="info" :size="14" class="shrink-0 text-ink-3" />
+        Une clé <strong class="font-semibold text-ink">de service</strong> autorise vos applications
+        à signaler leurs erreurs.
+        <RouterLink
+          :to="modulePath('supervision')"
+          class="font-medium text-ink underline underline-offset-2 transition-colors hover:text-ink-2"
+        >
+          Voir comment les envoyer
+        </RouterLink>
+      </p>
+
       <div class="card flex min-h-0 flex-1 flex-col overflow-hidden">
         <EmptyState
           v-if="keys.length === 0"
           class="flex-1"
           title="Aucune clé"
-          description="Une clé d'API autorise un client à interroger vos données."
+          description="Une clé de service authentifie une application qui écrit dans votre compte."
         />
 
         <ul v-else class="flex-1 divide-y divide-line overflow-y-auto">

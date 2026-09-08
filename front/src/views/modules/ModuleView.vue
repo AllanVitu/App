@@ -8,7 +8,9 @@
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
-import { Flip, ScrollTrigger, gsap, prefersReducedMotion } from '@/animations/gsap'
+import { appEnter, prefersReducedMotion } from '@/animations/motion'
+import { createLayout } from '@/animations/layout'
+import { revealOnScroll } from '@/animations/reveal'
 import AppIcon from '@/components/AppIcon.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ItemFormModal from '@/components/ItemFormModal.vue'
@@ -72,64 +74,66 @@ const hasFilters = computed(() => Boolean(filters.value.search || filters.value.
 let controller = null
 let searchTimer = null
 
-/** ScrollTriggers de la liste courante, à détruire avant chaque rechargement. */
-let listTriggers = []
+/** Arrêt de la révélation en cours, à appeler avant chaque rechargement. */
+let stopReveal = null
+
+/**
+ * Moteur de mise en page de la liste, créé au premier usage.
+ *
+ * Il mesure les lignes AVANT le changement (record) puis les fait glisser
+ * vers leur nouvelle place (animate) : c'est ce que faisait Flip.
+ */
+let layout = null
 
 const listRoot = ref(null)
 
 /**
  * Révélation des lignes : celles déjà visibles entrent tout de suite, les
- * suivantes à l'approche du défilement. `ScrollTrigger.batch` regroupe les
- * éléments proches pour produire un seul décalage cohérent plutôt que douze
- * animations isolées.
+ * suivantes à l'approche du défilement.
  */
 function revealRows() {
-  listTriggers.forEach((trigger) => trigger.kill())
-  listTriggers = []
-
-  if (prefersReducedMotion()) return
-
-  listTriggers = ScrollTrigger.batch('[data-flip-item]', {
-    start: 'top 95%',
-    once: true,
-    onEnter: (batch) =>
-      gsap.fromTo(
-        batch,
-        { y: 16, opacity: 0 },
-        { y: 0, opacity: 1, stagger: 0.05, duration: 0.45, overwrite: 'auto' },
-      ),
-  })
+  stopReveal?.()
+  stopReveal = listRoot.value
+    ? revealOnScroll(listRoot.value.querySelectorAll('[data-flip-item]'))
+    : null
 }
 
 /**
- * Changement de filtre, de tri ou de page : Flip mémorise la position de
- * chaque ligne AVANT le rechargement, puis les fait glisser vers leur nouvelle
- * place. L'utilisateur suit du regard ce qui a été conservé, au lieu de voir
- * une liste sauter d'un état à l'autre.
+ * Mesure la liste AVANT sa modification. Renvoie « false » quand il n'y a
+ * rien à animer, ce qui dispense l'appelant de retenir la condition.
  */
-async function replayFlip(previousState) {
+function recordLayout() {
+  if (prefersReducedMotion() || !items.value.length || !listRoot.value) return false
+
+  layout ??= createLayout(listRoot.value, { children: '[data-flip-item]' })
+  layout.record()
+
+  return true
+}
+
+/**
+ * Changement de filtre, de tri ou de page : les lignes conservées GLISSENT
+ * vers leur nouvelle place. L'utilisateur suit du regard ce qui a été gardé,
+ * au lieu de voir une liste sauter d'un état à l'autre.
+ *
+ * Celles qui arrivent et celles qui partent ne glissent pas : elles fondent.
+ * Leur donner en plus un décalage vertical ferait deux mouvements
+ * concurrents sur le même élément — et c'est illisible.
+ */
+async function replayLayout() {
   await nextTick()
 
-  Flip.from(previousState, {
-    duration: 0.5,
-    ease: 'appEnter',
-    absolute: true,
-    // Les lignes qui apparaissent et disparaissent ne « glissent » pas :
-    // elles fondent, sinon le mouvement devient illisible.
-    onEnter: (elements) =>
-      gsap.fromTo(
-        elements,
-        { opacity: 0, y: 14 },
-        { opacity: 1, y: 0, duration: 0.4, stagger: 0.03, overwrite: 'auto' },
-      ),
-    onLeave: (elements) => gsap.to(elements, { opacity: 0, y: -10, duration: 0.25 }),
+  layout.animate({
+    duration: 500,
+    ease: appEnter,
+    enterFrom: { opacity: 0 },
+    leaveTo: { opacity: 0 },
   })
 }
 
 async function loadItems({ flip = false } = {}) {
-  // L'état doit être capturé AVANT toute modification du DOM.
-  const previousState =
-    flip && !prefersReducedMotion() && items.value.length ? Flip.getState('[data-flip-item]') : null
+  // La liste doit être mesurée AVANT toute modification du DOM.
+  const measured = flip && recordLayout()
 
   controller?.abort()
   controller = new AbortController()
@@ -166,8 +170,8 @@ async function loadItems({ flip = false } = {}) {
 
   if (controller.signal.aborted) return
 
-  if (previousState) {
-    await replayFlip(previousState)
+  if (measured) {
+    await replayLayout()
   } else {
     await nextTick()
     revealRows()
@@ -221,9 +225,15 @@ function goToPage(next) {
   loadItems({ flip: true })
 
   // Retour en haut de liste : sans cela, changer de page laisse l'œil au
-  // milieu d'un contenu entièrement renouvelé.
-  if (!prefersReducedMotion() && listRoot.value) {
-    gsap.to(window, { duration: 0.4, scrollTo: { y: listRoot.value, offsetY: 90 } })
+  // milieu d'un contenu entièrement renouvelé. Le défilement est confié au
+  // navigateur : « scroll-behavior: smooth » est déjà posé sur <html>, et il
+  // sait seul l'annuler si l'utilisateur reprend la main.
+  const anchor = listRoot.value
+
+  if (anchor) {
+    const top = anchor.getBoundingClientRect().top + window.scrollY - 90
+
+    window.scrollTo({ top, behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
   }
 }
 
@@ -301,9 +311,12 @@ onBeforeUnmount(() => {
   controller?.abort()
   clearTimeout(searchTimer)
 
-  // Les ScrollTriggers survivraient à la vue et fuiraient en mémoire.
-  listTriggers.forEach((trigger) => trigger.kill())
-  listTriggers = []
+  // L'observateur d'intersection survivrait à la vue et retiendrait ses
+  // lignes en mémoire.
+  stopReveal?.()
+  stopReveal = null
+  layout?.revert()
+  layout = null
 })
 </script>
 
@@ -418,7 +431,7 @@ onBeforeUnmount(() => {
           v-for="item in items"
           :key="item.id"
           data-flip-item
-          class="group flex items-start gap-4 px-5 py-4 transition hover:bg-raised"
+          class="group flex items-start gap-3 px-4 py-2.5 transition-colors hover:bg-raised"
         >
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2">
@@ -448,7 +461,7 @@ onBeforeUnmount(() => {
           <div class="flex shrink-0 items-center gap-1">
             <button
               type="button"
-              class="p-2 text-ink-3 transition hover:bg-raised hover:text-ink"
+              class="p-2 text-ink-3 transition-colors hover:bg-raised hover:text-ink"
               :aria-label="`Modifier ${item.title}`"
               @click="openEdit(item)"
             >
@@ -456,7 +469,7 @@ onBeforeUnmount(() => {
             </button>
             <button
               type="button"
-              class="p-2 text-ink-3 transition hover:bg-brick-bg hover:text-brick"
+              class="p-2 text-ink-3 transition-colors hover:bg-brick-bg hover:text-brick"
               :aria-label="`Supprimer ${item.title}`"
               @click="askDelete(item)"
             >
@@ -469,7 +482,7 @@ onBeforeUnmount(() => {
       <!-- Pagination -->
       <div
         v-if="meta.total_pages > 1"
-        class="flex items-center justify-between border-t border-line px-5 py-3"
+        class="flex items-center justify-between border-t border-line px-4 py-2.5"
       >
         <p class="text-sm text-ink-2">
           Page {{ meta.page }} sur {{ meta.total_pages }} · {{ meta.total }} élément(s)

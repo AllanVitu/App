@@ -23,12 +23,15 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import AppIcon from '@/components/AppIcon.vue'
+import BoardColumns from '@/components/board/BoardColumns.vue'
+import TicketCard from '@/components/tickets/TicketCard.vue'
 import TicketPanel from '@/components/tickets/TicketPanel.vue'
-import TicketRow from '@/components/tickets/TicketRow.vue'
 import TicketStatusIcon from '@/components/tickets/TicketStatusIcon.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
+import TruncationNotice from '@/components/ui/TruncationNotice.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import { Flip, gsap, prefersReducedMotion } from '@/animations/gsap'
+import { appEnter, prefersReducedMotion } from '@/animations/motion'
+import { createLayout } from '@/animations/layout'
 import { ticketsApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useWriteQueue } from '@/composables/useWriteQueue'
@@ -40,6 +43,9 @@ const { enqueue } = useWriteQueue()
 
 const tickets = ref([])
 const stats = ref(null)
+// Compte SERVEUR, filtres compris : il voit au-delà du plafond de chargement,
+// contrairement à la liste reçue (cf. ui/TruncationNotice.vue).
+const total = ref(null)
 const projects = ref([])
 const loading = ref(true)
 const saving = ref(false)
@@ -55,8 +61,33 @@ const composeTitle = ref('')
 
 const searchInput = ref(null)
 const composeInput = ref(null)
-const listBox = ref(null)
+const board = ref(null)
 const panel = ref(null)
+
+/**
+ * Moteur de mise en page du tableau, créé au premier changement de statut.
+ *
+ * Il mesure les cartes avant le changement puis les fait glisser vers leur
+ * nouvelle colonne : c'est ce que faisait Flip, en 6 Ko au lieu de 92. Sans
+ * lui, une carte disparaît d'une colonne et réapparaît dans une autre — et
+ * rien ne dit que c'est la même.
+ */
+let layout = null
+
+/**
+ * Mesure le tableau AVANT sa modification. Renvoie « false » quand il n'y a
+ * rien à animer, ce qui dispense l'appelant de retenir la condition.
+ */
+function recordLayout() {
+  const element = board.value?.root
+
+  if (prefersReducedMotion() || !element) return false
+
+  layout ??= createLayout(element, { children: '[role="option"]' })
+  layout.record()
+
+  return true
+}
 
 // --- Chargement --------------------------------------------------------------
 
@@ -68,6 +99,7 @@ async function load({ silent = false } = {}) {
 
     tickets.value = rows
     stats.value = meta.stats
+    total.value = meta.total ?? null
     projects.value = meta.projects
   } catch (error) {
     ui.notify(error.message, 'error')
@@ -134,21 +166,41 @@ const filtered = computed(() => {
   })
 })
 
-/** Groupes affichés, dans l'ordre du travail — en cours d'abord, clos ensuite. */
-const groups = computed(() =>
-  BOARD_ORDER.map((status) => ({
-    status,
-    tickets: filtered.value.filter((ticket) => ticket.status === status.value),
-  })).filter((group) => group.tickets.length > 0),
+/**
+ * Colonnes affichées.
+ *
+ * Le filtre de statut ne RETIRE plus des lignes d'une liste : il réduit le
+ * tableau à une seule colonne. Le laisser filtrer les cartes aurait laissé
+ * quatre colonnes vides à l'écran, ce qui se lit comme une panne et non comme
+ * un filtre actif.
+ */
+const visibleColumns = computed(() =>
+  statusFilter.value
+    ? BOARD_ORDER.filter((status) => status.value === statusFilter.value)
+    : BOARD_ORDER,
 )
 
 /**
- * Liste À PLAT dans l'ordre d'affichage.
+ * Liste À PLAT dans l'ordre de lecture du tableau : colonne par colonne, de
+ * gauche à droite, et de haut en bas dans chacune.
  *
- * C'est elle que j/k parcourent : le curseur doit suivre l'ordre de lecture
- * de l'écran, pas celui du tableau source.
+ * C'est elle que j/k parcourent. Le curseur doit suivre l'ordre de l'ÉCRAN et
+ * non celui du tableau source, sinon « suivant » saute d'une colonne à
+ * l'autre sans raison visible.
+ *
+ * Le regroupement est fait en une passe, pas un `filter` par colonne : cinq
+ * passes sur cinq cents tickets à chaque frappe dans la recherche coûteraient
+ * la fluidité que ce module s'impose.
  */
-const flat = computed(() => groups.value.flatMap((group) => group.tickets))
+const flat = computed(() => {
+  const buckets = new Map(visibleColumns.value.map((status) => [status.value, []]))
+
+  for (const ticket of filtered.value) {
+    buckets.get(ticket.status)?.push(ticket)
+  }
+
+  return [...buckets.values()].flat()
+})
 
 const activeIndex = computed(() => flat.value.findIndex((ticket) => ticket.id === activeId.value))
 
@@ -192,9 +244,11 @@ function move(step) {
 async function scrollActiveIntoView() {
   await nextTick()
 
-  listBox.value
+  board.value?.root
     ?.querySelector(`#ticket-${CSS.escape(activeId.value ?? '')}`)
-    ?.scrollIntoView({ block: 'nearest' })
+    // « nearest » sur les deux axes : le curseur peut changer de COLONNE,
+    // donc le tableau doit pouvoir défiler horizontalement aussi.
+    ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
 }
 
 // --- Écritures ---------------------------------------------------------------
@@ -232,31 +286,29 @@ async function patch(ticket, changes) {
   const previous = tickets.value[index]
 
   // Un changement de STATUT déplace la ligne d'un groupe à l'autre. Sans
-  // Flip, elle disparaît d'un endroit et réapparaît ailleurs : rien ne dit
-  // que c'est la même. C'est pourtant le geste le plus fréquent du module.
+  // mesure préalable, elle disparaît d'un endroit et réapparaît ailleurs :
+  // rien ne dit que c'est la même. C'est pourtant le geste le plus fréquent
+  // du module.
   //
   // L'état est capturé AVANT la mise à jour optimiste, et l'animation jouée
   // juste après — pas au retour du serveur : le mouvement doit accompagner
   // la frappe, pas l'aller-retour réseau.
-  const flipState =
-    changes.status !== undefined && !prefersReducedMotion() && listBox.value
-      ? Flip.getState(listBox.value.querySelectorAll('[role="option"]'))
-      : null
+  const measured = changes.status !== undefined && recordLayout()
 
   tickets.value[index] = { ...previous, ...changes }
   saving.value = true
 
-  if (flipState) {
+  if (measured) {
     await nextTick()
 
-    Flip.from(flipState, {
-      duration: 0.42,
-      ease: 'appEnter',
+    layout.animate({
+      duration: 420,
+      ease: appEnter,
       // Les lignes qui ENTRENT dans un groupe ou en sortent ne sont pas
       // déplacées mais créées ou détruites : elles se contentent d'un fondu,
       // sinon elles glisseraient depuis un point qui n'existait pas.
-      onEnter: (elements) => gsap.fromTo(elements, { opacity: 0 }, { opacity: 1, duration: 0.3 }),
-      onLeave: (elements) => gsap.to(elements, { opacity: 0, duration: 0.2 }),
+      enterFrom: { opacity: 0 },
+      leaveTo: { opacity: 0 },
     })
   }
 
@@ -272,6 +324,18 @@ async function patch(ticket, changes) {
   } finally {
     saving.value = false
   }
+}
+
+/**
+ * Carte déposée dans une autre colonne.
+ *
+ * Le curseur clavier SUIT le ticket déplacé. Sans cela, on glisse une carte
+ * puis on appuie sur une touche, et c'est un autre ticket qui bouge — le
+ * curseur étant resté sur celui qui a pris la place laissée libre.
+ */
+function moveTicket(ticket, status) {
+  activeId.value = ticket.id
+  patch(ticket, { status })
 }
 
 function setPriority(priority) {
@@ -436,7 +500,11 @@ onMounted(() => {
   window.addEventListener('keydown', onKeydown)
 })
 
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+  layout?.revert()
+  layout = null
+})
 
 const SHORTCUTS = [
   { keys: ['j', 'k'], label: 'ticket suivant / précédent' },
@@ -570,6 +638,13 @@ const SHORTCUTS = [
       </div>
     </div>
 
+    <TruncationNotice
+      :loaded="tickets.length"
+      :total="total"
+      unit="tickets"
+      hint="Cherchez par numéro, par projet ou par étiquette pour atteindre le reste."
+    />
+
     <!-- ============================ CORPS ============================ -->
     <div v-if="loading" class="flex flex-1 items-center justify-center py-20">
       <BaseSpinner class="size-7 text-ink" />
@@ -603,37 +678,33 @@ const SHORTCUTS = [
           "
         />
 
-        <ul
+        <!-- Le tableau, et non plus une liste groupée verticalement.
+             « tabindex » et « aria-activedescendant » restent portés ici : le
+             clavier demeure le chemin principal du module, le glissement n'en
+             est qu'une couche de plus. -->
+        <div
           v-else
-          ref="listBox"
-          role="listbox"
+          class="flex min-h-0 flex-1 flex-col overflow-hidden p-2 focus:outline-none"
           tabindex="0"
-          aria-label="Tickets"
           :aria-activedescendant="activeId ? `ticket-${activeId}` : undefined"
-          class="flex-1 overflow-y-auto focus:outline-none"
         >
-          <template v-for="group in groups" :key="group.status.value">
-            <!-- En-tête de groupe collant : en descendant une longue liste,
-                 on doit toujours savoir dans quelle colonne on se trouve. -->
-            <li
-              class="sticky top-0 z-10 flex items-center gap-2 border-b border-line bg-panel px-3 py-1.5"
-              role="presentation"
-            >
-              <TicketStatusIcon :status="group.status.value" :size="12" />
-              <span class="label-caps">{{ group.status.label }}</span>
-              <span class="text-[0.7rem] tabular-nums text-ink-3">{{ group.tickets.length }}</span>
-            </li>
-
-            <TicketRow
-              v-for="ticket in group.tickets"
-              :key="ticket.id"
-              :ticket="ticket"
-              :active="ticket.id === activeId"
-              @select="activeId = ticket.id"
-              @open="openTicket(ticket)"
-            />
-          </template>
-        </ul>
+          <BoardColumns
+            ref="board"
+            label="Tickets"
+            id-prefix="ticket"
+            draggable
+            :columns="visibleColumns"
+            :items="filtered"
+            :active-id="activeId"
+            @select="activeId = $event.id"
+            @open="openTicket"
+            @move="moveTicket"
+          >
+            <template #card="{ item }">
+              <TicketCard :ticket="item" />
+            </template>
+          </BoardColumns>
+        </div>
       </div>
 
       <!-- Détail -->

@@ -10,24 +10,17 @@
  * (cf. 06_tickets.sql) — il porte le cycle de vie pour les statuts et la
  * gravité pour les priorités.
  */
+import { today } from '@/utils/format'
 
 /** Ordre d'AVANCEMENT, qui n'est pas l'ordre d'affichage du tableau. */
 export const STATUS_FLOW = ['backlog', 'todo', 'in_progress', 'done']
 
 export const STATUSES = [
-  {
-    value: 'backlog',
-    label: 'en attente',
-    short: 'attente',
-    // Le tableau se lit de haut en bas dans l'ordre du travail : ce qui est
-    // en cours d'abord, ce qui est clos en dernier.
-    board: 2,
-    tone: 'text-ink-3',
-  },
-  { value: 'todo', label: 'à faire', short: 'à faire', board: 1, tone: 'text-ink' },
-  { value: 'in_progress', label: 'en cours', short: 'en cours', board: 0, tone: 'text-ochre' },
-  { value: 'done', label: 'terminé', short: 'terminé', board: 3, tone: 'text-moss' },
-  { value: 'canceled', label: 'annulé', short: 'annulé', board: 4, tone: 'text-ink-3' },
+  { value: 'backlog', label: 'en attente', short: 'attente', tone: 'text-ink-3' },
+  { value: 'todo', label: 'à faire', short: 'à faire', tone: 'text-ink' },
+  { value: 'in_progress', label: 'en cours', short: 'en cours', tone: 'text-ochre' },
+  { value: 'done', label: 'terminé', short: 'terminé', tone: 'text-moss' },
+  { value: 'canceled', label: 'annulé', short: 'annulé', tone: 'text-ink-3' },
 ]
 
 export const PRIORITIES = [
@@ -49,8 +42,21 @@ export const statusOf = (value) => STATUS_BY_VALUE[value] ?? STATUS_BY_VALUE.tod
 
 export const priorityOf = (value) => PRIORITY_BY_VALUE[value] ?? PRIORITY_BY_VALUE.none
 
-/** Statuts dans l'ordre d'affichage du tableau. */
-export const BOARD_ORDER = [...STATUSES].sort((a, b) => a.board - b.board)
+/**
+ * Colonnes du tableau, de gauche à droite.
+ *
+ * L'ordre est celui du TRAVAIL : on avance un ticket vers la droite. C'est ce
+ * qui rend le glissement évident sans qu'on ait à l'expliquer, et ce qui fait
+ * qu'une accumulation dans une colonne se lit comme un embouteillage.
+ *
+ * Une version antérieure de cet écran groupait les tickets verticalement et
+ * plaçait « en cours » en premier, pour que le travail actif soit en haut.
+ * C'était juste pour une liste — en colonnes, ce serait remonter le courant.
+ *
+ * « annulé » ferme la marche : hors du flux, mais visible, parce qu'un ticket
+ * abandonné qu'on ne voit plus est un ticket qu'on recrée.
+ */
+export const BOARD_ORDER = [...STATUS_FLOW, 'canceled'].map(statusOf)
 
 /** Un ticket clos ne « travaille » plus : ni retard, ni avancement. */
 export const isClosed = (ticket) => ticket.status === 'done' || ticket.status === 'canceled'
@@ -81,7 +87,9 @@ export function advanceStatus(status, step = 1) {
 export function isOverdue(ticket) {
   if (!ticket.due_date || isClosed(ticket)) return false
 
-  return ticket.due_date < new Date().toISOString().slice(0, 10)
+  // « today() » et non toISOString() : ce dernier calcule en UTC, et un
+  // ticket à échéance du jour était annoncé en retard dès 20 h à Montréal.
+  return ticket.due_date < today()
 }
 
 const shortDate = (dueDate) =>
@@ -107,11 +115,11 @@ export function formatDue(ticket) {
 
   if (isClosed(ticket)) return shortDate(dueDate)
 
-  const today = new Date().toISOString().slice(0, 10)
+  const now = today()
 
-  if (dueDate === today) return "aujourd'hui"
+  if (dueDate === now) return "aujourd'hui"
 
-  const days = Math.round((Date.parse(dueDate) - Date.parse(today)) / 86400000)
+  const days = Math.round((Date.parse(dueDate) - Date.parse(now)) / 86400000)
 
   if (days === 1) return 'demain'
   if (days === -1) return 'hier'
