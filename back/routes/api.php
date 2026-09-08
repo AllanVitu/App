@@ -22,14 +22,21 @@ use App\Controllers\HealthController;
 use App\Controllers\ItemController;
 use App\Controllers\ModuleController;
 use App\Controllers\ProfileController;
+use App\Controllers\SearchController;
 use App\Controllers\SettingsController;
 use App\Controllers\TicketController;
 use App\Core\Router;
 use App\Middleware\AuthMiddleware;
+use App\Middleware\IngestMiddleware;
 
 $router = new Router();
 
 $auth = [AuthMiddleware::class];
+
+// Ingestion : accepte AUSSI une clé d'API de service, parce qu'une
+// application qui signale une erreur ne peut pas détenir de session
+// utilisateur (cf. IngestMiddleware).
+$ingest = [IngestMiddleware::class];
 
 // --- Public ----------------------------------------------------------------
 $router->get('/api/health', [HealthController::class, 'index']);
@@ -52,6 +59,11 @@ $router->post('/api/auth/email/resend', [AccountController::class, 'resendVerifi
 
 // --- Tableau de bord -------------------------------------------------------
 $router->get('/api/dashboard', [DashboardController::class, 'index'], $auth);
+
+// --- Recherche transverse ---------------------------------------------------
+// Un seul endpoint pour les cinq modules : on se souvient d'un mot, pas du
+// module où il vit (cf. SearchService).
+$router->get('/api/search', [SearchController::class, 'index'], $auth);
 
 // --- Profil ----------------------------------------------------------------
 $router->get('/api/profile', [ProfileController::class, 'show'], $auth);
@@ -111,7 +123,7 @@ $router->delete('/api/deployments/{id}', [DeploymentController::class, 'destroy'
 // Pas de PUT complet : une erreur est REÇUE, pas saisie. Seul son statut de
 // traitement se modifie (cf. ErrorController).
 $router->get('/api/errors', [ErrorController::class, 'index'], $auth);
-$router->post('/api/errors', [ErrorController::class, 'store'], $auth);
+$router->post('/api/errors', [ErrorController::class, 'store'], $ingest);
 $router->get('/api/errors/{id}', [ErrorController::class, 'show'], $auth);
 $router->put('/api/errors/{id}', [ErrorController::class, 'update'], $auth);
 $router->delete('/api/errors/{id}', [ErrorController::class, 'destroy'], $auth);

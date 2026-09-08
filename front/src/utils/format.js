@@ -21,34 +21,89 @@ export function parseDate(value) {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
-const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
-  day: '2-digit',
-  month: 'short',
-  year: 'numeric',
+/**
+ * ---------------------------------------------------------------------------
+ * FUSEAU HORAIRE
+ *
+ * Le fuseau choisi dans les Paramètres était enregistré en base et lu par
+ * PERSONNE : toutes les dates s'affichaient dans celui du navigateur. L'écran
+ * proposait un réglage qui ne réglait rien.
+ *
+ * Les formateurs vivent donc dans un `shallowRef` plutôt qu'en constantes.
+ * C'est ce qui rend le changement VISIBLE sans rechargement : un composant qui
+ * appelle `formatDate()` dans son gabarit lit ce ref, donc en dépend, donc se
+ * redessine quand le fuseau change. Avec des constantes, l'écran aurait gardé
+ * les anciennes heures jusqu'au prochain rechargement complet.
+ * ---------------------------------------------------------------------------
+ */
+import { shallowRef } from 'vue'
+
+const DATE = { day: '2-digit', month: 'short', year: 'numeric' }
+const DATE_TIME = { ...DATE, hour: '2-digit', minute: '2-digit' }
+
+/**
+ * `timeZone: undefined` laisse Intl prendre celui du navigateur — c'est le
+ * bon repli tant que les paramètres du compte ne sont pas chargés.
+ */
+const build = (zone) => ({
+  zone,
+  date: new Intl.DateTimeFormat('fr-FR', { ...DATE, timeZone: zone }),
+  dateTime: new Intl.DateTimeFormat('fr-FR', { ...DATE_TIME, timeZone: zone }),
+  relative: new Intl.RelativeTimeFormat('fr-FR', { numeric: 'auto' }),
 })
 
-const dateTimeFormatter = new Intl.DateTimeFormat('fr-FR', {
-  day: '2-digit',
-  month: 'short',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-})
+const formatters = shallowRef(build(undefined))
 
-const relativeFormatter = new Intl.RelativeTimeFormat('fr-FR', { numeric: 'auto' })
+/**
+ * Applique le fuseau du compte. Appelé par le store d'authentification dès que
+ * les paramètres arrivent, et par l'écran Paramètres à chaque changement.
+ *
+ * Un fuseau invalide ne doit pas casser l'affichage de toute l'application :
+ * on retombe sur celui du navigateur.
+ *
+ * @param {string|null} zone identifiant IANA, « Europe/Paris »
+ */
+export function setTimeZone(zone) {
+  try {
+    formatters.value = build(zone || undefined)
+  } catch {
+    formatters.value = build(undefined)
+  }
+}
+
+/**
+ * Date du jour DANS LE FUSEAU ACTIF, au format « AAAA-MM-JJ ».
+ *
+ * Corrige un décalage réel : « aujourd'hui » était calculé avec
+ * `toISOString()`, donc en UTC. À Montréal, passé 20 h, la journée courante
+ * était déjà celle du lendemain — un ticket à échéance du jour était annoncé
+ * « en retard » alors qu'il restait quatre heures pour le traiter.
+ *
+ * « en-CA » n'est pas un choix de langue mais de FORMAT : c'est la locale qui
+ * produit nativement AAAA-MM-JJ, donc directement comparable aux dates que
+ * PostgreSQL renvoie.
+ */
+export function today() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: formatters.value.zone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+}
 
 /** « 28 août 2026 » */
 export function formatDate(value) {
   const date = parseDate(value)
 
-  return date ? dateFormatter.format(date) : '—'
+  return date ? formatters.value.date.format(date) : '—'
 }
 
 /** « 28 août 2026, 16:02 » */
 export function formatDateTime(value) {
   const date = parseDate(value)
 
-  return date ? dateTimeFormatter.format(date) : '—'
+  return date ? formatters.value.dateTime.format(date) : '—'
 }
 
 /** « il y a 3 jours » — bascule sur la date absolue au-delà d'un mois. */
@@ -70,11 +125,11 @@ export function formatRelative(value) {
 
   for (const { unit, limit, divisor } of units) {
     if (absolute < limit) {
-      return relativeFormatter.format(Math.round(seconds / divisor), unit)
+      return formatters.value.relative.format(Math.round(seconds / divisor), unit)
     }
   }
 
-  return dateFormatter.format(date)
+  return formatters.value.date.format(date)
 }
 
 /** Date au format attendu par <input type="date"> (AAAA-MM-JJ). */

@@ -35,6 +35,24 @@ export const dashboardApi = {
   overview: () => http.get('/dashboard').then(unwrap),
 }
 
+// --- Recherche transverse ----------------------------------------------------
+
+export const searchApi = {
+  /**
+   * Renvoie { results, query }.
+   *
+   * Le TERME est renvoyé avec les résultats, et ce n'est pas décoratif : on
+   * tape plus vite que le réseau ne répond, et sans lui une réponse lente à
+   * « re » écraserait celle de « refresh » déjà affichée. L'appelant compare
+   * et jette ce qui est périmé.
+   */
+  query: (q, signal) =>
+    http.get('/search', { params: { q }, signal }).then((response) => ({
+      results: response.data.data,
+      query: response.data.meta?.query ?? q,
+    })),
+}
+
 // --- Modules ----------------------------------------------------------------
 
 export const modulesApi = {

@@ -164,6 +164,14 @@ onMounted(async () => {
                 {{ lang.label }}
               </option>
             </select>
+            <!-- Dit franchement ce que ce réglage fait AUJOURD'HUI. L'interface
+                 n'existe qu'en français : laisser croire qu'elle bascule en
+                 anglais serait exactement le genre de promesse creuse que ce
+                 projet corrige ailleurs. La préférence est bien enregistrée —
+                 elle servira quand les traductions existeront. -->
+            <p class="mt-1.5 text-xs text-ink-3">
+              Enregistrée pour plus tard : l'interface n'est traduite qu'en français.
+            </p>
             <p v-if="errors.language" class="mt-1.5 text-xs text-brick">{{ errors.language }}</p>
           </div>
 
@@ -172,6 +180,9 @@ onMounted(async () => {
             <select id="timezone" v-model="form.timezone" class="input-field">
               <option v-for="zone in TIMEZONES" :key="zone" :value="zone">{{ zone }}</option>
             </select>
+            <p class="mt-1.5 text-xs text-ink-3">
+              Toutes les dates et les échéances de l'application s'y règlent.
+            </p>
             <p v-if="errors.timezone" class="mt-1.5 text-xs text-brick">{{ errors.timezone }}</p>
           </div>
         </div>
@@ -180,6 +191,16 @@ onMounted(async () => {
       <!-- Notifications -->
       <section class="card p-6">
         <h3 class="text-base font-semibold">Notifications</h3>
+
+        <!-- Ces trois préférences sont enregistrées mais rien ne les consomme
+             encore : l'envoi périodique demande un ordonnanceur côté serveur,
+             et le push demande un service worker. Aucun des deux n'existe dans
+             cette pile. Le dire vaut mieux que trois interrupteurs qui donnent
+             le sentiment d'agir. -->
+        <p class="mt-1.5 text-[0.8rem] text-ink-3">
+          Vos choix sont conservés. Aucun envoi n'est encore effectué : cela demande un ordonnanceur
+          côté serveur, qui n'est pas en place.
+        </p>
 
         <div class="mt-4 divide-y divide-line">
           <label

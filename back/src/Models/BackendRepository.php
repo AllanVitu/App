@@ -215,6 +215,61 @@ final class BackendRepository
         return ['key' => $this->hydrateKey($row), 'token' => $token];
     }
 
+
+    /**
+     * Résout le compte propriétaire d'une clé d'API, à partir du jeton EN CLAIR.
+     *
+     * C'est ce qui donne enfin une utilité aux clés : jusqu'ici elles étaient
+     * créées, affichées une fois, révoquées — et n'ouvraient rien. Elles
+     * authentifient désormais l'ingestion d'erreurs (cf. IngestMiddleware).
+     *
+     * TROIS RÈGLES DE SÉCURITÉ, toutes appliquées ici et pas ailleurs.
+     *
+     * 1. LA COMPARAISON PORTE SUR L'EMPREINTE, jamais sur le jeton : la base
+     *    ne contient que le SHA-256. Une fuite de la table ne livre aucune clé
+     *    utilisable.
+     *
+     * 2. LES CLÉS RÉVOQUÉES SONT REJETÉES ICI, dans la clause WHERE, et non
+     *    par un test après lecture. Une révocation qui dépendrait d'un « if »
+     *    côté PHP finirait par être oubliée dans un autre appelant.
+     *
+     * 3. SEULES LES CLÉS « service » SONT ACCEPTÉES. Une clé « anon » est
+     *    publique par destination — elle vit dans du code livré au navigateur.
+     *    Lui laisser écrire en base ouvrirait l'ingestion à quiconque lit la
+     *    source de la page. Un rapporteur d'erreurs côté navigateur doit
+     *    passer par le serveur de son application, qui détient la clé service.
+     *
+     * La date de dernier usage est mise à jour dans le même aller-retour : sans
+     * elle, on ne peut pas distinguer une clé vivante d'une clé oubliée, et
+     * c'est précisément ce qu'on regarde avant d'en révoquer une.
+     *
+     * @return array{user_id: string, key_id: string, label: string}|null
+     */
+    public function findUserByKey(string $token): ?array
+    {
+        $statement = Database::connection()->prepare(
+            "UPDATE backend_api_keys
+                SET last_used_at = NOW()
+              WHERE token_hash = :hash
+                AND revoked_at IS NULL
+                AND scope = 'service'
+          RETURNING user_id::text AS user_id, id::text AS key_id, label",
+        );
+
+        $statement->execute(['hash' => hash('sha256', $token)]);
+
+        $row = $statement->fetch();
+
+        if ($row === false) {
+            return null;
+        }
+
+        return [
+            'user_id' => (string) $row['user_id'],
+            'key_id'  => (string) $row['key_id'],
+            'label'   => (string) $row['label'],
+        ];
+    }
     /**
      * Révocation : la ligne demeure, la clé cesse d'être utilisable.
      * Idempotente — révoquer deux fois n'est pas une erreur, mais la seconde

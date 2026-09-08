@@ -21,6 +21,12 @@ BEGIN;
 -- (évite que "Jean@Mail.com" et "jean@mail.com" créent deux comptes).
 CREATE EXTENSION IF NOT EXISTS citext;
 
+-- unaccent : replie les diacritiques -> « systeme » trouve « Système ».
+-- Indispensable dans une application francophone : personne ne tape les
+-- accents dans un champ de recherche, et ILIKE ne les replie pas de lui-même.
+-- Utilisé par SearchService, la recherche transverse aux cinq modules.
+CREATE EXTENSION IF NOT EXISTS unaccent;
+
 -- Note : gen_random_uuid() est natif depuis PostgreSQL 13, aucune extension requise.
 
 

@@ -13,6 +13,7 @@ import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppSidebar from '@/components/AppSidebar.vue'
+import CommandPalette from '@/components/CommandPalette.vue'
 import AppStatusBar from '@/components/AppStatusBar.vue'
 import AppTopbar from '@/components/AppTopbar.vue'
 import EmailVerificationBanner from '@/components/EmailVerificationBanner.vue'
@@ -64,6 +65,11 @@ onMounted(async () => {
     </div>
 
     <AppStatusBar />
+
+    <!-- Palette de recherche, montée UNE FOIS pour toute l'application :
+         elle écoute Ctrl/⌘ + K sur le document, donc depuis n'importe quel
+         écran, et cherche dans les cinq modules à la fois. -->
+    <CommandPalette />
 
     <!-- Le choix sonore n'est proposé qu'une fois entré : les écrans
          d'identification restent muets. -->

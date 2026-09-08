@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 
 import { authApi } from '@/services/api'
 import { configureSession, setAccessToken } from '@/services/http'
+import { setTimeZone } from '@/utils/format'
 
 /**
  * Session de l'utilisateur courant.
@@ -45,6 +46,7 @@ export const useAuthStore = defineStore('auth', () => {
   function clearSession() {
     user.value = null
     settings.value = null
+    setTimeZone(null)
     accessToken.value = null
     setAccessToken(null)
   }
@@ -70,7 +72,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function loadProfile() {
     const payload = await authApi.me()
     user.value = payload.user
-    settings.value = payload.settings
+    applySettings(payload.settings)
   }
 
   async function logout() {
@@ -106,7 +108,21 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function setSettings(updated) {
+    applySettings(updated)
+  }
+
+  /**
+   * Enregistre les paramètres ET les APPLIQUE.
+   *
+   * Le fuseau horaire ne sert à rien tant qu'il reste une valeur en base :
+   * c'est ici, au seul endroit où les paramètres arrivent, qu'il est poussé
+   * dans les formateurs de dates. Le faire dans l'écran Paramètres aurait
+   * laissé le reste de l'application au fuseau du navigateur tant qu'on n'y
+   * serait pas passé.
+   */
+  function applySettings(updated) {
     settings.value = updated
+    setTimeZone(updated?.timezone ?? null)
   }
 
   // Branche le client HTTP : il sait désormais rafraîchir la session et
