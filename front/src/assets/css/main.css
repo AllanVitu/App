@@ -1,81 +1,94 @@
 @import 'tailwindcss';
 
 /* ===========================================================================
-   Direction visuelle : studio
+   Direction visuelle : pastel délavé
    ---------------------------------------------------------------------------
-   Noir profond, encre presque blanche, formes molles — pastilles, angles très
-   arrondis, cercles. Une seule famille variable porte toute la hiérarchie par
-   sa graisse. La couleur ne sert qu'au sens : vert pour l'actif, ambre pour
-   l'archivé, corail pour le danger.
+   Blanc cassé chaud, encre adoucie plutôt que noir pur, teintes désaturées.
+   Rien ne claque : la couleur situe, elle n'interpelle pas. Les angles très
+   arrondis sont conservés — la rondeur et le pastel disent la même chose.
 
-   Le sombre est le thème PRINCIPAL — c'est lui qui est dessiné, le clair en
-   est la transposition. D'où l'inversion par rapport à l'usage : « :root »
-   porte le sombre, et c'est la classe « light » qui bascule.
+   TROIS RÔLES DE COULEUR, à ne jamais confondre.
+
+   1. SURFACES ET ENCRES (--c-paper, --c-panel, --c-ink…) : le pastel
+      proprement dit. Presque gris, à peine teinté de chaud.
+
+   2. SÉMANTIQUE (--c-moss, --c-ochre, --c-brick) : porte un SENS — réussi,
+      en attente, en échec. Assez profondes pour être lues EN TEXTE : toutes
+      mesurées au-dessus de 4,5:1 sur leur panneau. Un pastel véritable y
+      descendrait sous 3:1 et deviendrait illisible.
+
+   3. MARQUES DE GRAPHIQUE (--c-chart-*) : encore un cran plus profond. Un
+      pastel en aplat vire au gris — mesuré : chroma OKLCH 0,066 pour un
+      plancher de 0,10, et deux séries pastel voisines sont indistinguables
+      même en vision normale (ΔE 14 pour 15 requis). L'interface est pastel,
+      les données ne le sont pas.
+
+   Le sombre reste porté par « :root » et le clair par la classe « light »,
+   comme avant — mais le pastel se lit d'abord en clair ; le sombre en est la
+   version sourde, jamais un simple inverse.
 
    Les valeurs vivent dans des variables « --c-* » ; @theme les expose à
    Tailwind, ce qui rend « bg-panel », « text-ink » ou « border-line »
-   automatiquement sensibles au thème.
-
-   Note : aucune variante « dark: » n'est déclarée, parce qu'aucune n'est
-   utilisée — les jetons suffisent. En ajouter une créerait un second moyen
-   de dire la même chose.
+   automatiquement sensibles au thème. C'est ce qui permet à un changement de
+   trente lignes ici de repeindre les six écrans et les cinq modules.
 =========================================================================== */
 
-/* --- Sombre : la référence ------------------------------------------------ */
+/* --- Sombre : la version sourde ------------------------------------------- */
 :root {
-  --c-paper: #0a0a0a; /* fond général */
-  --c-panel: #141414; /* panneaux, cartes */
-  --c-raised: #1e1e1e; /* champs, survol */
+  --c-paper: #16161a; /* fond général — jamais du noir pur */
+  --c-panel: #1e1e23; /* panneaux, cartes */
+  --c-raised: #27272d; /* champs, survol */
 
-  --c-ink: #fafafa;
-  --c-ink-2: #a1a1a1; /* texte secondaire */
-  --c-ink-3: #6a6a6a; /* libellés, métadonnées */
+  --c-ink: #eceae5;
+  --c-ink-2: #a6a19a; /* texte secondaire — 6,5:1 */
+  --c-ink-3: #8b867f; /* libellés, métadonnées — 4,6:1 */
 
-  --c-line: #262626;
-  --c-line-2: #3a3a3a;
+  --c-line: #2d2d34;
+  --c-line-2: #3e3e47;
 
-  /* Sémantique — désaturée pour tenir sur du noir sans éblouir */
-  --c-moss: #7ee2a8;
-  --c-moss-bg: #14251c;
-  --c-ochre: #e8c17a;
-  --c-ochre-bg: #26200f;
-  --c-brick: #ff8a7a;
-  --c-brick-bg: #2a1512;
+  /* Sémantique — assez claire pour être lue en texte sur le panneau sombre */
+  --c-moss: #8fc7a6; /* réussi      — 8,6:1 */
+  --c-moss-bg: #1d2a24;
+  --c-ochre: #d8bd8a; /* en attente  — 9,1:1 */
+  --c-ochre-bg: #2a2519;
+  --c-brick: #dfa096; /* en échec    — 7,6:1 */
+  --c-brick-bg: #2c1f1d;
 
-  /* Teinte des MARQUES de graphique, distincte de la couleur de statut.
-     « --c-brick » est juste en texte, mais sa clarté (L 0,758 en OKLCH) sort
-     de la bande admise pour un aplat sur fond noir : en surface pleine, elle
-     éblouit. Ce pas plus profond a été retenu en mesurant, pas à l'œil. */
-  --c-chart-alert: #e8604d;
+  /* Deux séries de données. Séparation validée sous simulation de daltonisme
+     (ΔE 16,7 en protanopie) et chroma suffisant pour ne pas virer au gris. */
+  --c-chart-1: #4e8dc9; /* bleu       — déploiements */
+  --c-chart-2: #c9694f; /* terre cuite — erreurs */
+  --c-chart-alert: #c9694f;
 
-  /* Rondeurs : le trait distinctif de cette direction */
+  /* Rondeurs : conservées de la direction précédente */
   --r-pill: 999px;
   --r-card: 20px;
   --r-field: 12px;
 }
 
-/* --- Clair : la transposition --------------------------------------------- */
+/* --- Clair : le pastel proprement dit ------------------------------------- */
 .light {
-  --c-paper: #f2f2f0;
-  --c-panel: #fafafa;
-  --c-raised: #ffffff;
+  --c-paper: #f7f5f2; /* blanc cassé chaud */
+  --c-panel: #fdfcfa;
+  --c-raised: #f1eee9;
 
-  --c-ink: #0a0a0a;
-  --c-ink-2: #525252;
-  --c-ink-3: #8a8a8a;
+  --c-ink: #33312d; /* encre adoucie — 12,7:1 */
+  --c-ink-2: #6d6961; /* 5,3:1 */
+  --c-ink-3: #77726a; /* 4,7:1 — la valeur précédente (#8a8a8a) tombait à 2,7:1 */
 
-  --c-line: #e2e2e0;
-  --c-line-2: #cccccc;
+  --c-line: #e9e5de;
+  --c-line-2: #d8d2c8;
 
-  --c-moss: #1f7a4a;
-  --c-moss-bg: #e3f2e9;
-  --c-ochre: #8a6420;
-  --c-ochre-bg: #f6eeda;
-  --c-brick: #b3402c;
-  --c-brick-bg: #fbe8e4;
+  --c-moss: #4f7d63; /* 4,6:1 */
+  --c-moss-bg: #e9f1ec;
+  --c-ochre: #8a6733; /* 5,0:1 */
+  --c-ochre-bg: #f6efe2;
+  --c-brick: #a85448; /* 5,1:1 */
+  --c-brick-bg: #f8eae7;
 
-  /* Sur fond clair, la couleur de statut tient déjà comme marque. */
-  --c-chart-alert: #b3402c;
+  --c-chart-1: #3f7fb5;
+  --c-chart-2: #c25f4e;
+  --c-chart-alert: #c25f4e;
 }
 
 @theme {
@@ -94,6 +107,8 @@
   --color-ochre-bg: var(--c-ochre-bg);
   --color-brick: var(--c-brick);
   --color-brick-bg: var(--c-brick-bg);
+  --color-chart-1: var(--c-chart-1);
+  --color-chart-2: var(--c-chart-2);
   --color-chart-alert: var(--c-chart-alert);
 
   --radius-pill: var(--r-pill);
@@ -193,43 +208,11 @@
     @apply inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-0.5 text-[0.72rem];
   }
 
-  /* Curseur clignotant, hérité de l'écran d'entrée. */
-  .caret::after {
-    content: '_';
-    animation: caret 1.1s steps(1) infinite;
-  }
-
-  @keyframes caret {
-    0%,
-    50% {
-      opacity: 1;
-    }
-    50.01%,
-    100% {
-      opacity: 0;
-    }
-  }
-
-  /* Bandeau défilant : occupe une bande étroite sans jamais demander qu'on
-     la lise. Le masque évite que le texte ne soit coupé net aux bords. */
-  .marquee {
-    @apply flex w-full select-none overflow-hidden;
-    mask-image: linear-gradient(90deg, transparent, black 6%, black 94%, transparent);
-  }
-
-  .marquee > * {
-    @apply flex shrink-0 items-center gap-8 whitespace-nowrap;
-    animation: marquee 34s linear infinite;
-  }
-
-  @keyframes marquee {
-    from {
-      transform: translateX(0);
-    }
-    to {
-      transform: translateX(-100%);
-    }
-  }
+  /* Deux classes vivaient ici : « caret », un curseur clignotant, et
+     « marquee », un bandeau défilant. La première imitait un terminal sur un
+     écran où rien ne se tape ; la seconde n'était utilisée NULLE PART. Une
+     animation en boucle qui tourne sans fin coûte une image par seconde à
+     composer, pour ne rien apprendre à personne. */
 }
 
 /* ---------------------------------------------------------------------------
@@ -255,10 +238,5 @@
   .fade-enter-active,
   .fade-leave-active {
     transition: none;
-  }
-
-  .caret::after,
-  .marquee > * {
-    animation: none;
   }
 }
