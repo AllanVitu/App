@@ -11,7 +11,15 @@
  */
 import { onMounted, ref } from 'vue'
 
-import { gsap, prefersReducedMotion } from '@/animations/gsap'
+import {
+  DURATION,
+  animate,
+  appEnter,
+  appExit,
+  prefersReducedMotion,
+  settle,
+  stagger,
+} from '@/animations/motion'
 import * as sound from '@/services/sound'
 import { useUiStore } from '@/stores/ui'
 
@@ -21,13 +29,26 @@ const root = ref(null)
 const leaving = ref(false)
 
 onMounted(() => {
-  if (prefersReducedMotion() || !root.value) return
+  if (!root.value) return
 
-  gsap.fromTo(
-    root.value.querySelectorAll('[data-gate]'),
-    { y: 18, opacity: 0 },
-    { y: 0, opacity: 1, duration: 0.7, stagger: 0.09, ease: 'appEnter', delay: 0.15 },
-  )
+  const items = root.value.querySelectorAll('[data-gate]')
+
+  // Les animations partent d'un état explicite [départ, arrivée] : en
+  // mouvement réduit il faut POSER l'arrivée, pas s'abstenir — sinon l'écran
+  // reste à son état de départ, c'est-à-dire invisible.
+  if (prefersReducedMotion()) {
+    settle(items)
+
+    return
+  }
+
+  animate(items, {
+    translateY: [18, 0],
+    opacity: [0, 1],
+    duration: DURATION.feature,
+    delay: stagger(90, { start: 150 }),
+    ease: appEnter,
+  })
 })
 
 function choose(withSound) {
@@ -56,10 +77,10 @@ function choose(withSound) {
     return
   }
 
-  gsap.to(root.value, {
-    opacity: 0,
-    duration: 0.5,
-    ease: 'appExit',
+  animate(root.value, {
+    opacity: [1, 0],
+    duration: DURATION.base,
+    ease: appExit,
     onComplete: commit,
   })
 }

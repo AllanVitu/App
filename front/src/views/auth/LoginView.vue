@@ -8,11 +8,11 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { animate, appEnter, DURATION, shake, stagger, STAGGER } from '@/animations/anime'
+import { animate, appEnter, DURATION, shake, stagger, STAGGER } from '@/animations/motion'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
-import { useAnime } from '@/composables/useAnime'
+import { useMotion } from '@/composables/useMotion'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 
@@ -31,9 +31,9 @@ const formEl = ref(null)
  * Arrivée du formulaire : titre puis champs, en cascade.
  *
  * Durées en MILLISECONDES : cet écran appartient à la moitié publique et
- * tourne sous anime.js, pas sous GSAP (cf. animations/anime.js).
+ * passe par le point d'entrée unique du mouvement (cf. animations/motion.js).
  */
-const root = useAnime(() => {
+const root = useMotion(() => {
   animate('[data-anim="head"]', {
     translateY: [14, 0],
     opacity: [0, 1],
@@ -139,7 +139,7 @@ function fillDemo() {
 
     <button
       type="button"
-      class="mt-4 w-full border border-dashed border-line px-3 py-2.5 text-xs text-ink-2 transition hover:border-ink hover:text-ink"
+      class="mt-4 w-full border border-dashed border-line px-3 py-2.5 text-xs text-ink-2 transition-colors hover:border-ink hover:text-ink"
       @click="fillDemo"
     >
       Utiliser le compte de démonstration

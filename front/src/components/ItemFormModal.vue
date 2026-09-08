@@ -7,7 +7,7 @@
  */
 import { reactive, ref, watch } from 'vue'
 
-import { gsap, prefersReducedMotion } from '@/animations/gsap'
+import { shake } from '@/animations/motion'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
@@ -56,10 +56,11 @@ const formEl = ref(null)
 watch(
   () => props.errors,
   (errors) => {
-    if (!formEl.value || prefersReducedMotion()) return
     if (!errors || Object.keys(errors).length === 0) return
 
-    gsap.fromTo(formEl.value, { x: -8 }, { x: 0, duration: 0.6, ease: 'appShake' })
+    // « shake » se charge lui-même du mouvement réduit : rien à jouer, et
+    // rien à poser non plus — le formulaire est déjà à sa place.
+    shake(formEl.value)
   },
 )
 

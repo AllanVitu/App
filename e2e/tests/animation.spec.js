@@ -1,19 +1,21 @@
 import { expect, login, test } from './support.js'
 
 /**
- * La séparation des deux moteurs d'animation.
+ * Le comportement du moteur d'animation dans un vrai navigateur.
  *
- * Le front est coupé en deux moitiés qui ne chargent pas la même
- * bibliothèque : anime.js pour les écrans publics, GSAP pour l'application.
- * Ce n'est pas cosmétique — c'est 92 Ko compressés que l'écran de connexion
- * ne paie plus.
+ * CE QUI N'EST PAS ICI, ET POURQUOI. Le découpage en lots — le fait que
+ * l'écran de connexion ne télécharge ni la mesure de mise en page ni le
+ * morphing SVG — ne se vérifie PAS depuis cette suite : elle tourne contre le
+ * serveur de développement, où Vite sert les modules un par un, sans lot.
+ * L'invariant n'existe tout simplement pas là-bas, et un test qui l'y
+ * chercherait passerait ou échouerait pour de mauvaises raisons.
  *
- * L'invariant se casse en SILENCE : il suffit qu'un composant partagé entre
- * les deux mises en page — une notification, une fenêtre modale — importe
- * GSAP pour que ses 92 Ko reviennent dans le chemin public, sans la moindre
- * erreur pour le signaler. D'où ce fichier.
+ * Il est contrôlé sur la compilation de production, par
+ * `front/scripts/check-chunks.mjs` (lancé par « npm run check »).
+ *
+ * Reste ici ce qui a besoin d'un navigateur : le mouvement réduit.
  */
-test.describe('séparation des moteurs d’animation', () => {
+test.describe('moteur d’animation', () => {
   /** Les écrans publics, tous servis par AuthLayout. */
   const PUBLICS = [
     ['/connexion', 'connexion'],
@@ -36,43 +38,42 @@ test.describe('séparation des moteurs d’animation', () => {
     return scripts
   }
 
+  /**
+   * GSAP a été retiré du projet. S'il revenait — une dépendance qui le tire,
+   * un import restauré par mégarde — ce sont 81 Ko compressés qui rentreraient
+   * sans bruit. Ce contrôle-ci vaut dans les deux modes : en développement
+   * comme en production, le fichier porterait son nom.
+   */
   for (const [chemin, titre] of PUBLICS) {
-    test(`${chemin} ne charge jamais GSAP`, async ({ page }) => {
+    test(`${chemin} ne charge aucune trace de GSAP`, async ({ page }) => {
       const scripts = traceScripts(page)
 
       await page.goto(chemin)
       await expect(page.getByRole('heading', { name: new RegExp(titre, 'i') })).toBeVisible()
 
-      const gsap = [...scripts].filter((file) => file.toLowerCase().startsWith('gsap'))
+      const lots = [...scripts]
 
-      expect(gsap, `GSAP ne doit pas être chargé sur ${chemin}`).toEqual([])
-      expect([...scripts].some((file) => /anime/i.test(file))).toBe(true)
+      expect(
+        lots.filter((file) => file.toLowerCase().startsWith('gsap')),
+        `GSAP ne doit plus exister nulle part (${chemin})`,
+      ).toEqual([])
+
+      // Le moteur, lui, DOIT être là : sans cette ligne le test passerait
+      // aussi sur une page qui n'anime plus rien du tout.
+      expect(
+        lots.some((file) => /anime/i.test(file)),
+        `${chemin} : le moteur d'animation n'a pas été chargé`,
+      ).toBe(true)
     })
   }
-
-  test("l'application charge GSAP, et lui seul en a besoin", async ({ page }) => {
-    await login(page)
-
-    const scripts = traceScripts(page)
-
-    // Une navigation interne suffit : le tableau de bord est déjà monté.
-    await page.goto('/modules/tickets')
-    await expect(page.getByRole('heading', { name: 'tickets' })).toBeVisible()
-
-    // La moitié application a le droit d'utiliser GSAP — c'est son moteur.
-    // On vérifie surtout que la page fonctionne : le partage n'a pas privé
-    // l'application de ses animations.
-    await expect(page.getByRole('option').first()).toBeVisible()
-  })
 
   /**
    * Le piège propre à anime.js.
    *
-   * Côté GSAP, toutes les animations sont des tweens `from()` : ne rien jouer
-   * laisse l'interface dans son état final. Côté anime.js, elles partent d'un
-   * état explicite [départ, arrivée] — ne rien jouer laisserait les éléments
-   * INVISIBLES. C'est la régression la plus grave possible ici : un écran de
-   * connexion vide pour quiconque a demandé la réduction des animations.
+   * Ses animations partent d'un état explicite [départ, arrivée] : ne rien
+   * jouer laisserait les éléments INVISIBLES, à leur état de départ. C'est la
+   * régression la plus grave possible ici — un écran de connexion vide pour
+   * quiconque a demandé la réduction des animations.
    */
   test('en mouvement réduit, les écrans publics restent visibles', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -90,6 +91,22 @@ test.describe('séparation des moteurs d’animation', () => {
         true,
       )
     }
+  })
+
+  /** Le même piège, côté application : le tableau de bord anime ses blocs. */
+  test('en mouvement réduit, le tableau de bord reste visible', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await login(page)
+
+    await expect(page.getByRole('heading', { name: /bonjour/i })).toBeVisible()
+    await expect(page.getByText('état des modules')).toBeVisible()
+
+    const opacites = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-anim="block"]')].map((el) => getComputedStyle(el).opacity),
+    )
+
+    expect(opacites.length, 'aucun bloc animé trouvé').toBeGreaterThan(0)
+    expect(opacites.every((o) => o === '1'), 'un bloc est resté invisible').toBe(true)
   })
 
   test('le mouvement normal aboutit au même état visible', async ({ page }) => {

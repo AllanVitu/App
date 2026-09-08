@@ -69,6 +69,21 @@ export default [
   },
 
   {
+    // Les outils de compilation tournent sous Node, pas dans le navigateur :
+    // ils ont le droit à « process » et à la sortie standard, qui sont
+    // justement leur moyen de rendre un verdict.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+      },
+    },
+    rules: {
+      'no-console': 'off',
+    },
+  },
+
+  {
     // Les tests tournent sous Vitest, avec ses globales.
     files: ['tests/**/*.js'],
     languageOptions: {

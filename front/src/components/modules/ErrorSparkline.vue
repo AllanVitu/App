@@ -84,9 +84,9 @@ const total = computed(() => props.points.reduce((sum, point) => sum + point.cou
 //
 // Sans bibliothèque : un trait qui se dessine, c'est un pointillé de la
 // longueur du tracé dont on ramène le décalage à zéro. `getTotalLength()` la
-// donne, une transition CSS fait le reste. GSAP a un plugin pour cela
-// (DrawSVG) mais il a été retiré du lot — le garder pour une seule courbe
-// coûterait plus que ces huit lignes.
+// donne, une transition CSS fait le reste. anime.js sait le faire aussi
+// (createDrawable), mais l'importer ici tirerait le lot SVG dans une vue qui
+// n'en a pas d'autre usage : ces huit lignes coûtent moins.
 
 const line = ref(null)
 let drawn = false

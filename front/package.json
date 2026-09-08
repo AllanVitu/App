@@ -11,14 +11,14 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write \"src/**/*.{js,vue,css}\" \"tests/**/*.js\" \"*.js\"",
-    "format:check": "prettier --check \"src/**/*.{js,vue,css}\" \"tests/**/*.js\" \"*.js\"",
-    "check": "npm run lint && npm run format:check && npm run test && npm run build"
+    "format": "prettier --write \"src/**/*.{js,vue,css}\" \"tests/**/*.js\" \"scripts/**/*.mjs\" \"*.js\"",
+    "format:check": "prettier --check \"src/**/*.{js,vue,css}\" \"tests/**/*.js\" \"scripts/**/*.mjs\" \"*.js\"",
+    "check": "npm run lint && npm run format:check && npm run test && npm run build && npm run check:chunks",
+    "check:chunks": "node scripts/check-chunks.mjs"
   },
   "dependencies": {
     "animejs": "^4.5.0",
     "axios": "^1.7.7",
-    "gsap": "^3.15.0",
     "pinia": "^2.2.6",
     "vue": "^3.5.13",
     "vue-router": "^4.4.5"

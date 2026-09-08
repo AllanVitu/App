@@ -121,9 +121,12 @@ services:
     environment:
       # L'URL est injectée dans le build Vite (import.meta.env.VITE_API_BASE_URL)
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api}
-      # Bind mounts Windows : le watch natif ne remonte pas, on force le polling
-      CHOKIDAR_USEPOLLING: "true"
-      WATCHPACK_POLLING: "true"
+      # La scrutation du système de fichiers — nécessaire sur un bind mount
+      # Windows — est réglée dans front/vite.config.js, avec son intervalle et
+      # sa liste d'exclusions. Deux variables la forçaient ici en double :
+      # CHOKIDAR_USEPOLLING (redondante, et sans l'intervalle ni les
+      # exclusions) et WATCHPACK_POLLING (qui concerne webpack, absent de ce
+      # projet). Un seul endroit décide, celui qui peut aussi le régler.
     volumes:
       - ./front:/app
       - front_node_modules:/app/node_modules

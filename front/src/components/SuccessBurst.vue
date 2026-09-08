@@ -12,7 +12,13 @@
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
-import { animate, appBounce, prefersReducedMotion, svg, utils } from '@/animations/anime'
+import {
+  animate,
+  appBounce,
+  createDrawable,
+  prefersReducedMotion,
+  utils,
+} from '@/animations/motion'
 
 const props = defineProps({
   /** Gerbe de particules : à réserver au moment le plus marquant. */
@@ -41,8 +47,8 @@ onMounted(() => {
   // createDrawable transforme un tracé SVG en cible animable : il pose le
   // pointillé et son décalage, et expose une propriété « draw » de la forme
   // « début fin ». Aller de « 0 0 » à « 0 1 », c'est dessiner le trait.
-  const [circle] = svg.createDrawable(element.querySelector('[data-circle]'))
-  const [check] = svg.createDrawable(element.querySelector('[data-check]'))
+  const [circle] = createDrawable(element.querySelector('[data-circle]'))
+  const [check] = createDrawable(element.querySelector('[data-check]'))
 
   running.push(
     animate(circle, { draw: ['0 0', '0 1'], duration: 500, delay: 50 }),

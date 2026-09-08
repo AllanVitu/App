@@ -7,7 +7,7 @@
  */
 import { storeToRefs } from 'pinia'
 
-import { animate, appExit, appOvershoot, motionDuration } from '@/animations/anime'
+import { animate, appExit, appOvershoot, motionDuration } from '@/animations/motion'
 import AppIcon from '@/components/AppIcon.vue'
 import { useUiStore } from '@/stores/ui'
 

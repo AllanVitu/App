@@ -54,7 +54,7 @@ async function resend() {
 
     <button
       type="button"
-      class="font-medium underline underline-offset-2 transition hover:no-underline disabled:opacity-60"
+      class="font-medium underline underline-offset-2 transition-colors hover:no-underline disabled:opacity-60"
       :disabled="sending"
       @click="resend"
     >

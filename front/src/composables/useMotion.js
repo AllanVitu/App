@@ -1,6 +1,6 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 
-import { createScope, prefersReducedMotion, settle } from '@/animations/anime'
+import { createScope, prefersReducedMotion, settle } from '@/animations/motion'
 
 /**
  * Équivalent d'useGsap pour la moitié publique du front.
@@ -27,7 +27,7 @@ import { createScope, prefersReducedMotion, settle } from '@/animations/anime'
  *
  * Utilisation :
  *
- *   const root = useAnime(() => {
+ *   const root = useMotion(() => {
  *     animate('[data-anim="panel"]', { opacity: [0, 1], duration: DURATION.base })
  *   })
  *
@@ -37,7 +37,7 @@ import { createScope, prefersReducedMotion, settle } from '@/animations/anime'
  * @param {{ settleSelector?: string }} options
  * @returns {import('vue').Ref<HTMLElement|null>} référence à poser sur la racine
  */
-export function useAnime(setup, { settleSelector = '[data-anim]' } = {}) {
+export function useMotion(setup, { settleSelector = '[data-anim]' } = {}) {
   const root = ref(null)
   let scope = null
 

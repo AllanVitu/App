@@ -8,11 +8,11 @@
 import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { animate, appEnter, DURATION, shake, stagger, STAGGER } from '@/animations/anime'
+import { animate, appEnter, DURATION, shake, stagger, STAGGER } from '@/animations/motion'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
-import { useAnime } from '@/composables/useAnime'
+import { useMotion } from '@/composables/useMotion'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 
@@ -36,7 +36,7 @@ const loading = ref(false)
 const formEl = ref(null)
 
 /** Même cascade d'entrée que la page de connexion : les deux écrans se répondent. */
-const root = useAnime(() => {
+const root = useMotion(() => {
   animate('[data-anim="head"]', {
     translateY: [14, 0],
     opacity: [0, 1],
