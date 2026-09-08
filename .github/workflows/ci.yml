@@ -116,6 +116,16 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Le découpage en lots protège l'écran de connexion : sans lui, il
+      # télécharge la mesure de mise en page et le morphing SVG dont il ne se
+      # sert pas. Il se casse EN SILENCE — une règle qui disparaît de
+      # « manualChunks » ne rougit aucun test. Ce contrôle ne peut pas vivre
+      # dans la suite Playwright, qui tourne contre le serveur de
+      # développement, où Vite sert les modules un par un, sans lot : il lui
+      # faut donc la compilation ci-dessus, et sa place est ici.
+      - name: Découpage des lots
+        run: npm run check:chunks
+
   # ---------------------------------------------------------------------------
   # Parcours de bout en bout, contre la stack Docker réelle
   # ---------------------------------------------------------------------------
