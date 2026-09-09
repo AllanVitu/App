@@ -20,6 +20,8 @@ import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import SearchField from '@/components/ui/SearchField.vue'
 import { itemsApi, modulesApi } from '@/services/api'
+import { useQuerySync } from '@/composables/useQuerySync'
+import { useRevalidate } from '@/composables/useRevalidate'
 import { useModulesStore } from '@/stores/modules'
 import { useUiStore } from '@/stores/ui'
 import { formatDate, formatRelative } from '@/utils/format'
@@ -40,6 +42,34 @@ const notFound = ref(false)
 
 const filters = ref({ search: '', status: '', sort: 'created_at', direction: 'desc' })
 const page = ref(1)
+
+/**
+ * L'écran vit dans son adresse — y compris le numéro de page, sans quoi
+ * « précédent » après trois pages ramène à la première.
+ *
+ * Les filtres tiennent ici dans UN objet, là où `useQuerySync` attend des
+ * références écrivables. Ces adaptateurs en fournissent sans imposer au reste
+ * du fichier de changer de forme.
+ */
+const champ = (nom) =>
+  computed({
+    get: () => filters.value[nom],
+    set: (valeur) => (filters.value[nom] = valeur),
+  })
+
+// SEUL ÉCRAN À FILTRER CÔTÉ SERVEUR, d'où « surRetour ». Ailleurs, remettre
+// les champs suffit : le filtrage est local, la liste se recalcule. Ici la
+// liste vient du serveur — sans nouvelle requête, l'adresse dirait une chose
+// et l'écran en montrerait une autre.
+useQuerySync(
+  {
+    q: champ('search'),
+    statut: champ('status'),
+    tri: champ('sort'),
+    page: { ref: page, lire: (texte) => Math.max(1, Number(texte) || 1) },
+  },
+  { surRetour: () => loadItems({ flip: true }) },
+)
 
 // --- Formulaire et suppression ---------------------------------------------
 const formOpen = ref(false)
@@ -132,14 +162,17 @@ async function replayLayout() {
   })
 }
 
-async function loadItems({ flip = false } = {}) {
+async function loadItems({ flip = false, silent = false } = {}) {
   // La liste doit être mesurée AVANT toute modification du DOM.
   const measured = flip && recordLayout()
 
   controller?.abort()
   controller = new AbortController()
 
-  loading.value = true
+  // « silent » sert au rafraîchissement du retour sur l'onglet : les lignes
+  // sont déjà à l'écran, les remplacer par un rond qui tourne donnerait
+  // l'impression de les avoir perdues.
+  if (!silent) loading.value = true
 
   try {
     const params = {
@@ -307,6 +340,13 @@ async function confirmDelete() {
 // Le slug change quand on passe d'un module à l'autre : le composant est
 // réutilisé par le routeur, il faut donc recharger explicitement.
 watch(() => props.slug, loadModule, { immediate: true })
+
+/**
+ * Revenu sur l'onglet après une absence : les données ont pu changer
+ * ailleurs. On relit SANS indicateur de chargement — remplacer l'écran par un
+ * rond qui tourne au retour donnerait l'impression d'avoir tout perdu.
+ */
+useRevalidate(() => loadItems({ silent: true }))
 
 onBeforeUnmount(() => {
   controller?.abort()

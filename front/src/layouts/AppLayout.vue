@@ -9,7 +9,7 @@
  * Le catalogue des modules est chargé ici, une fois pour toutes les pages
  * enfants ; le titre affiché suit la route courante.
  */
-import { computed, onMounted } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppSidebar from '@/components/AppSidebar.vue'
@@ -39,6 +39,48 @@ const title = computed(() => {
   return route.meta.title ?? ''
 })
 
+/**
+ * LE CONTENU EST UNE DESTINATION, PAS SEULEMENT UNE ZONE.
+ *
+ * Le menu latéral compte une vingtaine d'éléments focalisables, et il est
+ * identique sur toutes les pages. Sans point d'entrée direct, quelqu'un qui
+ * navigue au clavier les retraverse à CHAQUE changement d'écran pour
+ * atteindre ce qu'il vient d'ouvrir.
+ */
+const main = ref(null)
+
+function focusMain() {
+  main.value?.focus()
+}
+
+/**
+ * Le focus suit la navigation.
+ *
+ * Dans une application d'une seule page, changer d'écran ne déplace ni le
+ * focus ni le curseur virtuel d'un lecteur d'écran : le titre du document
+ * change, et rien ne l'annonce. On amène donc le focus sur la région
+ * principale, qui porte le nom de la page — le nouvel écran s'annonce, et la
+ * touche de tabulation repart de son début plutôt que du menu.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │  « path » ET SURTOUT PAS « fullPath »                               │
+ * │                                                                     │
+ * │  Les filtres de chaque écran vivent maintenant dans l'adresse : une │
+ * │  frappe dans une recherche réécrit la query. Observer « fullPath »  │
+ * │  arracherait le curseur du champ à chaque lettre.                  │
+ * └─────────────────────────────────────────────────────────────────────┘
+ *
+ * Rien au premier rendu : au chargement, le focus appartient au document, et
+ * le déplacer ferait sauter la page avant même qu'on l'ait lue.
+ */
+watch(
+  () => route.path,
+  async () => {
+    await nextTick()
+    focusMain()
+  },
+)
+
 onMounted(async () => {
   try {
     await modulesStore.load()
@@ -50,6 +92,29 @@ onMounted(async () => {
 
 <template>
   <div class="flex h-screen flex-col gap-1.5 bg-paper p-1.5 lg:gap-2 lg:p-2">
+    <!-- PREMIER ÉLÉMENT FOCALISABLE DE LA PAGE, et invisible jusqu'à ce
+         qu'on l'atteigne. Il n'existe que pour la première tabulation.
+
+         « href » est conservé pour que ce soit un vrai lien — annoncé comme
+         tel, atteignable par la liste des liens d'un lecteur d'écran — mais
+         le saut est fait à la main : laisser le navigateur suivre l'ancre
+         inscrirait « #contenu » dans l'adresse, où il resterait.
+
+         L'ACTIVATION AU CLAVIER EST TRAITÉE EXPLICITEMENT, et pas seulement
+         par le clic que le navigateur synthétise sur « Entrée ». Ce lien
+         n'existe QUE pour le clavier : faire dépendre son unique usage d'un
+         comportement implicite serait le laisser à la merci du premier
+         écouteur qui avale l'événement. « prevent » sur la touche empêche du
+         même coup le clic qui suivrait — l'action ne part donc qu'une fois. -->
+    <a
+      href="#contenu"
+      class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-80 focus:rounded-pill focus:border focus:border-ink focus:bg-panel focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-ink focus:shadow-lg"
+      @click.prevent="focusMain"
+      @keydown.enter.prevent="focusMain"
+    >
+      Aller au contenu
+    </a>
+
     <div class="flex min-h-0 flex-1 gap-1.5 lg:gap-2">
       <AppSidebar />
 
@@ -57,8 +122,21 @@ onMounted(async () => {
         <AppTopbar :title="title" />
 
         <!-- Le défilement vit DANS le panneau, pas sur la page : le cadre
-             reste fixe, comme une fenêtre d'application. -->
-        <main class="panel min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-7 lg:py-6">
+             reste fixe, comme une fenêtre d'application.
+
+             « tabindex=-1 » le rend focalisable par programme sans l'insérer
+             dans l'ordre de tabulation, et « aria-label » donne au repère son
+             nom : à l'arrivée, le lecteur d'écran annonce la page. Aucun
+             contour ne s'affiche pour autant — la feuille de style ne dessine
+             que « :focus-visible », que le focus programmatique ne déclenche
+             pas. -->
+        <main
+          id="contenu"
+          ref="main"
+          tabindex="-1"
+          :aria-label="title || 'Contenu'"
+          class="panel min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-7 lg:py-6"
+        >
           <EmailVerificationBanner />
 
           <RouterView v-slot="{ Component }">

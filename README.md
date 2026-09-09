@@ -265,14 +265,15 @@ cd e2e && npm test                       # parcours navigateur (Playwright)
 | --------------------- | ----------------------------------------- | -------- |
 | PHPUnit `unit`        | Jetons JWT — sans base                    | 7 tests  |
 | PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel     | 94 tests |
-| Vitest                | Formatage, intercepteur HTTP, composables | 42 tests |
-| Playwright            | Parcours complets dans Chromium           | 42 tests |
+| Vitest                | Formatage, intercepteur HTTP, composables | 67 tests |
+| Playwright            | Parcours complets dans Chromium           | 51 tests |
 
 Les composables portent l'essentiel de la logique du client : file
-d'écritures, glisser-déposer, raccourcis, pagination. Ils sont testés
-directement, pas seulement à travers un parcours navigateur — un délai de
-1,2 seconde ou un écouteur oublié au démontage se vérifient en millisecondes
-sous Vitest, et coûteraient une minute à Playwright.
+d'écritures, glisser-déposer, raccourcis, pagination, synchronisation de
+l'adresse. Ils sont testés directement, pas seulement à travers un parcours
+navigateur — un délai de 1,2 seconde, un écouteur oublié au démontage ou une
+absence de trente secondes se vérifient en millisecondes sous Vitest, et
+coûteraient une minute chacun à Playwright.
 
 Les tests d'intégration traversent `App\Core\Kernel` — le même point d'entrée
 que `public/index.php`. Un test empruntant un chemin parallèle ne dirait rien
@@ -305,6 +306,41 @@ déploiement est un fait constaté et non un état qu'on décide.
 Les jetons vivent dans [`front/src/assets/css/main.css`](front/src/assets/css/main.css) :
 modifier une variable `--c-*` recolore toute l'application, thème sombre
 compris.
+
+## Adresse, clavier, erreurs
+
+**Chaque écran vit dans son adresse.** Filtres, recherche, onglet, tri et
+numéro de page s'y inscrivent — `?q=`, `?statut=`, `?env=`, `?type=`,
+`?onglet=`, `?tri=`, `?page=` — par
+[`useQuerySync`](front/src/composables/useQuerySync.js). Un lien décrit donc
+ce qu'on regarde : il se partage, se met en favori, survit à un rechargement.
+
+Deux règles rendent la chose vivable. Les valeurs par défaut n'apparaissent
+JAMAIS, pour qu'un écran qu'on n'a pas touché garde une URL nue. Et l'écriture
+se fait en `replace`, jamais en `push` : sans quoi une recherche tapée lettre
+par lettre empilerait autant d'entrées d'historique, et « précédent » les
+effacerait une à une au lieu de revenir à la page d'avant.
+
+**Les données se rafraîchissent en revenant.**
+[`useRevalidate`](front/src/composables/useRevalidate.js) relit au retour sur
+l'onglet — après une absence d'au moins trente secondes — et au retour du
+réseau. Pas de sondage : interroger le serveur en continu coûterait à tout le
+monde pour servir un utilisateur qui, la plupart du temps, ne regarde pas. Le
+rechargement est silencieux, les lignes restent à l'écran.
+
+**Le contenu est une destination.** Un lien d'évitement ouvre la tabulation de
+chaque page, et `<main>` porte le nom de l'écran. Changer d'écran y amène le
+focus : dans une application d'une seule page, rien d'autre n'annonce à un
+lecteur d'écran qu'on a changé de page.
+
+**Une erreur ne disparaît plus en silence.** Quatre chemins sont couverts, pas
+un seul : le code d'un composant (`app.config.errorHandler`), les promesses
+rejetées que personne n'attrape, les exceptions hors de Vue, et les écrans qui
+ne se chargent plus. Ce dernier cas est celui d'un onglet resté ouvert pendant
+un déploiement : il réclame des morceaux de code qui n'existent plus, la
+navigation échoue, et l'utilisateur clique sans que rien ne se passe. Un
+rechargement le résout — tenté UNE fois, marqué en session, pour qu'un échec
+d'une autre cause ne tourne pas en boucle.
 
 ## Commandes utiles
 

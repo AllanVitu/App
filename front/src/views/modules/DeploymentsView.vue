@@ -28,6 +28,8 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import { deploymentsApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useLoadMore } from '@/composables/useLoadMore'
+import { useQuerySync } from '@/composables/useQuerySync'
+import { useRevalidate } from '@/composables/useRevalidate'
 import { useUiStore } from '@/stores/ui'
 import { formatRelative } from '@/utils/format'
 
@@ -53,6 +55,10 @@ const busy = ref(false)
 const search = ref('')
 const envFilter = ref(null)
 const statusFilter = ref(null)
+
+// L'écran vit dans son adresse : un filtre posé se partage, se met en favori,
+// et le bouton « précédent » le rend au lieu de le perdre.
+useQuerySync({ q: search, env: envFilter, statut: statusFilter })
 const openId = ref(null)
 
 const composing = ref(false)
@@ -218,6 +224,13 @@ async function removeDeployment(row) {
     ui.notify(error.message, 'error')
   }
 }
+
+/**
+ * Revenu sur l'onglet après une absence : les données ont pu changer
+ * ailleurs. On relit SANS indicateur de chargement — remplacer l'écran par un
+ * rond qui tourne au retour donnerait l'impression d'avoir tout perdu.
+ */
+useRevalidate(() => load({ silent: true }))
 
 onMounted(load)
 </script>

@@ -25,6 +25,8 @@ import SearchField from '@/components/ui/SearchField.vue'
 import { backendApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useWriteQueue } from '@/composables/useWriteQueue'
+import { useQuerySync } from '@/composables/useQuerySync'
+import { useRevalidate } from '@/composables/useRevalidate'
 import { useUiStore } from '@/stores/ui'
 import { modulePath } from '@/utils/modules'
 import { formatRelative } from '@/utils/format'
@@ -41,6 +43,11 @@ const busy = ref(false)
 
 const search = ref('')
 const tab = ref('tables')
+
+// L'écran vit dans son adresse : un filtre posé se partage, se met en favori,
+// et le bouton « précédent » le rend au lieu de le perdre.
+// L'onglet en fait partie : « les clés » est un endroit, pas un réglage.
+useQuerySync({ q: search, onglet: tab })
 const openId = ref(null)
 const errors = ref({})
 
@@ -273,6 +280,13 @@ async function copyToken() {
     ui.notify('Copie impossible : sélectionnez la clé pour la copier.', 'error')
   }
 }
+
+/**
+ * Revenu sur l'onglet après une absence : les données ont pu changer
+ * ailleurs. On relit SANS indicateur de chargement — remplacer l'écran par un
+ * rond qui tourne au retour donnerait l'impression d'avoir tout perdu.
+ */
+useRevalidate(() => load({ silent: true }))
 
 onMounted(load)
 </script>

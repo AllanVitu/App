@@ -34,6 +34,7 @@ import StatTile from '@/components/dashboard/StatTile.vue'
 import TrendChart from '@/components/dashboard/TrendChart.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import { useRevalidate } from '@/composables/useRevalidate'
 import { dashboardApi } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -144,7 +145,13 @@ function playIntro() {
   })
 }
 
-onMounted(async () => {
+/**
+ * Un seul appel fournit tout l'écran : les chiffres, les alertes, les
+ * courbes, la grille et l'activité. Le relire, c'est tout rafraîchir.
+ */
+async function load({ silent = false } = {}) {
+  if (!silent) loading.value = true
+
   try {
     overview.value = await dashboardApi.overview()
   } catch (error) {
@@ -152,6 +159,17 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+}
+
+/**
+ * L'écran d'accueil est celui qu'on laisse ouvert. C'est aussi celui qui
+ * annonce ce qui « demande attention » — un tableau d'alertes vieux d'une
+ * heure ne dit pas ce qui demande attention, il dit ce qui le demandait.
+ */
+useRevalidate(() => load({ silent: true }))
+
+onMounted(async () => {
+  await load()
 
   // Le DOM doit exister avant d'être ciblé par les sélecteurs.
   await nextTick()

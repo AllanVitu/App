@@ -35,6 +35,8 @@ import { designApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useWriteQueue } from '@/composables/useWriteQueue'
 import { useLoadMore } from '@/composables/useLoadMore'
+import { useQuerySync } from '@/composables/useQuerySync'
+import { useRevalidate } from '@/composables/useRevalidate'
 import { useUiStore } from '@/stores/ui'
 import { formatRelative } from '@/utils/format'
 
@@ -59,6 +61,10 @@ const busy = ref(false)
 
 const search = ref('')
 const kindFilter = ref(null)
+
+// L'écran vit dans son adresse : un filtre posé se partage, se met en favori,
+// et le bouton « précédent » le rend au lieu de le perdre.
+useQuerySync({ q: search, type: kindFilter })
 const openId = ref(null)
 const board = ref(null)
 const detail = ref(null)
@@ -333,6 +339,13 @@ async function removeFile(file) {
     ui.notify(error.message, 'error')
   }
 }
+
+/**
+ * Revenu sur l'onglet après une absence : les données ont pu changer
+ * ailleurs. On relit SANS indicateur de chargement — remplacer l'écran par un
+ * rond qui tourne au retour donnerait l'impression d'avoir tout perdu.
+ */
+useRevalidate(() => load({ silent: true }))
 
 onMounted(load)
 </script>

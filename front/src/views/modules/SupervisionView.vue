@@ -31,6 +31,8 @@ import { errorsApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useWriteQueue } from '@/composables/useWriteQueue'
 import { useLoadMore } from '@/composables/useLoadMore'
+import { useQuerySync } from '@/composables/useQuerySync'
+import { useRevalidate } from '@/composables/useRevalidate'
 import { useUiStore } from '@/stores/ui'
 import { formatRelative } from '@/utils/format'
 
@@ -58,6 +60,11 @@ const search = ref('')
 // Démarrer sur « non résolues » masquerait deux colonnes sur trois, et donc le
 // travail déjà fait — dont la vue est la moitié de l'intérêt d'un tableau.
 const statusFilter = ref(null)
+
+// L'écran vit dans son adresse : un filtre posé se partage, se met en favori,
+// et le bouton « précédent » le rend au lieu de le perdre.
+useQuerySync({ q: search, statut: statusFilter })
+
 const openId = ref(null)
 const detail = ref(null)
 const detailLoading = ref(false)
@@ -255,6 +262,13 @@ async function removeGroup(group) {
     ui.notify(error.message, 'error')
   }
 }
+
+/**
+ * Revenu sur l'onglet après une absence : les données ont pu changer
+ * ailleurs. On relit SANS indicateur de chargement — remplacer l'écran par un
+ * rond qui tourne au retour donnerait l'impression d'avoir tout perdu.
+ */
+useRevalidate(() => load({ silent: true }))
 
 onMounted(load)
 </script>
