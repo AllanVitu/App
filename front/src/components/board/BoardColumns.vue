@@ -116,15 +116,23 @@ function startDrag(event) {
 
       <!-- Zone de dépôt. « data-column » est ce que le glissement mesure ;
            le fond change quand la carte la survole, sans quoi on lâcherait
-           à l'aveugle. -->
+           à l'aveugle.
+
+           AU REPOS, LA VOIE EST INVISIBLE. Elle portait un voile clair,
+           hérité d'une direction où le panneau était presque de la couleur du
+           fond. Sur une plaque franchement blanche, ce voile passait entre le
+           fond et les cartes et les effaçait — blanc sur blanc sur blanc.
+           Rendue transparente, elle laisse les cartes être les seules plaques,
+           et le contraste du survol devient franc au lieu d'être un cran de
+           plus dans une série de gris. -->
       <div
         :data-column="column.value"
         role="presentation"
         class="flex min-h-24 flex-1 flex-col gap-2 rounded-card border border-dashed p-2 transition-colors"
         :class="
           overColumn === column.value && draggingId
-            ? 'border-ink-3 bg-raised'
-            : 'border-transparent bg-panel/40'
+            ? 'border-focus bg-raised'
+            : 'border-transparent bg-transparent'
         "
       >
         <div
@@ -137,7 +145,7 @@ function startDrag(event) {
           class="card cursor-pointer p-2.5 transition-colors hover:border-line-2 hover:bg-raised"
           :class="[
             String(item.id) === activeId ? 'border-ink-3' : '',
-            draggingId === String(item.id) ? 'opacity-90 shadow-lg' : '',
+            draggingId === String(item.id) ? 'opacity-90 shadow-e3' : '',
             draggable ? 'touch-none' : '',
           ]"
           @pointerdown="startDrag"

@@ -44,7 +44,7 @@ const SIZES = {
 }
 
 const classes = computed(() => [
-  'inline-flex items-center justify-center rounded-pill font-medium transition-colors',
+  'inline-flex items-center justify-center rounded-field font-medium transition-colors',
   'disabled:cursor-not-allowed disabled:opacity-50',
   VARIANTS[props.variant],
   SIZES[props.size],

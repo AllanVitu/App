@@ -358,7 +358,7 @@ onMounted(load)
       <BaseSpinner class="size-7 text-ink" />
     </div>
 
-    <div v-else class="card flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden">
       <EmptyState
         v-if="filtered.length === 0"
         class="flex-1"

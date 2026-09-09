@@ -248,7 +248,7 @@ defineExpose({ show })
       <div class="absolute inset-0 bg-ink/45" @click="hide" />
 
       <div
-        class="panel relative z-10 flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden border-ink-3"
+        class="floating relative z-10 flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden"
       >
         <div class="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3">
           <AppIcon name="search" :size="16" class="shrink-0 text-ink-3" />

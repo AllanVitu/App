@@ -200,7 +200,7 @@ function onLeave(element, done) {
           ref="panel"
           data-panel
           tabindex="-1"
-          class="panel relative z-10 flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden border-ink-3 focus:outline-none"
+          class="floating relative z-10 flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden focus:outline-none"
           :class="SIZES[size]"
         >
           <header

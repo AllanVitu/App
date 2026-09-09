@@ -98,7 +98,7 @@ onMounted(() => {
 <template>
   <button
     type="button"
-    class="rounded-pill p-2 text-ink-2 transition-colors hover:bg-raised hover:text-ink"
+    class="rounded-field p-2 text-ink-2 transition-colors hover:bg-raised hover:text-ink"
     :aria-label="isDark ? 'Passer au thème clair' : 'Passer au thème sombre'"
     :aria-pressed="isDark"
     @click="toggle"

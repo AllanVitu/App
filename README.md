@@ -2,8 +2,9 @@
 
 Application SaaS complète : authentification (avec vérification d'adresse et
 mot de passe oublié), tableau de bord, cinq modules métier, profil et
-paramètres, recherche transverse. Interface « poste de travail » à colonnes,
-animations anime.js, suite de tests et intégration continue.
+paramètres, recherche transverse. Interface « signal » à colonnes — console
+froide, plaques à arêtes nettes, couleur réservée à l'état. Animations
+anime.js, suite de tests et intégration continue.
 
 ## Les modules
 
@@ -77,7 +78,8 @@ App/
 ├── e2e/                        # Playwright — hors conteneur
 └── front/                      # client Vue 3
     ├── tests/                  # Vitest — hors de src/
-    ├── scripts/check-chunks.mjs # garde-fou : ce que le chemin public importe
+    ├── scripts/                # deux garde-fous : les lots du chemin public,
+    │                           #   et le contraste de la palette
     └── src/
         ├── animations/         # motion.js (tronc commun), layout.js, reveal.js + PLAN.md
         ├── composables/        # drag, gestes, file d'écritures, raccourcis, pagination
@@ -257,7 +259,7 @@ Trois portes, exécutables en local exactement comme en intégration continue.
 
 ```bash
 docker compose exec php composer check   # PSR-12 + PHPStan niveau 6 + PHPUnit
-docker compose exec node npm run check   # ESLint + Prettier + Vitest + build
+docker compose exec node npm run check   # ESLint + Prettier + Vitest + build + 2 garde-fous
 cd e2e && npm test                       # parcours navigateur (Playwright)
 ```
 
@@ -292,10 +294,54 @@ cd e2e && npm install && npx playwright install chromium
 
 ## Direction visuelle
 
-Poste de travail : une seule famille typographique (Source Code Pro), fond
-papier chaud, panneaux délimités par des filets, angles vifs. La hiérarchie
-passe par la graisse et l'échelle ; la couleur est réservée au sens — mousse
-pour l'actif, ocre pour l'archivé, brique pour le danger.
+**« Signal ».** Ce que fait l'application, au fond, c'est dire ce qui ne va
+pas : cinq modules qui surveillent des déploiements, des erreurs, des tickets,
+et un accueil dont la première section s'appelle « demande attention ». La
+direction précédente — pastel délavé, blanc cassé chaud, coins à 20 px —
+posait pour principe que « rien ne claque ». C'est calme et c'est joli, et
+c'est exactement ce qu'une console d'exploitation ne doit pas être : quand
+tout a la même voix, rien ne s'entend.
+
+Le renversement tient en quatre gestes.
+
+**La surface recule.** Fonds froids et profonds, gris tirant vers le bleu —
+un écran, pas du papier. La chrome (menu, chemin, barre d'état) est une
+plaque ; le contenu repose sur le FOND, et les cartes qu'il porte redeviennent
+donc des plaques posées. Sans cela, en thème clair, on empilait du blanc sur
+du blanc.
+
+**L'état avance.** La sémantique cesse d'être pastel : vert franc, ambre,
+corail. La couleur ne décore rien ici — elle ne dit qu'une chose, où en est ce
+qu'on regarde.
+
+**Des plaques, pas des coussins.** 20 px de rayon → 6. La forme dit la nature,
+et la règle n'a que deux entrées : **gélule = jeton** (pastille de filtre,
+étiquette, point de statut), **plaque = surface et action** (panneaux, cartes,
+champs — et les boutons, qui étaient des gélules et ne le sont plus).
+
+**La lumière vient de quelque part.** Une échelle d'élévation apparaît. Seul
+ce qui flotte réellement — fenêtres, palette de commandes — porte une ombre.
+Ce qui est posé à plat n'a qu'un filet, et le plan de l'interface se lit sans
+y penser.
+
+Une famille typographique, Geist, avec Geist Mono pour ce qui s'aligne en
+colonne : empreintes de commit, durées, compteurs. La hiérarchie passe par la
+GRAISSE — 660 pour un titre, 400 pour le corps — plutôt que par la taille :
+deux points de plus se noieraient sur un écran dense.
+
+### La couleur est la seule partie du dessin qui se mesure
+
+`npm run check:contrast` lit les jetons, calcule les rapports de luminance sur
+**chacun** des fonds où chaque couleur se pose réellement, mesure le chroma
+OKLCH des marques de graphique et leur écart ΔE sous les trois dichromatismes
+— puis refuse la chaîne en dessous des seuils.
+
+Écrit avant la refonte et passé sur la palette PRÉCÉDENTE, il y a trouvé cinq
+manquements que deux refontes successives n'avaient pas vus : le texte des
+pastilles « réussi » à 4,11:1 sur sa propre teinte, les libellés secondaires à
+4,11:1 sur les champs. Rien d'autre dans la chaîne ne pouvait les signaler —
+ni ESLint, ni le compilateur, ni un parcours navigateur, qui ne sait pas lire
+un rapport de luminance.
 
 Les cinq modules, comme le tableau de bord, s'organisent en **colonnes par
 statut** : un seul composant, [`BoardColumns.vue`](front/src/components/board/BoardColumns.vue),

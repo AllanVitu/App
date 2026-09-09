@@ -49,7 +49,7 @@ const openCount = computed(() =>
 
 <template>
   <footer
-    class="panel flex h-9 shrink-0 items-center gap-3 px-3 text-[0.7rem] tracking-wide text-ink-3"
+    class="flex h-8 shrink-0 items-center gap-3 border-t border-line bg-panel px-3 text-[0.7rem] tracking-wide text-ink-3"
   >
     <span class="flex items-center gap-1.5">
       <span class="size-1.5" :class="online ? 'bg-moss' : 'bg-brick'" aria-hidden="true" />

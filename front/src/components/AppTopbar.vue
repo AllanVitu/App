@@ -82,7 +82,7 @@ async function logout() {
 </script>
 
 <template>
-  <header class="panel flex h-10 shrink-0 items-center gap-2 pl-2 pr-1.5">
+  <header class="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-panel pl-2 pr-1.5">
     <button
       type="button"
       class="p-1.5 text-ink-2 transition-colors hover:text-ink lg:hidden"

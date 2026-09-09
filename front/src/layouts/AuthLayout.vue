@@ -103,36 +103,43 @@ const root = useMotion(() => {
     <aside
       class="relative hidden w-[46%] max-w-2xl shrink-0 flex-col justify-between overflow-hidden border-r border-line p-10 lg:flex xl:p-14"
     >
-      <!-- Fond : deux lavis pastel très dilués, tracés avec les jetons du
-           thème. Ils suivent donc la bascule clair/sombre au lieu d'être
-           deux couleurs figées qui jureraient sur l'un des deux. -->
+      <!-- Fond : une GRILLE DE MESURE, pas un lavis.
+           Deux dégradés radiaux pastel occupaient cette place — un halo mou,
+           hérité de la direction précédente. La direction « signal » tient à
+           l'arête nette : une grille tracée aux jetons du thème dit la même
+           chose qu'un fond travaillé, sans rien diffuser. Elle s'efface vers
+           les bords par un masque, pour ne pas concurrencer le texte.
+
+           Deux dégradés linéaires : aucune image, aucune requête, et rien qui
+           s'anime — le coût de peinture est celui d'un aplat. -->
       <div
         class="pointer-events-none absolute inset-0"
         style="
-          background:
-            radial-gradient(60% 55% at 15% 12%, var(--c-moss-bg) 0%, transparent 70%),
-            radial-gradient(55% 50% at 85% 88%, var(--c-ochre-bg) 0%, transparent 70%);
+          background-image:
+            linear-gradient(to right, var(--c-line) 1px, transparent 1px),
+            linear-gradient(to bottom, var(--c-line) 1px, transparent 1px);
+          background-size: 56px 56px;
+          mask-image: radial-gradient(80% 65% at 22% 18%, #000 0%, transparent 100%);
         "
         aria-hidden="true"
       />
 
       <header class="relative flex items-center gap-3">
-        <!-- Sphère : un dégradé radial tracé en CSS, pas une image. -->
+        <!-- LA MARQUE : trois barres de signal sur une plaque.
+             Une sphère en dégradé radial, cerclée d'un halo, occupait cette
+             place. Elle était jolie et elle ne disait rien — et surtout elle
+             portait quatre couleurs écrites en dur, qui ne suivaient ni le
+             thème ni la palette. Ces barres-là ne coûtent aucune image, se
+             colorent aux jetons, et disent ce que fait l'application. -->
         <div
           data-anim="orb"
-          class="size-11 shrink-0 rounded-full"
-          style="
-            background: radial-gradient(
-              circle at 34% 30%,
-              #d6ffe8 0%,
-              #7ee2a8 26%,
-              #2f9d7a 55%,
-              #0d2b22 100%
-            );
-            box-shadow: 0 0 40px -12px #7ee2a8;
-          "
+          class="flex size-11 shrink-0 items-end justify-center gap-0.75 rounded-card bg-focus p-2.5"
           aria-hidden="true"
-        />
+        >
+          <span class="h-[35%] w-0.75 rounded-[1px] bg-paper" />
+          <span class="h-[65%] w-0.75 rounded-[1px] bg-paper" />
+          <span class="h-full w-0.75 rounded-[1px] bg-paper" />
+        </div>
 
         <div>
           <p data-anim="brand-name" class="text-[1.05rem] font-semibold tracking-tight">saas os</p>
@@ -170,19 +177,13 @@ const root = useMotion(() => {
            s'agit de la même page. -->
       <header class="flex shrink-0 flex-col items-center gap-3 lg:hidden">
         <div
-          class="size-14 rounded-full"
-          style="
-            background: radial-gradient(
-              circle at 34% 30%,
-              #d6ffe8 0%,
-              #7ee2a8 26%,
-              #2f9d7a 55%,
-              #0d2b22 100%
-            );
-            box-shadow: 0 0 44px -14px #7ee2a8;
-          "
+          class="flex size-14 items-end justify-center gap-1 rounded-card bg-focus p-3.5"
           aria-hidden="true"
-        />
+        >
+          <span class="h-[35%] w-1 rounded-[1px] bg-paper" />
+          <span class="h-[65%] w-1 rounded-[1px] bg-paper" />
+          <span class="h-full w-1 rounded-[1px] bg-paper" />
+        </div>
         <div class="text-center">
           <p class="text-[1.05rem] font-semibold tracking-tight">saas os</p>
           <p class="mt-0.5 text-[0.78rem] text-ink-3">tableau de bord &amp; modules métier</p>

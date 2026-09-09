@@ -91,7 +91,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex h-screen flex-col gap-1.5 bg-paper p-1.5 lg:gap-2 lg:p-2">
+  <div class="flex h-screen flex-col bg-paper">
     <!-- PREMIER ÉLÉMENT FOCALISABLE DE LA PAGE, et invisible jusqu'à ce
          qu'on l'atteigne. Il n'existe que pour la première tabulation.
 
@@ -108,17 +108,17 @@ onMounted(async () => {
          même coup le clic qui suivrait — l'action ne part donc qu'une fois. -->
     <a
       href="#contenu"
-      class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-80 focus:rounded-pill focus:border focus:border-ink focus:bg-panel focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-ink focus:shadow-lg"
+      class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-80 focus:rounded-field focus:border focus:border-ink focus:bg-panel focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-ink focus:shadow-e3"
       @click.prevent="focusMain"
       @keydown.enter.prevent="focusMain"
     >
       Aller au contenu
     </a>
 
-    <div class="flex min-h-0 flex-1 gap-1.5 lg:gap-2">
+    <div class="flex min-h-0 flex-1">
       <AppSidebar />
 
-      <div class="flex min-w-0 flex-1 flex-col gap-1.5 lg:gap-2">
+      <div class="flex min-w-0 flex-1 flex-col">
         <AppTopbar :title="title" />
 
         <!-- Le défilement vit DANS le panneau, pas sur la page : le cadre
@@ -135,7 +135,7 @@ onMounted(async () => {
           ref="main"
           tabindex="-1"
           :aria-label="title || 'Contenu'"
-          class="panel min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-7 lg:py-6"
+          class="min-h-0 flex-1 overflow-y-auto bg-paper px-4 py-5 lg:px-8 lg:py-7"
         >
           <EmailVerificationBanner />
 
@@ -159,7 +159,7 @@ onMounted(async () => {
          semble n'avoir rien fait, et on la retape. -->
     <p
       v-if="pending"
-      class="fixed bottom-14 left-1/2 z-60 -translate-x-1/2 rounded-pill border border-line bg-panel px-3 py-1 text-[0.72rem] text-ink-2 shadow-lg"
+      class="fixed bottom-14 left-1/2 z-60 -translate-x-1/2 rounded-field border border-line bg-panel px-3 py-1 text-[0.72rem] text-ink-2 shadow-e2"
       role="status"
     >
       <kbd class="font-mono text-ink">g</kbd> … puis une lettre

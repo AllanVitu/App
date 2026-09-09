@@ -205,7 +205,7 @@ watch(() => props.points.length, draw)
          typographie et des jetons de couleur du reste de l'interface. -->
     <div
       v-if="hovered !== null && coords[hovered]"
-      class="pointer-events-none absolute -top-1 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-field border border-line bg-panel px-2 py-1 text-[0.68rem] text-ink shadow-sm"
+      class="pointer-events-none absolute -top-1 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-field border border-line bg-panel px-2 py-1 text-[0.68rem] text-ink shadow-e1"
       :style="{ left: `${(coords[hovered].x / W) * 100}%` }"
     >
       <span class="text-ink-3">{{ formatDay(coords[hovered].date) }}</span>

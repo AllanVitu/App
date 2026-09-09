@@ -120,7 +120,7 @@ function choose(withSound) {
     <div data-gate class="flex flex-col items-center gap-3 sm:flex-row">
       <button
         type="button"
-        class="rounded-pill border border-ink bg-ink px-6 py-2.5 text-[0.85rem] font-medium text-paper transition-opacity hover:opacity-85"
+        class="rounded-field border border-ink bg-ink px-6 py-2.5 text-[0.85rem] font-medium text-paper transition-opacity hover:opacity-85"
         :disabled="leaving"
         @click="choose(true)"
       >
@@ -129,7 +129,7 @@ function choose(withSound) {
 
       <button
         type="button"
-        class="rounded-pill border border-line px-6 py-2.5 text-[0.85rem] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
+        class="rounded-field border border-line px-6 py-2.5 text-[0.85rem] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
         :disabled="leaving"
         @click="choose(false)"
       >

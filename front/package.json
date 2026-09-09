@@ -13,8 +13,9 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.{js,vue,css}\" \"tests/**/*.js\" \"scripts/**/*.mjs\" \"*.js\"",
     "format:check": "prettier --check \"src/**/*.{js,vue,css}\" \"tests/**/*.js\" \"scripts/**/*.mjs\" \"*.js\"",
-    "check": "npm run lint && npm run format:check && npm run test && npm run build && npm run check:chunks",
-    "check:chunks": "node scripts/check-chunks.mjs"
+    "check": "npm run lint && npm run format:check && npm run test && npm run build && npm run check:chunks && npm run check:contrast",
+    "check:chunks": "node scripts/check-chunks.mjs",
+    "check:contrast": "node scripts/check-contrast.mjs"
   },
   "dependencies": {
     "animejs": "^4.5.0",

@@ -20,7 +20,7 @@ const label = computed(() => (ui.soundOn ? 'Couper le son' : 'Activer le son'))
 <template>
   <button
     type="button"
-    class="rounded-pill p-2 text-ink-2 transition-colors hover:bg-raised hover:text-ink"
+    class="rounded-field p-2 text-ink-2 transition-colors hover:bg-raised hover:text-ink"
     :aria-label="label"
     :aria-pressed="ui.soundOn"
     :title="label"
