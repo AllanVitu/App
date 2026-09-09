@@ -113,16 +113,16 @@ Toutes les routes sont déclarées dans [`back/routes/api.php`](back/routes/api.
 
 **Compte** — jeton d'accès requis
 
-| Méthode | Route                    | Rôle                                |
-| ------- | ------------------------ | ----------------------------------- |
-| GET     | `/api/auth/me`           | Utilisateur + préférences           |
-| POST    | `/api/auth/email/resend` | Renvoi du lien de confirmation      |
-| GET/PUT | `/api/profile`           | Profil                              |
-| PUT     | `/api/profile/password`  | Changement de mot de passe          |
-| DELETE  | `/api/profile`           | Suppression du compte               |
-| GET/PUT | `/api/settings`          | Préférences (thème, fuseau, langue) |
-| GET     | `/api/dashboard`         | Alertes, état des modules, activité |
-| GET     | `/api/search`            | Recherche dans les cinq modules     |
+| Méthode | Route                    | Rôle                                            |
+| ------- | ------------------------ | ----------------------------------------------- |
+| GET     | `/api/auth/me`           | Utilisateur + préférences                       |
+| POST    | `/api/auth/email/resend` | Renvoi du lien de confirmation                  |
+| GET/PUT | `/api/profile`           | Profil                                          |
+| PUT     | `/api/profile/password`  | Changement de mot de passe                      |
+| DELETE  | `/api/profile`           | Suppression du compte                           |
+| GET/PUT | `/api/settings`          | Préférences (thème, densité, mouvement, fuseau) |
+| GET     | `/api/dashboard`         | Alertes, état des modules, activité             |
+| GET     | `/api/search`            | Recherche dans les cinq modules                 |
 
 **Sessions ouvertes** — sous `/api/auth` alors que l'écran qui les consomme
 est le profil : le cookie de rafraîchissement est déposé avec
@@ -351,9 +351,9 @@ cd e2e && npm test                       # parcours navigateur (Playwright)
 | Suite                 | Portée                                    | Volume    |
 | --------------------- | ----------------------------------------- | --------- |
 | PHPUnit `unit`        | Jetons JWT — sans base                    | 7 tests   |
-| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel     | 137 tests |
+| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel     | 150 tests |
 | Vitest                | Formatage, intercepteur HTTP, composables | 131 tests |
-| Playwright            | Parcours complets dans Chromium           | 58 tests  |
+| Playwright            | Parcours complets dans Chromium           | 61 tests  |
 
 Les composables portent l'essentiel de la logique du client : file
 d'écritures, glisser-déposer, raccourcis, pagination, synchronisation de
@@ -459,6 +459,36 @@ secondaires à 4,11:1 sur les champs. Elle n'avait jamais été mesurée que
 contre `panel`. Rien d'autre dans la chaîne ne pouvait le dire — ni ESLint, ni
 le compilateur, ni un parcours navigateur, qui ne sait pas lire un rapport de
 luminance.
+
+## Réglages, et ce qu’ils changent
+
+Cet écran a déjà **perdu** des réglages : trois interrupteurs de notification
+et un choix « English » en ont été retirés parce qu'ils étaient enregistrés en
+base et consommés par personne. Un réglage qui ne change rien fait croire à un
+contrôle qui n'existe pas.
+
+Chacun de ceux qui restent agit, et un parcours navigateur le vérifie par son
+**effet** — pas par la case cochée.
+
+| Réglage                    | Ce qu’il change                                                    | Où il vit    |
+| -------------------------- | ------------------------------------------------------------------ | ------------ |
+| Thème                      | clair / sombre / système                                           | compte       |
+| **Densité**                | la taille de base, dont dépendent toutes les mesures en `rem`      | compte       |
+| **Réduire les animations** | coupe transitions CSS et animations JS, en plus du réglage système | compte       |
+| Fuseau horaire             | toutes les dates et échéances                                      | compte       |
+| **Retours sonores**        | survols, clics, notifications                                      | **appareil** |
+
+Le son reste sur l'appareil, et c'est délibéré : l'écran d'entrée sonore est
+proposé AVANT toute connexion, et le stocker par compte le rendrait
+indisponible au moment précis où il est demandé. Ce qui lui manquait n'était
+pas la persistance mais la PLACE — son seul interrupteur vivait dans la barre
+du haut.
+
+Densité et mouvement sont **mis en miroir dans `localStorage`** et relus par le
+script d'avant-rendu de `index.html`, comme le thème. Sans cette avance, la
+page s'affichait à la densité par défaut puis sautait — et jouait ses
+animations d'entrée alors même qu'on venait de les couper. Le serveur reste la
+source de vérité ; le miroir est corrigé dès sa réponse.
 
 ## Adresse, clavier, erreurs
 

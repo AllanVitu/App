@@ -17,6 +17,9 @@ final class SettingsController
     private const THEMES    = ['light', 'dark', 'system'];
     private const LANGUAGES = ['fr', 'en'];
 
+    /** L'interface est dense par construction ; ceci en règle le grain. */
+    private const DENSITIES = ['compact', 'confortable'];
+
     private SettingsRepository $settings;
 
     public function __construct()
@@ -50,6 +53,31 @@ final class SettingsController
             $validator->addError('timezone', 'Fuseau horaire inconnu.');
         }
 
+        /**
+         * ┌───────────────────────────────────────────────────────────────┐
+         * │  DEUX RÉGLAGES QUI AGISSENT, ET C'EST LA SEULE RAISON D'ÊTRE  │
+         * │  ICI                                                          │
+         * │                                                               │
+         * │  Cet écran a déjà perdu des réglages : trois interrupteurs de │
+         * │  notification et un choix « English » en ont été retirés parce│
+         * │  qu'ils étaient enregistrés et consommés par personne. Un     │
+         * │  réglage qui ne change rien fait croire à un contrôle qui     │
+         * │  n'existe pas.                                                │
+         * │                                                               │
+         * │  Ces deux-là sont branchés dans le même mouvement que leur    │
+         * │  ajout : la densité change l'interface, la réduction de       │
+         * │  mouvement coupe les animations.                              │
+         * └───────────────────────────────────────────────────────────────┘
+         */
+        $density = $validator->enum(
+            'density',
+            self::DENSITIES,
+            required: false,
+            default: $current['density'],
+        );
+
+        $reduceMotion = $validator->boolean('reduce_motion', $current['reduce_motion']);
+
         $notifications = $validator->jsonObject('notifications', $current['notifications']);
         $validator->check();
 
@@ -65,6 +93,8 @@ final class SettingsController
             'theme'         => $theme,
             'language'      => $language,
             'timezone'      => $timezone,
+            'density'       => $density,
+            'reduce_motion' => $reduceMotion,
             'notifications' => $notifications + $current['notifications'],
         ])));
     }

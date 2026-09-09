@@ -10,6 +10,7 @@ import { onMounted, reactive, ref } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
+import FilterChip from '@/components/ui/FilterChip.vue'
 import { settingsApi } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -25,6 +26,8 @@ const form = reactive({
   theme: 'system',
   language: 'fr',
   timezone: 'Europe/Paris',
+  density: 'confortable',
+  reduce_motion: false,
   notifications: { email: true, push: false, weekly_digest: true },
 })
 
@@ -48,6 +51,12 @@ const THEMES = [
  */
 const LANGUAGES = [{ value: 'fr', label: 'Français' }]
 
+/** Deux grains, et ils changent vraiment quelque chose à l'écran. */
+const DENSITIES = [
+  { value: 'confortable', label: 'Confortable' },
+  { value: 'compact', label: 'Compact' },
+]
+
 // Sous-ensemble courant ; l'API valide contre la liste complète des fuseaux PHP.
 const TIMEZONES = [
   'Europe/Paris',
@@ -64,6 +73,8 @@ function hydrate(settings) {
   form.theme = settings.theme
   form.language = settings.language
   form.timezone = settings.timezone
+  form.density = settings.density ?? 'confortable'
+  form.reduce_motion = Boolean(settings.reduce_motion)
   form.notifications = { ...form.notifications, ...settings.notifications }
 }
 
@@ -71,6 +82,18 @@ function hydrate(settings) {
 function previewTheme(value) {
   form.theme = value
   ui.applyTheme(value)
+}
+
+/**
+ * Aperçu immédiat de la densité et du mouvement, comme pour le thème.
+ *
+ * Un réglage d'apparence se juge à l'œil : demander d'enregistrer pour voir,
+ * puis de rouvrir l'écran pour changer d'avis, fait trois allers-retours là où
+ * il en faut zéro. L'enregistrement fixe le choix, il ne le révèle pas.
+ */
+function previewDisplay(champ, valeur) {
+  form[champ] = valeur
+  ui.applyDisplay({ density: form.density, reduce_motion: form.reduce_motion })
 }
 
 async function save() {
@@ -82,6 +105,8 @@ async function save() {
       theme: form.theme,
       language: form.language,
       timezone: form.timezone,
+      density: form.density,
+      reduce_motion: form.reduce_motion,
       notifications: form.notifications,
     })
 
@@ -152,6 +177,76 @@ onMounted(async () => {
           </button>
         </div>
         <p v-if="errors.theme" class="mt-2 text-xs text-brick">{{ errors.theme }}</p>
+
+        <!-- DENSITÉ. Un seul point d'action côté CSS : la taille de base,
+             dont dépendent toutes les mesures en « rem ». -->
+        <div class="mt-6 border-t border-line pt-5">
+          <p class="label-field mb-0">Densité</p>
+          <p class="mb-3 mt-1 text-xs text-ink-3">
+            « Compact » resserre l'interface pour afficher plus de lignes à l'écran.
+          </p>
+
+          <div class="flex flex-wrap gap-2">
+            <FilterChip
+              v-for="option in DENSITIES"
+              :key="option.value"
+              :active="form.density === option.value"
+              @click="previewDisplay('density', option.value)"
+            >
+              {{ option.label }}
+            </FilterChip>
+          </div>
+          <p v-if="errors.density" class="mt-2 text-xs text-brick">{{ errors.density }}</p>
+        </div>
+
+        <!-- MOUVEMENT. Le réglage système reste respecté ; celui-ci s'y
+             ajoute. On peut vouloir couper les animations d'UNE application
+             sans les couper partout — et beaucoup ignorent que le réglage
+             système existe. -->
+        <div class="mt-5 border-t border-line pt-5">
+          <label class="flex cursor-pointer items-start gap-3">
+            <input
+              v-model="form.reduce_motion"
+              type="checkbox"
+              class="mt-0.5 size-4 shrink-0 accent-(--c-ink)"
+              @change="previewDisplay('reduce_motion', form.reduce_motion)"
+            />
+            <span>
+              <span class="block text-[0.86rem] font-medium">Réduire les animations</span>
+              <span class="mt-0.5 block text-xs text-ink-3">
+                Si votre système les a déjà réduites, ce réglage n'a rien à changer — il ne sert
+                qu'à les couper ici sans les couper partout.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <!-- LE SON. Il existait, il persistait, et il n'avait pas sa place
+             ici : son seul interrupteur vivait dans la barre du haut. Ce qui
+             manquait n'était pas la fonctionnalité mais l'endroit où on la
+             cherche.
+
+             Il reste côté CLIENT, hors du formulaire : l'écran d'entrée sonore
+             est proposé AVANT toute connexion, et le stocker par compte le
+             rendrait indisponible au moment précis où il est demandé. Il n'a
+             donc rien à faire dans l'enregistrement, et s'applique au clic. -->
+        <div class="mt-5 border-t border-line pt-5">
+          <label class="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              class="mt-0.5 size-4 shrink-0 accent-(--c-ink)"
+              :checked="ui.soundOn"
+              @change="ui.setSound($event.target.checked)"
+            />
+            <span>
+              <span class="block text-[0.86rem] font-medium">Retours sonores</span>
+              <span class="mt-0.5 block text-xs text-ink-3">
+                Survols, clics et notifications. Appliqué tout de suite, et retenu sur cet appareil
+                plutôt que sur le compte.
+              </span>
+            </span>
+          </label>
+        </div>
       </section>
 
       <!-- Régionalisation -->

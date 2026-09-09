@@ -103,6 +103,54 @@ export const useUiStore = defineStore('ui', () => {
     sidebarOpen.value = value ?? !sidebarOpen.value
   }
 
+  // ---------------------------------------------------------------------------
+  // Densité et mouvement
+  //
+  // Deux réglages qui AGISSENT — c'est la seule raison de leur présence dans
+  // l'écran des préférences, dont trois interrupteurs de notification et un
+  // choix « English » ont déjà été retirés faute d'agir sur quoi que ce soit.
+  //
+  // Ils sont posés en ATTRIBUTS sur <html>, comme le thème. Le CSS s'y
+  // accroche (taille de base, transitions), et `prefersReducedMotion()` lit le
+  // même attribut — ce qui lui évite d'importer un store depuis le tronc
+  // commun des animations.
+  // ---------------------------------------------------------------------------
+  const DENSITIES = ['compact', 'confortable']
+
+  const density = ref('confortable')
+  const reduceMotion = ref(false)
+
+  function applyDisplay({ density: prochaine, reduce_motion: mouvement } = {}) {
+    density.value = DENSITIES.includes(prochaine) ? prochaine : 'confortable'
+    reduceMotion.value = Boolean(mouvement)
+
+    document.documentElement.dataset.densite = density.value
+    document.documentElement.dataset.mouvement = reduceMotion.value ? 'reduit' : 'normal'
+
+    /**
+     * ┌───────────────────────────────────────────────────────────────────┐
+     * │  UN MIROIR LOCAL, CONTRE LE CLIGNOTEMENT                          │
+     * │                                                                   │
+     * │  Ces réglages viennent du COMPTE, donc du réseau : ils n'arrivent │
+     * │  qu'après « /auth/me ». Entre le premier rendu et cette réponse,  │
+     * │  la page s'affichait à la densité par défaut puis sautait — et    │
+     * │  jouait ses animations d'entrée alors même qu'on les avait        │
+     * │  coupées.                                                          │
+     * │                                                                   │
+     * │  Le thème résout cela depuis toujours par un script joué avant le │
+     * │  rendu, dans index.html. Ces deux-là empruntent le même chemin.   │
+     * │  Le serveur reste la SOURCE DE VÉRITÉ ; le miroir n'est qu'une    │
+     * │  avance, corrigée dès que la réponse arrive.                      │
+     * └───────────────────────────────────────────────────────────────────┘
+     */
+    try {
+      localStorage.setItem('densite', density.value)
+      localStorage.setItem('mouvement', reduceMotion.value ? 'reduit' : 'normal')
+    } catch {
+      /* stockage indisponible : on paiera un clignotement, rien de plus */
+    }
+  }
+
   /**
    * Affiche une notification temporaire.
    *
@@ -157,11 +205,15 @@ export const useUiStore = defineStore('ui', () => {
   return {
     theme,
     themes: THEMES,
+    density,
+    densities: DENSITIES,
+    reduceMotion,
     sidebarOpen,
     toasts,
     soundOn,
     soundUndecided,
     applyTheme,
+    applyDisplay,
     watchSystemTheme,
     setSound,
     toggleSound,

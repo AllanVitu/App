@@ -40,8 +40,26 @@
             stored === 'light' ||
             (stored === 'system' && window.matchMedia('(prefers-color-scheme: light)').matches)
           document.documentElement.classList.toggle('light', light)
+
+          // Densité et mouvement suivent le même chemin, et pour la même
+          // raison : ils viennent du COMPTE, donc du réseau, et n'arrivent
+          // qu'après « /auth/me ». Sans cette avance, la page s'affiche à la
+          // densité par défaut puis saute — et joue ses animations d'entrée
+          // alors même qu'on les a coupées.
+          //
+          // Le serveur reste la source de vérité : ce miroir est corrigé dès
+          // que la réponse arrive (cf. stores/ui.js, applyDisplay).
+          const densite = localStorage.getItem('densite')
+          if (densite === 'compact' || densite === 'confortable') {
+            document.documentElement.dataset.densite = densite
+          }
+
+          const mouvement = localStorage.getItem('mouvement')
+          if (mouvement === 'reduit' || mouvement === 'normal') {
+            document.documentElement.dataset.mouvement = mouvement
+          }
         } catch (e) {
-          /* stockage indisponible : le thème sombre par défaut s'applique */
+          /* stockage indisponible : les réglages par défaut s'appliquent */
         }
       })()
     </script>

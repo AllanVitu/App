@@ -221,6 +221,42 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /**
+   * DENSITÉ — un réglage qui agit réellement.
+   *
+   * Un seul point d'action : la taille de base, dont dépendent toutes les
+   * mesures en « rem ». Changer chaque marge une par une aurait produit un
+   * réglage à moitié appliqué, et une liste de règles à tenir à jour à chaque
+   * nouvel écran.
+   *
+   * Les mesures en pixels — filets, barres de ligne, épaisseurs — ne bougent
+   * PAS, et c'est voulu : un filet d'un pixel reste un filet d'un pixel.
+   */
+  :root[data-densite='compact'] body {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  /**
+   * MOUVEMENT RÉDUIT, choisi dans l'application.
+   *
+   * Le réglage système reste respecté (cf. animations/motion.js) ; celui-ci
+   * s'y ajoute. On peut vouloir couper les animations d'UNE application sans
+   * les couper partout — et beaucoup de gens ignorent que le réglage système
+   * existe.
+   *
+   * Les transitions CSS sont coupées ici ; les animations JavaScript le sont
+   * dans « prefersReducedMotion() », qui lit le même attribut.
+   */
+  :root[data-mouvement='reduit'] *,
+  :root[data-mouvement='reduit'] *::before,
+  :root[data-mouvement='reduit'] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
   /* La signalétique se compose SERRÉ et GRAS. L'interlettrage se resserre à
      mesure que la graisse monte — sans quoi un titre lourd paraît lâche. */
   h1,

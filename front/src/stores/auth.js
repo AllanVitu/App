@@ -4,6 +4,9 @@ import { defineStore } from 'pinia'
 import { authApi } from '@/services/api'
 import { configureSession, setAccessToken } from '@/services/http'
 import { setTimeZone } from '@/utils/format'
+// Importé pour ce seul appel : les préférences d'affichage arrivent ici, et
+// c'est le store d'interface qui sait les poser sur le document.
+import { useUiStore } from '@/stores/ui'
 
 /**
  * Session de l'utilisateur courant.
@@ -123,6 +126,13 @@ export const useAuthStore = defineStore('auth', () => {
   function applySettings(updated) {
     settings.value = updated
     setTimeZone(updated?.timezone ?? null)
+
+    // La densité et la réduction de mouvement suivent le même chemin, et pour
+    // la même raison : posées ici, au seul endroit où les préférences
+    // arrivent, elles valent pour toute l'application dès la connexion. Les
+    // appliquer depuis l'écran Paramètres aurait laissé le reste de
+    // l'interface au réglage par défaut tant qu'on n'y serait pas passé.
+    useUiStore().applyDisplay(updated ?? {})
   }
 
   // Branche le client HTTP : il sait désormais rafraîchir la session et

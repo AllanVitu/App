@@ -93,16 +93,28 @@ export const STAGGER = {
 // -----------------------------------------------------------------------------
 
 /**
- * Respect du réglage système « réduire les animations ».
+ * Le mouvement est-il refusé ?
+ *
+ * DEUX SOURCES, ET LA PLUS RESTRICTIVE L'EMPORTE.
+ *
+ *   Le réglage SYSTÈME, qui vaut pour toutes les applications.
+ *   Le réglage de CETTE application, dans les Paramètres — parce qu'on peut
+ *   vouloir couper les animations ici sans les couper partout, et parce que
+ *   beaucoup de gens ignorent que le réglage système existe.
+ *
+ * Le second est lu sur l'attribut de <html>, posé par le store d'interface.
+ * Un attribut plutôt qu'un import : cette fonction est appelée dans des
+ * boucles d'animation, et elle ne doit dépendre d'aucun module applicatif —
+ * c'est ce qui la garde utilisable depuis le tronc commun.
  *
  * Les animations d'ici partent d'un état explicite `[départ, arrivée]`. Ne
  * rien jouer laisserait donc les éléments dans leur état de DÉPART,
  * c'est-à-dire invisibles. Chaque écran doit POSER son état final : c'est le
- * rôle de `settle()`. C'est la différence essentielle avec l'ancien code
- * GSAP, qui n'utilisait que des tweens `from()`.
+ * rôle de `settle()`.
  */
 export const prefersReducedMotion = () =>
-  window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+  document.documentElement.dataset.mouvement === 'reduit'
 
 /**
  * Pose immédiatement l'état final sur des éléments, sans transition.
