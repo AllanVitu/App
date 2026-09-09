@@ -14,16 +14,22 @@ import { useRoute } from 'vue-router'
 
 import AppSidebar from '@/components/AppSidebar.vue'
 import CommandPalette from '@/components/CommandPalette.vue'
+import ShortcutSheet from '@/components/ShortcutSheet.vue'
 import AppStatusBar from '@/components/AppStatusBar.vue'
 import AppTopbar from '@/components/AppTopbar.vue'
 import EmailVerificationBanner from '@/components/EmailVerificationBanner.vue'
 import SoundGate from '@/components/SoundGate.vue'
+import { useAppShortcuts } from '@/composables/useAppShortcuts'
 import { useModulesStore } from '@/stores/modules'
 import { useUiStore } from '@/stores/ui'
 
 const route = useRoute()
 const modulesStore = useModulesStore()
 const ui = useUiStore()
+
+// Raccourcis valables sur toute l'application : « g » puis une lettre pour
+// naviguer, « ? » pour la feuille. Montés ici, donc actifs sur chaque écran.
+const { helpOpen, pending } = useAppShortcuts()
 
 const title = computed(() => {
   if (route.name === 'module') {
@@ -65,6 +71,22 @@ onMounted(async () => {
     </div>
 
     <AppStatusBar />
+
+    <!-- Feuille des raccourcis, ouverte par « ? ». Le module Tickets se
+         pilotait entièrement au clavier depuis le début — et il fallait le
+         savoir. C'est le seul endroit où l'application le dit. -->
+    <ShortcutSheet :open="helpOpen" @close="helpOpen = false" />
+
+    <!-- Indicateur de séquence : « g » attend sa lettre. Sans lui, la touche
+         semble n'avoir rien fait, et on la retape. -->
+    <p
+      v-if="pending"
+      class="fixed bottom-14 left-1/2 z-60 -translate-x-1/2 rounded-pill border border-line bg-panel px-3 py-1 text-[0.72rem] text-ink-2 shadow-lg"
+      role="status"
+    >
+      <kbd class="font-mono text-ink">g</kbd> … puis une lettre
+      <span class="text-ink-3">(? pour la liste)</span>
+    </p>
 
     <!-- Palette de recherche, montée UNE FOIS pour toute l'application :
          elle écoute Ctrl/⌘ + K sur le document, donc depuis n'importe quel
