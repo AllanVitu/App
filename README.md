@@ -122,6 +122,17 @@ Toutes les routes sont déclarées dans [`back/routes/api.php`](back/routes/api.
 | GET     | `/api/dashboard`         | Alertes, état des modules, activité |
 | GET     | `/api/search`            | Recherche dans les cinq modules     |
 
+**Sessions ouvertes** — sous `/api/auth` alors que l'écran qui les consomme
+est le profil : le cookie de rafraîchissement est déposé avec
+`path=/api/auth`, et c'est lui SEUL qui permet de reconnaître la session
+courante parmi les autres.
+
+| Méthode | Route                     | Rôle                                 |
+| ------- | ------------------------- | ------------------------------------ |
+| GET     | `/api/auth/sessions`      | Appareils connectés, courant désigné |
+| DELETE  | `/api/auth/sessions/{id}` | Fermer une session à distance        |
+| DELETE  | `/api/auth/sessions`      | Fermer toutes les autres             |
+
 **Modules** — le catalogue, et le repli générique `module_items`
 
 | Méthode        | Route                       | Rôle                                |

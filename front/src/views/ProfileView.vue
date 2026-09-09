@@ -3,13 +3,14 @@
  * Page Profil : informations du compte, changement de mot de passe et
  * suppression définitive.
  */
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/AppIcon.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
+import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import { profileApi } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -105,6 +106,70 @@ async function deleteAccount() {
 
 const memberSince = computed(() => formatDateTime(auth.user?.created_at))
 const lastLogin = computed(() => formatDateTime(auth.user?.last_login_at))
+
+// --- Sessions ouvertes ------------------------------------------------------
+/**
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │  LA BASE ENREGISTRAIT DÉJÀ TOUT CELA, ET PERSONNE NE POUVAIT LE VOIR    │
+ * │                                                                         │
+ * │  Appareil, adresse IP et date sont conservés à chaque ouverture de      │
+ * │  session depuis le premier jour. Sans écran pour les montrer,           │
+ * │  l'utilisateur ne pouvait ni savoir où sa session restait ouverte, ni   │
+ * │  la fermer à distance — le geste qu'on cherche justement quand on se    │
+ * │  souvient d'un ordinateur laissé connecté ailleurs.                     │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
+const sessions = ref([])
+const sessionsLoading = ref(true)
+const closing = ref(null)
+const closingOthers = ref(false)
+
+/** Combien d'appareils AUTRES que celui-ci — ce que le bouton propose de fermer. */
+const otherSessions = computed(() => sessions.value.filter((session) => !session.current).length)
+
+async function loadSessions() {
+  try {
+    sessions.value = await profileApi.sessions()
+  } catch (error) {
+    ui.notify(error.message, 'error')
+  } finally {
+    sessionsLoading.value = false
+  }
+}
+
+async function closeSession(session) {
+  closing.value = session.id
+
+  try {
+    await profileApi.revokeSession(session.id)
+
+    // Retirée de la liste plutôt que rechargée : le serveur vient de dire
+    // qu'elle est fermée, un aller-retour n'apprendrait rien de plus.
+    sessions.value = sessions.value.filter((entry) => entry.id !== session.id)
+    ui.notify('Session fermée.')
+  } catch (error) {
+    ui.notify(error.message, 'error')
+  } finally {
+    closing.value = null
+  }
+}
+
+async function closeOtherSessions() {
+  closingOthers.value = true
+
+  try {
+    const { closed } = await profileApi.revokeOtherSessions()
+
+    sessions.value = sessions.value.filter((session) => session.current)
+    ui.notify(closed > 1 ? `${closed} sessions fermées.` : 'Session fermée.')
+  } catch (error) {
+    ui.notify(error.message, 'error')
+  } finally {
+    closingOthers.value = false
+  }
+}
+
+onMounted(loadSessions)
 </script>
 
 <template>
@@ -224,6 +289,73 @@ const lastLogin = computed(() => formatDateTime(auth.user?.last_login_at))
           </BaseButton>
         </div>
       </form>
+    </section>
+
+    <!-- Sessions ouvertes -->
+    <section class="card p-6">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 class="text-base font-semibold">Sessions ouvertes</h3>
+          <p class="mt-1 text-sm text-ink-2">
+            Les appareils où votre compte est connecté. Fermer une session en déconnecte l'appareil
+            immédiatement.
+          </p>
+        </div>
+
+        <BaseButton
+          v-if="otherSessions"
+          variant="secondary"
+          :loading="closingOthers"
+          @click="closeOtherSessions"
+        >
+          Fermer les autres ({{ otherSessions }})
+        </BaseButton>
+      </div>
+
+      <div v-if="sessionsLoading" class="mt-5 flex justify-center py-6">
+        <BaseSpinner class="size-6 text-ink" />
+      </div>
+
+      <ul v-else class="mt-5 divide-y divide-line border-y border-line">
+        <li
+          v-for="session in sessions"
+          :key="session.id"
+          class="flex flex-wrap items-center gap-x-4 gap-y-1 py-3"
+        >
+          <div class="min-w-0 flex-1">
+            <p class="flex items-center gap-2 text-[0.86rem] font-medium">
+              {{ session.label }}
+
+              <!-- « Cet appareil » se dit en toutes lettres et non par une
+                   couleur seule : c'est l'information qui empêche de se
+                   déconnecter soi-même par mégarde. -->
+              <span v-if="session.current" class="chip border-moss bg-moss-bg text-moss">
+                cet appareil
+              </span>
+            </p>
+
+            <p class="mt-0.5 truncate font-mono text-[0.7rem] text-ink-3">
+              {{ session.ip_address ?? 'adresse inconnue' }} · ouverte le
+              {{ formatDateTime(session.created_at) }}
+            </p>
+          </div>
+
+          <button
+            v-if="!session.current"
+            type="button"
+            class="shrink-0 text-[0.76rem] text-ink-2 underline-offset-4 transition-colors hover:text-brick hover:underline disabled:opacity-50"
+            :disabled="closing === session.id"
+            @click="closeSession(session)"
+          >
+            {{ closing === session.id ? 'Fermeture…' : 'Fermer' }}
+          </button>
+        </li>
+      </ul>
+
+      <p class="mt-3 flex items-start gap-2 text-[0.78rem] text-ink-3">
+        <AppIcon name="info" :size="14" class="mt-0.5 shrink-0" />
+        Changer de mot de passe ferme toutes les sessions, y compris celle-ci.
+      </p>
     </section>
 
     <!-- Zone sensible -->

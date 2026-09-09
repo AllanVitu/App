@@ -24,6 +24,7 @@ use App\Controllers\ItemController;
 use App\Controllers\ModuleController;
 use App\Controllers\ProfileController;
 use App\Controllers\SearchController;
+use App\Controllers\SessionController;
 use App\Controllers\SettingsController;
 use App\Controllers\TicketController;
 use App\Core\Router;
@@ -57,6 +58,16 @@ $router->post('/api/auth/password/reset', [AccountController::class, 'resetPassw
 $router->get('/api/auth/me', [AuthController::class, 'me'], $auth);
 
 $router->post('/api/auth/email/resend', [AccountController::class, 'resendVerification'], $auth);
+
+// Sessions ouvertes : lister ses appareils, en fermer un à distance.
+//
+// Sous « /api/auth » alors que l'écran qui les consomme est le PROFIL. Le
+// cookie de rafraîchissement est déposé avec « path=/api/auth » : ailleurs le
+// navigateur ne l'enverrait pas, et c'est lui SEUL qui permet de reconnaître
+// la session courante parmi les autres. Cf. SessionController.
+$router->get('/api/auth/sessions', [SessionController::class, 'index'], $auth);
+$router->delete('/api/auth/sessions', [SessionController::class, 'destroyOthers'], $auth);
+$router->delete('/api/auth/sessions/{id}', [SessionController::class, 'destroy'], $auth);
 
 // --- Tableau de bord -------------------------------------------------------
 $router->get('/api/dashboard', [DashboardController::class, 'index'], $auth);

@@ -179,6 +179,17 @@ export const profileApi = {
   update: (payload) => http.put('/profile', payload).then(unwrap),
   updatePassword: (payload) => http.put('/profile/password', payload).then(unwrap),
   destroy: (password) => http.delete('/profile', { data: { password } }),
+
+  /**
+   * Sessions ouvertes — sous « /auth » alors que l'écran est le profil.
+   *
+   * Le cookie de rafraîchissement est déposé avec « path=/api/auth » : sur
+   * « /profile », le navigateur ne l'enverrait pas, et le serveur ne pourrait
+   * plus reconnaître la session courante ni l'épargner. Cf. SessionController.
+   */
+  sessions: () => http.get('/auth/sessions').then(unwrap),
+  revokeSession: (id) => http.delete(`/auth/sessions/${id}`),
+  revokeOtherSessions: () => http.delete('/auth/sessions').then(unwrap),
 }
 
 // --- Paramètres -------------------------------------------------------------
