@@ -53,6 +53,8 @@ export function useBoardDrag({ onDrop }) {
   let rootEl = null
   let columns = []
   let armed = false
+  /** Identifiant annoncé par l'appelant, retenu jusqu'au début du geste. */
+  let pendingId = null
 
   /** Mesure les colonnes UNE fois. Voir l'encadré ci-dessus. */
   function measure(root) {
@@ -87,6 +89,7 @@ export function useBoardDrag({ onDrop }) {
     overColumn.value = null
     origin = null
     rootEl = null
+    pendingId = null
     columns = []
     armed = false
   }
@@ -100,11 +103,26 @@ export function useBoardDrag({ onDrop }) {
     // Bouton principal seulement : un clic droit ouvre un menu contextuel.
     if (event.button !== 0 || !root) return
 
+    // ┌───────────────────────────────────────────────────────────────────┐
+    // │  UNE CARTE À LA FOIS                                              │
+    // │                                                                   │
+    // │  Deux doigts sur une tablette, ou une souris pendant un geste     │
+    // │  tactile : sans cette garde, le second appui écrasait « card » et │
+    // │  la PREMIÈRE carte restait en « position: fixed » pour toujours — │
+    // │  plus rien ne la remettait en place, puisque « reset » ne connaît │
+    // │  que la carte courante.                                           │
+    // │                                                                   │
+    // │  Trouvé en écrivant le test, pas en le corrigeant : c'est le      │
+    // │  troisième défaut de ce fichier.                                  │
+    // └───────────────────────────────────────────────────────────────────┘
+    if (armed) return
+
     const element = event.currentTarget
 
     startX = event.clientX
     startY = event.clientY
     card.value = element
+    pendingId = id
     armed = true
     draggingId.value = null
     // Retenue pour mesurer plus tard : la mesure n'a lieu qu'au début RÉEL du
@@ -146,7 +164,14 @@ export function useBoardDrag({ onDrop }) {
       // Le geste est reconnu : la carte quitte le flux pour suivre le doigt.
       // Sa largeur est figée, sans quoi elle s'effondrerait à zéro une fois
       // sortie de sa colonne.
-      draggingId.value = card.value.dataset.boardCard
+      //
+      // L'IDENTIFIANT VIENT DE L'APPELANT, pas du DOM. Il était jusqu'ici
+      // relu dans « dataset.boardCard » — et le paramètre « id », pourtant
+      // reçu et documenté, ne servait à rien. Outre le doublon, l'attribut
+      // manquant donnait « undefined » : la condition ci-dessus restant
+      // vraie, on remesurait à CHAQUE mouvement, ce qui défait précisément la
+      // règle que ce fichier existe pour tenir.
+      draggingId.value = pendingId
       card.value.style.position = 'fixed'
       card.value.style.left = `${origin.left}px`
       card.value.style.top = `${origin.top}px`

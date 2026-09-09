@@ -96,5 +96,19 @@ export default [
         afterEach: 'readonly',
       },
     },
+    rules: {
+      /**
+       * Un fichier de test déclare souvent DEUX harnais : le cas nominal et
+       * sa variante — un composant sans racine, un composant sans le contexte
+       * attendu. Ce sont des montages jetables de trois lignes, pas des
+       * composants d'application.
+       *
+       * La règle vise les fichiers « .vue », où un fichier est un composant.
+       * Elle n'a pas de sens ici, et la contourner en éclatant les harnais en
+       * fichiers séparés rendrait les tests moins lisibles pour satisfaire une
+       * règle qui ne les concerne pas.
+       */
+      'vue/one-component-per-file': 'off',
+    },
   },
 ]
