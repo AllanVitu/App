@@ -36,14 +36,18 @@ final class DesignController
     {
         $userId = $request->userId();
 
+        // Décalage borné : au-delà du plafond, la page demandée n'existe pas.
+        $offset = $request->queryInt('offset', 0, 0, 100000);
+
         $result = $this->design->search($userId, [
             'kind'      => $this->validateFilter($request, 'kind', self::KINDS),
             'search'    => $request->queryParam('search'),
             'sort'      => $request->queryParam('sort', 'updated_at'),
             'direction' => $request->queryParam('direction', 'desc'),
-        ]);
+        ], 200, $offset);
 
         Response::json($result['files'], 200, [
+            'offset' => $offset,
             'total' => $result['total'],
             'stats' => $this->design->statsForUser($userId),
             'kinds' => self::KINDS,

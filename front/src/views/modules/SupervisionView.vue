@@ -28,6 +28,7 @@ import { createLayout } from '@/animations/layout'
 import { errorsApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useWriteQueue } from '@/composables/useWriteQueue'
+import { useLoadMore } from '@/composables/useLoadMore'
 import { useUiStore } from '@/stores/ui'
 import { formatRelative } from '@/utils/format'
 
@@ -39,6 +40,14 @@ const stats = ref(null)
 // Compte SERVEUR, filtres compris : il voit au-delà du plafond de chargement,
 // contrairement à la liste reçue (cf. ui/TruncationNotice.vue).
 const total = ref(null)
+
+// « Charger la suite » : le plafond de chargement reste, mais il cesse d'être
+// une impasse (cf. composables/useLoadMore.js).
+const { loadingMore, loadMore } = useLoadMore({
+  rows: groups,
+  fetch: async (offset) => (await errorsApi.list({ offset })).groups,
+  onError: (message) => ui.notify(message, 'error'),
+})
 const daily = ref([])
 const loading = ref(true)
 
@@ -323,6 +332,8 @@ onMounted(load)
     </ModuleHeader>
 
     <TruncationNotice
+      :loading="loadingMore"
+      @more="loadMore"
       :loaded="groups.length"
       :total="total"
       unit="groupes d'erreurs"

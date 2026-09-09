@@ -43,15 +43,19 @@ final class ErrorController
     {
         $userId = $request->userId();
 
+        // Décalage borné : au-delà du plafond, la page demandée n'existe pas.
+        $offset = $request->queryInt('offset', 0, 0, 100000);
+
         $result = $this->errors->search($userId, [
             'status'    => $this->validateFilter($request, 'status', self::STATUSES),
             'level'     => $this->validateFilter($request, 'level', self::LEVELS),
             'search'    => $request->queryParam('search'),
             'sort'      => $request->queryParam('sort', 'last_seen_at'),
             'direction' => $request->queryParam('direction', 'desc'),
-        ]);
+        ], 200, $offset);
 
         Response::json($result['groups'], 200, [
+            'offset'  => $offset,
             'total'  => $result['total'],
             'stats'  => $this->errors->statsForUser($userId),
             // Courbe des 14 derniers jours : une erreur qui se répète et une

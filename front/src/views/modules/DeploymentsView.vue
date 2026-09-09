@@ -25,6 +25,7 @@ import TruncationNotice from '@/components/ui/TruncationNotice.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { deploymentsApi } from '@/services/api'
 import { play } from '@/services/sound'
+import { useLoadMore } from '@/composables/useLoadMore'
 import { useUiStore } from '@/stores/ui'
 import { formatRelative } from '@/utils/format'
 
@@ -35,6 +36,14 @@ const stats = ref(null)
 // Compte SERVEUR, filtres compris : il voit au-delà du plafond de chargement,
 // contrairement à la liste reçue (cf. ui/TruncationNotice.vue).
 const total = ref(null)
+
+// « Charger la suite » : le plafond de chargement reste, mais il cesse d'être
+// une impasse (cf. composables/useLoadMore.js).
+const { loadingMore, loadMore } = useLoadMore({
+  rows: deployments,
+  fetch: async (offset) => (await deploymentsApi.list({ offset })).deployments,
+  onError: (message) => ui.notify(message, 'error'),
+})
 const branches = ref([])
 const loading = ref(true)
 const busy = ref(false)
@@ -298,6 +307,8 @@ onMounted(load)
     <BranchPreviews :deployments="deployments" :statuses="STATUSES" />
 
     <TruncationNotice
+      :loading="loadingMore"
+      @more="loadMore"
       :loaded="deployments.length"
       :total="total"
       unit="déploiements"

@@ -28,8 +28,12 @@ final class DeploymentRepository
      *              search?: string|null, sort?: string|null, direction?: string|null} $filters
      * @return array{deployments: list<array<string, mixed>>, total: int}
      */
-    public function search(string $userId, array $filters, int $limit = 200): array
-    {
+    public function search(
+        string $userId,
+        array $filters,
+        int $limit = 200,
+        int $offset = 0,
+    ): array {
         $conditions = ['user_id = :user_id', 'deleted_at IS NULL'];
         $params     = ['user_id' => $userId];
 
@@ -69,7 +73,7 @@ final class DeploymentRepository
                FROM deployments
               WHERE {$where}
               ORDER BY {$sort} {$direction} NULLS LAST, created_at DESC
-              LIMIT :limit",
+              LIMIT :limit OFFSET :offset",
         );
 
         foreach ($params as $key => $value) {
@@ -77,6 +81,7 @@ final class DeploymentRepository
         }
 
         $statement->bindValue('limit', $limit, PDO::PARAM_INT);
+        $statement->bindValue('offset', max(0, $offset), PDO::PARAM_INT);
         $statement->execute();
 
         return [

@@ -39,6 +39,9 @@ final class DeploymentController
     {
         $userId = $request->userId();
 
+        // Décalage borné : au-delà du plafond, la page demandée n'existe pas.
+        $offset = $request->queryInt('offset', 0, 0, 100000);
+
         $result = $this->deployments->search($userId, [
             'environment' => $this->validateFilter($request, 'environment', self::ENVIRONMENTS),
             'status'      => $this->validateFilter($request, 'status', self::STATUSES),
@@ -46,9 +49,10 @@ final class DeploymentController
             'search'      => $request->queryParam('search'),
             'sort'        => $request->queryParam('sort', 'created_at'),
             'direction'   => $request->queryParam('direction', 'desc'),
-        ]);
+        ], 200, $offset);
 
         Response::json($result['deployments'], 200, [
+            'offset'    => $offset,
             'total'    => $result['total'],
             'stats'    => $this->deployments->statsForUser($userId),
             'branches' => $this->deployments->branchesForUser($userId),

@@ -51,6 +51,9 @@ final class TicketController
         $status   = $this->validateFilter($request, 'status', self::STATUSES);
         $priority = $this->validateFilter($request, 'priority', self::PRIORITIES);
 
+        // Décalage borné : au-delà du plafond, la page demandée n'existe pas.
+        $offset = $request->queryInt('offset', 0, 0, 100000);
+
         $result = $this->tickets->search($request->userId(), [
             'status'    => $status,
             'priority'  => $priority,
@@ -60,9 +63,10 @@ final class TicketController
             'overdue'   => $request->queryParam('overdue') === '1',
             'sort'      => $request->queryParam('sort', 'created_at'),
             'direction' => $request->queryParam('direction', 'desc'),
-        ]);
+        ], 500, $offset);
 
         Response::json($result['tickets'], 200, [
+            'offset'    => $offset,
             'total'    => $result['total'],
             'stats'    => $this->tickets->statsForUser($request->userId()),
             'projects' => $this->tickets->projectsForUser($request->userId()),

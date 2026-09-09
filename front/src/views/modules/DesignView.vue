@@ -32,6 +32,7 @@ import { createLayout } from '@/animations/layout'
 import { designApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useWriteQueue } from '@/composables/useWriteQueue'
+import { useLoadMore } from '@/composables/useLoadMore'
 import { useUiStore } from '@/stores/ui'
 import { formatRelative } from '@/utils/format'
 
@@ -43,6 +44,14 @@ const stats = ref(null)
 // Compte SERVEUR, filtres compris : il voit au-delà du plafond de chargement,
 // contrairement à la liste reçue (cf. ui/TruncationNotice.vue).
 const total = ref(null)
+
+// « Charger la suite » : le plafond de chargement reste, mais il cesse d'être
+// une impasse (cf. composables/useLoadMore.js).
+const { loadingMore, loadMore } = useLoadMore({
+  rows: files,
+  fetch: async (offset) => (await designApi.list({ offset })).files,
+  onError: (message) => ui.notify(message, 'error'),
+})
 const loading = ref(true)
 const busy = ref(false)
 
@@ -389,6 +398,8 @@ onMounted(load)
     </ModuleHeader>
 
     <TruncationNotice
+      :loading="loadingMore"
+      @more="loadMore"
       :loaded="files.length"
       :total="total"
       unit="fichiers"

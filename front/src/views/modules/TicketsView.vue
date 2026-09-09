@@ -35,6 +35,7 @@ import { createLayout } from '@/animations/layout'
 import { ticketsApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useWriteQueue } from '@/composables/useWriteQueue'
+import { useLoadMore } from '@/composables/useLoadMore'
 import { useUiStore } from '@/stores/ui'
 import { BOARD_ORDER, PRIORITIES, advanceStatus } from '@/utils/tickets'
 
@@ -46,6 +47,14 @@ const stats = ref(null)
 // Compte SERVEUR, filtres compris : il voit au-delà du plafond de chargement,
 // contrairement à la liste reçue (cf. ui/TruncationNotice.vue).
 const total = ref(null)
+
+// « Charger la suite » : le plafond de chargement reste, mais il cesse d'être
+// une impasse (cf. composables/useLoadMore.js).
+const { loadingMore, loadMore } = useLoadMore({
+  rows: tickets,
+  fetch: async (offset) => (await ticketsApi.list({ offset })).tickets,
+  onError: (message) => ui.notify(message, 'error'),
+})
 const projects = ref([])
 const loading = ref(true)
 const saving = ref(false)
@@ -639,6 +648,8 @@ const SHORTCUTS = [
     </div>
 
     <TruncationNotice
+      :loading="loadingMore"
+      @more="loadMore"
       :loaded="tickets.length"
       :total="total"
       unit="tickets"
