@@ -27,6 +27,10 @@ abstract class ApiTestCase extends TestCase
      * est remis à zéro sans avoir à dérouler mentalement les clés étrangères.
      */
     private const MUTABLE_TABLES = [
+        // La file : les e-mails y sont déposés au lieu d'être envoyés dans la
+        // requête. Sans ce vidage, chaque inscription de test laisserait une
+        // tâche derrière elle.
+        'jobs',
         'user_tokens',
         'refresh_tokens',
         'login_attempts',

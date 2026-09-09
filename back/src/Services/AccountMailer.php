@@ -15,13 +15,15 @@ use Throwable;
  *  - le corps HTML est intégralement échappé (htmlspecialchars) : un nom
  *    d'utilisateur ne peut pas injecter de balises dans le message ;
  *  - un échec d'envoi ne fait JAMAIS échouer l'action métier. Une inscription
- *    réussie ne doit pas être annulée parce que le SMTP est indisponible :
- *    l'erreur est journalisée et l'utilisateur peut redemander l'e-mail.
+ *    réussie ne doit pas être annulée parce que le SMTP est indisponible.
+ *
+ * Cette classe COMPOSE les messages ; elle ne les remet plus. Le corps est
+ * déposé en file et un worker s'occupe du serveur SMTP, avec trois essais.
+ * C'est ce qui a sorti l'envoi du chemin de la requête HTTP — voir deliver().
  */
 final class AccountMailer
 {
     public function __construct(
-        private readonly Mailer $mailer = new Mailer(),
         private readonly UserTokenService $tokens = new UserTokenService(),
     ) {
     }
@@ -143,16 +145,43 @@ final class AccountMailer
     }
 
     /**
-     * @return bool false si l'envoi a échoué (journalisé, jamais propagé)
+     * ┌─────────────────────────────────────────────────────────────────────┐
+     * │  L'ENVOI A QUITTÉ LA REQUÊTE HTTP                                   │
+     * │                                                                     │
+     * │  Le message était remis au serveur SMTP PENDANT la requête. Une     │
+     * │  inscription attendait donc le serveur de messagerie : lent, elle   │
+     * │  était lente ; muet, elle expirait. Et un envoi échoué était perdu, │
+     * │  sans relance — l'utilisateur n'avait plus qu'à redemander l'e-mail.│
+     * │                                                                     │
+     * │  Le message est désormais DÉPOSÉ EN FILE, et un worker le remet au  │
+     * │  serveur avec trois essais et un recul croissant. La réponse HTTP   │
+     * │  n'attend plus que la base.                                         │
+     * └─────────────────────────────────────────────────────────────────────┘
+     *
+     * La valeur de retour change donc de sens : elle ne dit plus « remis au
+     * serveur » mais « pris en charge ». C'est le seul contrat qu'un envoi
+     * différé peut tenir, et le seul dont les appelants avaient besoin — ils
+     * s'en servent pour dire « e-mail envoyé », jamais pour attendre une
+     * confirmation de remise.
      */
     private function deliver(string $email, string $name, string $subject, string $html, string $text): bool
     {
         try {
-            $this->mailer->send($email, $name, $subject, $html, $text);
+            Queue::push('mail.send', [
+                'to'      => $email,
+                'name'    => $name,
+                'subject' => $subject,
+                'html'    => $html,
+                'text'    => $text,
+            ]);
 
             return true;
         } catch (Throwable $e) {
-            error_log('[Mailer] Envoi impossible à ' . $email . ' : ' . $e->getMessage());
+            // La file est en base : si elle est injoignable, l'action métier
+            // qui appelle ici l'est aussi. On journalise et on ne casse rien —
+            // une inscription réussie ne doit pas être annulée parce qu'un
+            // e-mail n'a pas pu être mis en file.
+            error_log('[Mailer] Mise en file impossible pour ' . $email . ' : ' . $e->getMessage());
 
             return false;
         }

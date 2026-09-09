@@ -102,3 +102,26 @@ sort($schemaFiles);
 foreach ($schemaFiles as $file) {
     $pdo->exec((string) file_get_contents($file));
 }
+
+/**
+ * ---------------------------------------------------------------------------
+ * PUIS LES MIGRATIONS, exactement comme au démarrage du conteneur PHP.
+ *
+ * « init/ » est la ligne de base ; « migrations/ » porte tout ce qui vient
+ * après. Reconstruire la base de test à partir de la seule ligne de base
+ * revenait donc à tester sur un schéma d'avant — et c'est ce qui s'est
+ * produit : la première migration écrite pour ce projet a fait échouer
+ * quatorze tests sur « relation "jobs" does not exist ».
+ *
+ * Le migrateur est appelé ICI, et pas seulement dans l'entrypoint Docker,
+ * pour que la base de test suive le même chemin que la production : ligne de
+ * base, puis migrations, dans cet ordre.
+ * ---------------------------------------------------------------------------
+ */
+try {
+    (new App\Core\Migrator())->run();
+} catch (Throwable $e) {
+    fwrite(STDERR, "\nMigrations impossibles sur la base de test : " . $e->getMessage() . "\n\n");
+
+    exit(1);
+}

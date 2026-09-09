@@ -57,7 +57,7 @@ docker compose up -d --build
 
 ```
 App/
-├── docker-compose.yml          # développement : Nginx + PHP-FPM + PostgreSQL + Vite + Mailpit
+├── docker-compose.yml          # développement : Nginx + PHP-FPM + Worker + PostgreSQL + Vite + Mailpit
 ├── docker-compose.prod.yml     # déploiement  : images autonomes, même origine
 ├── docker/                     # images et configuration d'infrastructure
 ├── back/                       # API REST PHP — seul back/public/ est exposé
@@ -71,9 +71,11 @@ App/
 │   │   │                       #   SchemaBuilder, Search, ModuleMetrics, AttentionFeed
 │   │   ├── Models/             # 9 dépôts PDO (requêtes préparées)
 │   │   └── Controllers/        # 15 : un par domaine, plus Health et Search
+│   ├── bin/                    # migrate.php (schéma) · worker.php (tâches)
 │   ├── tests/                  # PHPUnit : unit + integration
 │   └── database/
-│       ├── init/               # schéma, joué à la création du volume
+│       ├── init/               # LIGNE DE BASE, jouée à la création du volume
+│       ├── migrations/         # tout ce qui vient après — cf. « Le schéma »
 │       └── seeds/              # jeux de données, choisis par DB_SEED
 ├── e2e/                        # Playwright — hors conteneur
 └── front/                      # client Vue 3
@@ -187,6 +189,65 @@ Trois choix qui se remarquent en lisant cette liste :
 Réponses : `{ "data": … }` en succès (avec `meta` pour la pagination),
 `{ "message": …, "errors": { champ: message } }` en erreur.
 
+## Le schéma, et ce qui tourne en fond
+
+### « init » est la ligne de base, « migrations » est la suite
+
+Les fichiers de [`back/database/init`](back/database/init) sont joués par
+PostgreSQL **à la création du volume**, et à ce moment-là seulement. Ils sont
+donc figés : passé le premier déploiement, toute évolution du schéma passe par
+[`back/database/migrations`](back/database/migrations).
+
+```bash
+docker compose exec php composer migrate          # applique ce qui est en attente
+docker compose exec php composer migrate:status   # état de chaque migration
+```
+
+Les migrations sont jouées **automatiquement au démarrage du conteneur PHP**
+(`DB_AUTO_MIGRATE=false` pour reprendre la main). Un fichier se nomme
+`AAAAMMJJhhmm_intitulé.sql` — un horodatage plutôt qu'une séquence, pour que
+deux personnes qui écrivent une migration la même semaine ne se disputent pas
+le même numéro.
+
+Trois garde-fous, chacun pour un accident classique :
+
+| Garde-fou                     | Ce qu'il empêche                                                                                                        |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Verrou consultatif PostgreSQL | Deux conteneurs qui migrent au même instant                                                                             |
+| Empreinte SHA-256 par fichier | Une migration modifiée **après** avoir été appliquée : elle ne sera pas rejouée, et la base diverge du dépôt en silence |
+| Une transaction par migration | Un schéma à moitié transformé après un échec                                                                            |
+
+Le troisième impose une règle : **pas de `BEGIN`/`COMMIT` dans un fichier de
+migration**, le migrateur ouvrant déjà la transaction. Les rares ordres qui la
+refusent — `CREATE INDEX CONCURRENTLY` — se déclarent par
+`-- @sans-transaction` en tête de fichier.
+
+### Le worker
+
+Un second conteneur, **même image que `php`**, autre point d'entrée. Il exécute
+les tâches de fond et déclenche les travaux périodiques.
+
+```bash
+docker compose logs -f worker
+docker compose exec php php bin/worker.php --once   # vide la file puis s'arrête
+```
+
+**Les e-mails ont quitté la requête HTTP.** Le message était remis au serveur
+SMTP _pendant_ la requête : une inscription attendait donc la messagerie —
+lente, elle était lente ; muette, elle expirait. Le corps est désormais déposé
+en file, et le worker le remet avec trois essais et un recul croissant.
+
+La file vit dans PostgreSQL, sans courtier de messages : `SELECT … FOR UPDATE
+SKIP LOCKED` permet à plusieurs workers d'y puiser sans jamais se prendre la
+même tâche. Le contrat est **« au moins une fois »** — un worker tué entre le
+travail et l'acquittement fera reprendre la tâche, et les gestionnaires
+supportent d'être rejoués.
+
+Un travail périodique est livré : la **purge des jetons de rafraîchissement**
+révoqués ou expirés depuis plus de quatorze jours. La rotation en produit un à
+chaque rafraîchissement ; sans purge, la table croît indéfiniment — 2 082
+lignes accumulées sur une base de développement avant que ce travail n'existe.
+
 ## Sécurité
 
 - **Mots de passe** : bcrypt coût 12, réhachage transparent si le coût évolue.
@@ -271,15 +332,16 @@ Trois portes, exécutables en local exactement comme en intégration continue.
 ```bash
 docker compose exec php composer check   # PSR-12 + PHPStan niveau 6 + PHPUnit
 docker compose exec node npm run check   # ESLint + Prettier + Vitest + build + 2 garde-fous
+docker compose exec php composer migrate  # applique les migrations en attente
 cd e2e && npm test                       # parcours navigateur (Playwright)
 ```
 
-| Suite                 | Portée                                    | Volume   |
-| --------------------- | ----------------------------------------- | -------- |
-| PHPUnit `unit`        | Jetons JWT — sans base                    | 7 tests  |
-| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel     | 94 tests |
-| Vitest                | Formatage, intercepteur HTTP, composables | 67 tests |
-| Playwright            | Parcours complets dans Chromium           | 51 tests |
+| Suite                 | Portée                                    | Volume    |
+| --------------------- | ----------------------------------------- | --------- |
+| PHPUnit `unit`        | Jetons JWT — sans base                    | 7 tests   |
+| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel     | 129 tests |
+| Vitest                | Formatage, intercepteur HTTP, composables | 67 tests  |
+| Playwright            | Parcours complets dans Chromium           | 54 tests  |
 
 Les composables portent l'essentiel de la logique du client : file
 d'écritures, glisser-déposer, raccourcis, pagination, synchronisation de

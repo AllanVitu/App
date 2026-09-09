@@ -126,6 +126,17 @@ jobs:
       - name: Découpage des lots
         run: npm run check:chunks
 
+      # La couleur est la seule partie du dessin qui se mesure — et la seule
+      # que rien d'autre dans cette chaîne ne sait lire. Ni ESLint, ni le
+      # compilateur, ni un parcours navigateur ne calculent un rapport de
+      # luminance : passé sur la palette précédente, ce script y a trouvé cinq
+      # manquements que deux refontes n'avaient pas vus.
+      #
+      # Il était dans « npm run check » sans être ici, où les étapes sont
+      # appelées une par une : il ne tournait donc pas en intégration.
+      - name: Contraste et lisibilité de la palette
+        run: npm run check:contrast
+
   # ---------------------------------------------------------------------------
   # Parcours de bout en bout, contre la stack Docker réelle
   # ---------------------------------------------------------------------------

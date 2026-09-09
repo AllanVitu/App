@@ -89,6 +89,65 @@ services:
     networks:
       - saas_net
 
+
+  # --------------------------------------------------------------------------
+  # Worker — tâches de fond et travaux périodiques
+  #
+  # MÊME IMAGE que php, même environnement, autre point d'entrée. Les e-mails
+  # y sont remis au serveur SMTP, hors de la requête HTTP, et le planificateur
+  # y déclenche les travaux récurrents (purge des jetons).
+  #
+  # DB_AUTO_MIGRATE=false : les migrations appartiennent au service php, qui
+  # démarre en même temps. Deux processus qui migrent au même instant sont
+  # protégés par le verrou consultatif, mais le second n'aurait rien à faire —
+  # autant ne pas le lancer.
+  #
+  # Arrêter ce service ne casse rien : les tâches s'accumulent en file et
+  # partiront à son retour.
+  # --------------------------------------------------------------------------
+  worker:
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+    container_name: saas_worker
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["php", "bin/worker.php"]
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      APP_DEBUG: ${APP_DEBUG:-true}
+      # --- Connexion PDO (nom du service Docker comme hôte) ---
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-saas_db}
+      DB_USER: ${POSTGRES_USER:-saas_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-saas_password}
+      # --- Sécurité / JWT (cf. Étape 3) ---
+      JWT_SECRET: ${JWT_SECRET:-change_me_in_env_file}
+      JWT_ISSUER: ${JWT_ISSUER:-saas-api}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-900}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-1209600}
+      # --- CORS : origine autorisée = serveur de dev Vite ---
+      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:5173}
+      # --- Liens envoyés par e-mail (vérification, réinitialisation) ---
+      APP_FRONTEND_URL: ${APP_FRONTEND_URL:-http://localhost:5173}
+      # --- SMTP (Mailpit en développement) ---
+      MAIL_HOST: ${MAIL_HOST:-mailer}
+      MAIL_PORT: ${MAIL_PORT:-1025}
+      MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-none}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-no-reply@saas.local}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-SaaS App}
+      DB_AUTO_MIGRATE: "false"
+    volumes:
+      - ./back:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - saas_net
+
   # --------------------------------------------------------------------------
   # Nginx — reverse proxy / serveur web de l'API (document root = back/public)
   # --------------------------------------------------------------------------

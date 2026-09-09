@@ -35,13 +35,17 @@
             "@format:check",
             "@analyse",
             "@test"
-        ]
+        ],
+        "migrate": "php bin/migrate.php",
+        "migrate:status": "php bin/migrate.php --status"
     },
     "scripts-descriptions": {
         "test": "Exécute toute la suite de tests",
         "analyse": "Analyse statique PHPStan",
         "format": "Applique le formatage PSR-12",
-        "check": "Formatage + analyse + tests : ce que la CI exécute"
+        "check": "Formatage + analyse + tests : ce que la CI exécute",
+        "migrate": "Applique les migrations de schéma en attente",
+        "migrate:status": "État de chaque migration, appliquée ou non"
     },
     "config": {
         "optimize-autoloader": true,

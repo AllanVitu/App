@@ -31,8 +31,13 @@ COPY php.ini /usr/local/etc/php/conf.d/99-app.ini
 
 WORKDIR /var/www/html
 
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 # php-fpm tourne en www-data (UID 82 sur Alpine)
 USER www-data
 
 EXPOSE 9000
+# Les migrations sont jouées avant php-fpm : cf. entrypoint.sh.
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["php-fpm", "-F"]
