@@ -37,6 +37,7 @@ import { createLayout } from '@/animations/layout'
 import { ticketsApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useWriteQueue } from '@/composables/useWriteQueue'
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useLoadMore } from '@/composables/useLoadMore'
 import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
@@ -75,6 +76,10 @@ const panelOpen = ref(false)
 const helpOpen = ref(false)
 const composing = ref(false)
 const composeTitle = ref('')
+
+// Le titre d'un ticket en cours de frappe. Court, mais c'est justement
+// l'endroit où l'on tape le plus vite — et où un « g » de trop change d'écran.
+useUnsavedGuard(() => composing.value && Boolean(composeTitle.value.trim()))
 
 const searchInput = ref(null)
 const composeInput = ref(null)
@@ -405,7 +410,27 @@ async function removeTicket(ticket) {
 
   try {
     await ticketsApi.remove(ticket.id)
-    ui.notify(`Ticket #${ticket.number} supprimé.`, 'info')
+
+    // ┌───────────────────────────────────────────────────────────────────┐
+    // │  LA SUPPRESSION EST LOGIQUE : ELLE PEUT DONC SE DÉFAIRE           │
+    // │                                                                   │
+    // │  La ligne n'a jamais quitté la base — seul un « deleted_at » a    │
+    // │  été posé. Rien n'était perdu, et pourtant, du point de vue de    │
+    // │  celui qui venait de cliquer, c'était définitif.                  │
+    // │                                                                   │
+    // │  Le bandeau reste huit secondes au lieu de quatre : le temps de   │
+    // │  lire, de comprendre l'erreur, et d'atteindre le bouton.          │
+    // └───────────────────────────────────────────────────────────────────┘
+    ui.notifyUndo(`Ticket #${ticket.number} supprimé.`, async () => {
+      try {
+        await ticketsApi.restore(ticket.id)
+        ui.notify(`Ticket #${ticket.number} restauré.`)
+        await load({ silent: true })
+      } catch (error) {
+        ui.notify(error.message, 'error')
+      }
+    })
+
     refresh()
   } catch (error) {
     tickets.value.splice(index, 0, previous)

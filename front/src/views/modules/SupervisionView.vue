@@ -256,6 +256,19 @@ async function removeGroup(group) {
 
   try {
     await errorsApi.remove(group.id)
+
+    // Suppression logique, donc réversible — cf. TicketsView.
+    ui.notifyUndo('Erreur supprimée.', async () => {
+      try {
+        await errorsApi.restore(group.id)
+        ui.notify('Erreur restaurée.')
+      } catch (error) {
+        ui.notify(error.message, 'error')
+      } finally {
+        load({ silent: true })
+      }
+    })
+
     load({ silent: true })
   } catch (error) {
     groups.value.splice(index, 0, previous)

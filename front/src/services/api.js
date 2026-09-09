@@ -76,6 +76,15 @@ export const itemsApi = {
   create: (slug, payload) => http.post(`/modules/${slug}/items`, payload).then(unwrap),
   update: (id, payload) => http.put(`/items/${id}`, payload).then(unwrap),
   remove: (id) => http.delete(`/items/${id}`),
+
+  /**
+   * Restauration après une suppression.
+   *
+   * Toutes les suppressions de l'application sont LOGIQUES : la ligne reste
+   * en base, marquée. C'est ce qui rend l'annulation possible — il ne
+   * manquait que ce chemin de retour.
+   */
+  restore: (id) => http.post(`/items/${id}/restore`).then(unwrap),
 }
 
 // --- Tickets ----------------------------------------------------------------
@@ -103,6 +112,7 @@ export const ticketsApi = {
   update: (id, payload) => http.put(`/tickets/${id}`, payload).then(unwrap),
 
   remove: (id) => http.delete(`/tickets/${id}`),
+  restore: (id) => http.post(`/tickets/${id}/restore`).then(unwrap),
 }
 
 // --- Backend : schémas de données et clés d'API -----------------------------
@@ -138,6 +148,7 @@ export const deploymentsApi = {
   create: (payload) => http.post('/deployments', payload).then(unwrap),
   update: (id, payload) => http.put(`/deployments/${id}`, payload).then(unwrap),
   remove: (id) => http.delete(`/deployments/${id}`),
+  restore: (id) => http.post(`/deployments/${id}/restore`).then(unwrap),
 }
 
 // --- Supervision ------------------------------------------------------------
@@ -153,6 +164,7 @@ export const errorsApi = {
   /** Seul le statut se modifie : une erreur est reçue, pas saisie. */
   setStatus: (id, status) => http.put(`/errors/${id}`, { status }).then(unwrap),
   remove: (id) => http.delete(`/errors/${id}`),
+  restore: (id) => http.post(`/errors/${id}/restore`).then(unwrap),
 }
 
 // --- Design -----------------------------------------------------------------
@@ -168,6 +180,7 @@ export const designApi = {
   create: (payload) => http.post('/design/files', payload).then(unwrap),
   update: (id, payload) => http.put(`/design/files/${id}`, payload).then(unwrap),
   remove: (id) => http.delete(`/design/files/${id}`),
+  restore: (id) => http.post(`/design/files/${id}/restore`).then(unwrap),
   /** Une version s'ajoute ; elle ne se modifie ni ne se supprime. */
   addVersion: (id, payload) => http.post(`/design/files/${id}/versions`, payload).then(unwrap),
 }

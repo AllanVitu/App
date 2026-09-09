@@ -176,6 +176,26 @@ final class DeploymentRepository
     }
 
     /**
+     * Restauration d'un déploiement.
+     *
+     * Un déploiement est un FAIT daté : le restaurer ne relance rien, il rend
+     * seulement sa trace visible. Son statut, sa durée et son journal sont
+     * exactement ceux qu'il avait.
+     */
+    public function restore(string $id, string $userId): bool
+    {
+        $statement = Database::connection()->prepare(
+            'UPDATE deployments
+                SET deleted_at = NULL
+              WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL',
+        );
+
+        $statement->execute(['id' => $id, 'user_id' => $userId]);
+
+        return $statement->rowCount() > 0;
+    }
+
+    /**
      * Branches déjà déployées, pour le filtre.
      *
      * @return list<string>

@@ -34,6 +34,7 @@ import { createLayout } from '@/animations/layout'
 import { designApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useWriteQueue } from '@/composables/useWriteQueue'
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useLoadMore } from '@/composables/useLoadMore'
 import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
@@ -72,6 +73,10 @@ const detailLoading = ref(false)
 
 const composing = ref(false)
 const draft = ref({ name: '', kind: 'maquette', description: '', accent: '#7ee2a8' })
+
+// Ni « kind » ni « accent » ne comptent : ils ont une valeur par défaut, et
+// ouvrir le formulaire ne constitue pas une saisie.
+useUnsavedGuard(() => composing.value && Boolean(draft.value.name || draft.value.description))
 const errors = ref({})
 
 const versionLabel = ref('')
@@ -333,6 +338,21 @@ async function removeFile(file) {
 
   try {
     await designApi.remove(file.id)
+
+    // Suppression logique, donc réversible — cf. TicketsView. L'historique
+    // des versions revient avec le fichier : elles ne sont jamais supprimées,
+    // seul l'état du fichier les masque.
+    ui.notifyUndo(`« ${file.name} » supprimé.`, async () => {
+      try {
+        await designApi.restore(file.id)
+        ui.notify(`« ${file.name} » restauré.`)
+      } catch (error) {
+        ui.notify(error.message, 'error')
+      } finally {
+        load({ silent: true })
+      }
+    })
+
     load({ silent: true })
   } catch (error) {
     files.value.splice(index, 0, previous)

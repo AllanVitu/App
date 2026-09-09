@@ -98,6 +98,7 @@ $router->post('/api/modules/{slug}/items', [ItemController::class, 'store'], $au
 $router->get('/api/items/{id}', [ItemController::class, 'show'], $auth);
 $router->put('/api/items/{id}', [ItemController::class, 'update'], $auth);
 $router->delete('/api/items/{id}', [ItemController::class, 'destroy'], $auth);
+$router->post('/api/items/{id}/restore', [ItemController::class, 'restore'], $auth);
 
 // --- Tickets ---------------------------------------------------------------
 // Module « Tickets » : endpoints DÉDIÉS, hors de /api/modules/{slug}/items.
@@ -111,6 +112,7 @@ $router->post('/api/tickets', [TicketController::class, 'store'], $auth);
 $router->get('/api/tickets/{id}', [TicketController::class, 'show'], $auth);
 $router->put('/api/tickets/{id}', [TicketController::class, 'update'], $auth);
 $router->delete('/api/tickets/{id}', [TicketController::class, 'destroy'], $auth);
+$router->post('/api/tickets/{id}/restore', [TicketController::class, 'restore'], $auth);
 
 // --- Backend : schémas de données et clés d'API ----------------------------
 $router->get('/api/backend/tables', [BackendController::class, 'index'], $auth);
@@ -137,6 +139,7 @@ $router->post('/api/deployments', [DeploymentController::class, 'store'], $auth)
 $router->get('/api/deployments/{id}', [DeploymentController::class, 'show'], $auth);
 $router->put('/api/deployments/{id}', [DeploymentController::class, 'update'], $auth);
 $router->delete('/api/deployments/{id}', [DeploymentController::class, 'destroy'], $auth);
+$router->post('/api/deployments/{id}/restore', [DeploymentController::class, 'restore'], $auth);
 
 // --- Supervision -----------------------------------------------------------
 // Pas de PUT complet : une erreur est REÇUE, pas saisie. Seul son statut de
@@ -146,6 +149,7 @@ $router->post('/api/errors', [ErrorController::class, 'store'], $ingest);
 $router->get('/api/errors/{id}', [ErrorController::class, 'show'], $auth);
 $router->put('/api/errors/{id}', [ErrorController::class, 'update'], $auth);
 $router->delete('/api/errors/{id}', [ErrorController::class, 'destroy'], $auth);
+$router->post('/api/errors/{id}/restore', [ErrorController::class, 'restore'], $auth);
 
 // --- Design ----------------------------------------------------------------
 // Une version s'ajoute, ne se modifie ni ne se supprime : c'est ce qui fait
@@ -155,6 +159,7 @@ $router->post('/api/design/files', [DesignController::class, 'store'], $auth);
 $router->get('/api/design/files/{id}', [DesignController::class, 'show'], $auth);
 $router->put('/api/design/files/{id}', [DesignController::class, 'update'], $auth);
 $router->delete('/api/design/files/{id}', [DesignController::class, 'destroy'], $auth);
+$router->post('/api/design/files/{id}/restore', [DesignController::class, 'restore'], $auth);
 $router->post('/api/design/files/{id}/versions', [DesignController::class, 'storeVersion'], $auth);
 
 return $router;

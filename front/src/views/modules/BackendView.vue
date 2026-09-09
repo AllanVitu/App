@@ -25,6 +25,7 @@ import SearchField from '@/components/ui/SearchField.vue'
 import { backendApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useWriteQueue } from '@/composables/useWriteQueue'
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
 import { useUiStore } from '@/stores/ui'
@@ -58,6 +59,12 @@ const keyLabel = ref('')
 const keyScope = ref('anon')
 /** Jeton fraîchement créé : affiché une fois, puis oublié. */
 const freshToken = ref(null)
+
+// Le nom d'une table, ou l'intitulé d'une clé d'API en cours de création.
+// Posée APRÈS les deux références qu'elle lit : la fermeture ne serait
+// évaluée que plus tard, mais un garde qui se lit avant ce qu'il surveille se
+// casse au premier déplacement de ligne.
+useUnsavedGuard(() => Boolean(draftName.value || keyLabel.value))
 
 async function load({ silent = false } = {}) {
   if (!silent) loading.value = true

@@ -146,6 +146,20 @@ final class ErrorController
     }
 
     /**
+     * POST /api/errors/{id}/restore — cf. TicketController::restore().
+     */
+    public function restore(Request $request): void
+    {
+        $id = $this->validateId($request);
+
+        if (!$this->errors->restore($id, $request->userId())) {
+            throw HttpException::notFound('Erreur introuvable.');
+        }
+
+        Response::json($this->errors->find($id, $request->userId()));
+    }
+
+    /**
      * @param list<string> $allowed
      */
     private function validateFilter(Request $request, string $key, array $allowed): ?string

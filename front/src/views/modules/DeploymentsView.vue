@@ -28,6 +28,7 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import { deploymentsApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useLoadMore } from '@/composables/useLoadMore'
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
 import { useUiStore } from '@/stores/ui'
@@ -63,6 +64,19 @@ const openId = ref(null)
 
 const composing = ref(false)
 const draft = ref({ branch: '', commit_sha: '', commit_message: '', environment: 'preview' })
+
+/**
+ * Une empreinte de commit et un message de déploiement se recopient à la
+ * main : les perdre sur un clic à côté oblige à tout retrouver.
+ *
+ * « environment » n'entre pas dans le test — il a une valeur par défaut, et
+ * un formulaire qu'on vient d'ouvrir n'est pas une saisie en cours.
+ */
+useUnsavedGuard(
+  () =>
+    composing.value &&
+    Boolean(draft.value.branch || draft.value.commit_sha || draft.value.commit_message),
+)
 const errors = ref({})
 
 /** Vocabulaire du module : libellé et ton, définis une fois. */
@@ -218,6 +232,19 @@ async function removeDeployment(row) {
 
   try {
     await deploymentsApi.remove(row.id)
+
+    // Suppression logique, donc réversible — cf. TicketsView.
+    ui.notifyUndo('Déploiement supprimé.', async () => {
+      try {
+        await deploymentsApi.restore(row.id)
+        ui.notify('Déploiement restauré.')
+      } catch (error) {
+        ui.notify(error.message, 'error')
+      } finally {
+        load({ silent: true })
+      }
+    })
+
     load({ silent: true })
   } catch (error) {
     deployments.value.splice(index, 0, previous)

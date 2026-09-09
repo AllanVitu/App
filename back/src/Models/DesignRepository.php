@@ -217,6 +217,27 @@ final class DesignRepository
     }
 
     /**
+     * Restauration d'un fichier.
+     *
+     * Les VERSIONS reviennent avec lui, sans rien avoir à faire : elles ne
+     * sont jamais supprimées, et les requêtes qui les lisent les filtrent par
+     * « f.deleted_at IS NULL » — c'est-à-dire par l'état du fichier. Un
+     * historique de douze versions restauré est le même qu'avant.
+     */
+    public function restoreFile(string $id, string $userId): bool
+    {
+        $statement = Database::connection()->prepare(
+            'UPDATE design_files
+                SET deleted_at = NULL
+              WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL',
+        );
+
+        $statement->execute(['id' => $id, 'user_id' => $userId]);
+
+        return $statement->rowCount() > 0;
+    }
+
+    /**
      * Ajoute une version. Le numéro est posé par le trigger, pas ici.
      *
      * @param  array<string, mixed> $attributes

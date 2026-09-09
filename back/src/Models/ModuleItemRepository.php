@@ -173,6 +173,25 @@ final class ModuleItemRepository
     }
 
     /**
+     * Restauration d'un élément générique.
+     *
+     * Le compteur du module est ajusté par l'appelant, comme il l'est à la
+     * suppression : le dépôt ne connaît que sa table.
+     */
+    public function restore(string $id, string $userId): bool
+    {
+        $statement = Database::connection()->prepare(
+            'UPDATE module_items
+                SET deleted_at = NULL
+              WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL',
+        );
+
+        $statement->execute(['id' => $id, 'user_id' => $userId]);
+
+        return $statement->rowCount() > 0;
+    }
+
+    /**
      * Derniers éléments modifiés, tous modules confondus (fil d'activité).
      *
      * @return list<array<string, mixed>>

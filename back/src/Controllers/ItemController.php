@@ -120,6 +120,20 @@ final class ItemController
     }
 
     /**
+     * POST /api/items/{id}/restore — cf. TicketController::restore().
+     */
+    public function restore(Request $request): void
+    {
+        $id = $this->validateId($request);
+
+        if (!$this->items->restore($id, $request->userId())) {
+            throw HttpException::notFound('Élément introuvable.');
+        }
+
+        Response::json($this->items->find($id, $request->userId()));
+    }
+
+    /**
      * Valide le corps d'une création ou d'une mise à jour.
      * En mise à jour, les valeurs existantes servent de défaut : le client
      * peut n'envoyer que les champs modifiés.

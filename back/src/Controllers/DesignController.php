@@ -108,6 +108,20 @@ final class DesignController
     }
 
     /**
+     * POST /api/design/files/{id}/restore — cf. TicketController::restore().
+     */
+    public function restore(Request $request): void
+    {
+        $id = $this->validateId($request);
+
+        if (!$this->design->restoreFile($id, $request->userId())) {
+            throw HttpException::notFound('Fichier introuvable.');
+        }
+
+        Response::json($this->design->find($id, $request->userId()));
+    }
+
+    /**
      * POST /api/design/files/{id}/versions
      *
      * Le numéro est attribué par la base, par fichier : il n'est ni fourni

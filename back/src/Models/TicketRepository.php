@@ -215,6 +215,27 @@ final class TicketRepository
     }
 
     /**
+     * Restauration : la suppression n'ayant été que logique, la ligne n'a
+     * jamais quitté la table.
+     *
+     * Sans risque de collision : le numéro de ticket n'est JAMAIS réattribué
+     * — c'est un compteur par compte, jamais un rang. Un ticket restauré
+     * retrouve donc exactement le sien.
+     */
+    public function restore(string $id, string $userId): bool
+    {
+        $statement = Database::connection()->prepare(
+            'UPDATE tickets
+                SET deleted_at = NULL
+              WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL',
+        );
+
+        $statement->execute(['id' => $id, 'user_id' => $userId]);
+
+        return $statement->rowCount() > 0;
+    }
+
+    /**
      * Indicateurs du module, en une seule requête — alimente la tuile d'état
      * du tableau de bord.
      *

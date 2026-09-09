@@ -321,7 +321,24 @@ async function confirmDelete() {
   deleting.value = true
 
   try {
-    await itemsApi.remove(target.value.id)
+    const supprime = target.value
+
+    await itemsApi.remove(supprime.id)
+
+    // Suppression logique, donc réversible — cf. TicketsView. La référence est
+    // retenue AVANT l'appel : « target » est vidée à la fermeture de la
+    // fenêtre de confirmation, qui suit immédiatement.
+    ui.notifyUndo(`« ${supprime.title} » supprimé.`, async () => {
+      try {
+        await itemsApi.restore(supprime.id)
+        modulesStore.adjustCount(props.slug, 1)
+        ui.notify(`« ${supprime.title} » restauré.`)
+      } catch (error) {
+        ui.notify(error.message, 'error')
+      } finally {
+        await loadItems({ silent: true })
+      }
+    })
     modulesStore.adjustCount(props.slug, -1)
     ui.notify('Élément supprimé.')
 

@@ -130,6 +130,40 @@ final class TicketController
     }
 
     /**
+     * POST /api/tickets/{id}/restore
+     *
+     * ┌───────────────────────────────────────────────────────────────────┐
+     * │  LA DONNÉE ÉTAIT LÀ, LE CHEMIN DE RETOUR MANQUAIT                 │
+     * │                                                                   │
+     * │  Toutes les suppressions de l'application sont LOGIQUES : la ligne │
+     * │  reste, marquée d'un « deleted_at ». Rien n'était perdu — et       │
+     * │  pourtant rien ne permettait de revenir en arrière. Supprimer un   │
+     * │  ticket par erreur était définitif du point de vue de celui qui    │
+     * │  l'avait fait.                                                     │
+     * │                                                                   │
+     * │  Aucune limite de temps côté API : un élément supprimé il y a six  │
+     * │  mois se restaure aussi bien qu'un élément supprimé il y a dix     │
+     * │  secondes. C'est l'INTERFACE qui propose l'annulation pendant      │
+     * │  quelques secondes ; le serveur, lui, n'a aucune raison de         │
+     * │  refuser plus tard ce qu'il accepte tout de suite.                 │
+     * └───────────────────────────────────────────────────────────────────┘
+     *
+     * Répond 404 sur un identifiant inconnu, appartenant à un autre compte,
+     * ou déjà restauré — les trois se traitent pareil, et distinguer le
+     * deuxième dirait à un attaquant quels identifiants sont réels.
+     */
+    public function restore(Request $request): void
+    {
+        $id = $this->validateId($request);
+
+        if (!$this->tickets->restore($id, $request->userId())) {
+            throw HttpException::notFound('Ticket introuvable.');
+        }
+
+        Response::json($this->tickets->find($id, $request->userId()));
+    }
+
+    /**
      * Valide le corps d'une création ou d'une mise à jour.
      *
      * Sémantique de mise à jour partielle : un champ ABSENT conserve sa

@@ -149,6 +149,45 @@ describe('store ui — les notifications', () => {
     expect(ui.toasts.map((t) => t.message)).toEqual(['deux'])
   })
 
+  it('porte une action de rattrapage, et la laisse plus longtemps à l’écran', async () => {
+    vi.useFakeTimers()
+
+    const restaurer = vi.fn()
+    const ui = await store()
+
+    ui.notifyUndo('Ticket #12 supprimé.', restaurer)
+
+    expect(ui.toasts[0].action.label).toBe('Annuler')
+
+    // ┌─────────────────────────────────────────────────────────────────┐
+    // │  HUIT SECONDES, PAS QUATRE                                      │
+    // │                                                                 │
+    // │  Un message ordinaire confirme ; celui-ci propose de se         │
+    // │  rattraper. Quatre secondes suffisent à lire « supprimé » ;     │
+    // │  elles ne suffisent pas à comprendre qu'on s'est trompé, à      │
+    // │  trouver le bouton et à l'atteindre.                            │
+    // └─────────────────────────────────────────────────────────────────┘
+    vi.advanceTimersByTime(4000)
+    expect(ui.toasts).toHaveLength(1)
+
+    vi.advanceTimersByTime(4000)
+    expect(ui.toasts).toHaveLength(0)
+
+    // L'action n'est pas exécutée toute seule : c'est le clic qui la
+    // déclenche, et le bandeau qui expire ne restaure rien.
+    expect(restaurer).not.toHaveBeenCalled()
+  })
+
+  it('un message ordinaire n’a pas d’action', async () => {
+    const ui = await store()
+
+    ui.notify('Enregistré.')
+
+    // « action: null » et non « undefined » : le gabarit teste sa présence,
+    // et une propriété absente se lit moins bien qu'une propriété vide.
+    expect(ui.toasts[0].action).toBeNull()
+  })
+
   it('donne des identifiants distincts, même à message identique', async () => {
     const ui = await store()
 

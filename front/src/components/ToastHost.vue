@@ -66,6 +66,21 @@ const STYLES = {
   error: { icon: 'alert', classes: 'border-l-brick text-ink', mark: 'text-brick' },
   info: { icon: 'info', classes: 'border-l-ink-3 text-ink', mark: 'text-ink-3' },
 }
+
+/**
+ * Déclenche l'action d'un message, puis le referme.
+ *
+ * Le message est retiré AVANT que l'action n'aboutisse : la fenêtre
+ * d'annulation est passée, et laisser le bouton cliquable une seconde de plus
+ * inviterait à le presser deux fois — ce qui, sur une restauration, produit un
+ * second appel qui échouera en 404 puisque l'élément est déjà revenu.
+ *
+ * L'erreur éventuelle est rendue à l'appelant, qui sait comment la dire.
+ */
+function run(toast) {
+  ui.dismiss(toast.id)
+  toast.action.run()
+}
 </script>
 
 <template>
@@ -89,6 +104,21 @@ const STYLES = {
           :class="(STYLES[toast.type] ?? STYLES.info).mark"
         />
         <p class="flex-1 text-[0.8rem] leading-snug">{{ toast.message }}</p>
+
+        <!-- L'ACTION DE RATTRAPAGE, quand il y en a une.
+             C'est par ici que passe « Annuler » après une suppression : la
+             donnée n'a jamais quitté la base, seul le chemin de retour
+             manquait. Un vrai bouton, atteignable au clavier comme le reste —
+             et non un lien dans le texte, qu'un lecteur d'écran annoncerait au
+             milieu d'une phrase. -->
+        <button
+          v-if="toast.action"
+          type="button"
+          class="shrink-0 font-semibold text-ink underline underline-offset-4 transition-opacity hover:opacity-70"
+          @click="run(toast)"
+        >
+          {{ toast.action.label }}
+        </button>
 
         <button
           type="button"

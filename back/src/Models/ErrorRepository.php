@@ -238,6 +238,27 @@ final class ErrorRepository
     }
 
     /**
+     * Restauration d'un groupe d'erreurs.
+     *
+     * Les occurrences ne sont pas supprimées avec le groupe — elles y sont
+     * rattachées par clé étrangère et restent en base. Le groupe restauré
+     * retrouve donc son compte exact, y compris les occurrences arrivées
+     * pendant qu'il était masqué.
+     */
+    public function restore(string $id, string $userId): bool
+    {
+        $statement = Database::connection()->prepare(
+            'UPDATE error_groups
+                SET deleted_at = NULL
+              WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL',
+        );
+
+        $statement->execute(['id' => $id, 'user_id' => $userId]);
+
+        return $statement->rowCount() > 0;
+    }
+
+    /**
      * Erreurs qui demandent une action — alimente le tableau de bord.
      *
      * Les groupes IGNORÉS sont exclus : ignorer est une décision explicite de

@@ -110,6 +110,20 @@ final class DeploymentController
     }
 
     /**
+     * POST /api/deployments/{id}/restore — cf. TicketController::restore().
+     */
+    public function restore(Request $request): void
+    {
+        $id = $this->validateId($request);
+
+        if (!$this->deployments->restore($id, $request->userId())) {
+            throw HttpException::notFound('Déploiement introuvable.');
+        }
+
+        Response::json($this->deployments->find($id, $request->userId()));
+    }
+
+    /**
      * Sémantique de mise à jour partielle : un champ ABSENT conserve sa
      * valeur, un champ PRÉSENT est validé.
      *

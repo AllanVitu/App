@@ -161,6 +161,18 @@ mise à jour partielle, suppression logique.
 | GET/PUT/DELETE | `/api/design/files/{id}`          |                                             |
 | POST           | `/api/design/files/{id}/versions` | Ajoute, n'écrase jamais                     |
 
+**Annuler une suppression.** Toutes les suppressions sont LOGIQUES : la ligne
+reste en base, marquée. Il ne manquait que le chemin de retour — l'interface
+l'offre pendant huit secondes, l'API sans limite de temps.
+
+| Méthode | Route                            |
+| ------- | -------------------------------- |
+| POST    | `/api/tickets/{id}/restore`      |
+| POST    | `/api/items/{id}/restore`        |
+| POST    | `/api/deployments/{id}/restore`  |
+| POST    | `/api/errors/{id}/restore`       |
+| POST    | `/api/design/files/{id}/restore` |
+
 **Clés d'API et données ingérées** — le module `backend`
 
 | Méthode | Route                            | Auth                                   |
@@ -339,9 +351,9 @@ cd e2e && npm test                       # parcours navigateur (Playwright)
 | Suite                 | Portée                                    | Volume    |
 | --------------------- | ----------------------------------------- | --------- |
 | PHPUnit `unit`        | Jetons JWT — sans base                    | 7 tests   |
-| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel     | 129 tests |
-| Vitest                | Formatage, intercepteur HTTP, composables | 67 tests  |
-| Playwright            | Parcours complets dans Chromium           | 54 tests  |
+| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel     | 137 tests |
+| Vitest                | Formatage, intercepteur HTTP, composables | 131 tests |
+| Playwright            | Parcours complets dans Chromium           | 58 tests  |
 
 Les composables portent l'essentiel de la logique du client : file
 d'écritures, glisser-déposer, raccourcis, pagination, synchronisation de

@@ -106,11 +106,15 @@ export const useUiStore = defineStore('ui', () => {
   /**
    * Affiche une notification temporaire.
    *
+   * @param {string} message
    * @param {'success'|'error'|'info'} type
+   * @param {{ duration?: number, action?: { label: string, run: () => unknown } }} [options]
    */
-  function notify(message, type = 'success', duration = 4000) {
+  function notify(message, type = 'success', options = {}) {
+    const { duration = 4000, action = null } = options
+
     const id = ++toastId
-    toasts.value.push({ id, message, type })
+    toasts.value.push({ id, message, type, action })
 
     // Le son double le message, il ne le remplace pas : couper le son ne
     // fait rien perdre de l'information.
@@ -119,6 +123,31 @@ export const useUiStore = defineStore('ui', () => {
     setTimeout(() => dismiss(id), duration)
 
     return id
+  }
+
+  /**
+   * Annonce une suppression, en offrant de la défaire.
+   *
+   * ┌─────────────────────────────────────────────────────────────────────┐
+   * │  LA DONNÉE ÉTAIT DÉJÀ LÀ ; C'EST LE CHEMIN DE RETOUR QUI MANQUAIT   │
+   * │                                                                     │
+   * │  Toutes les suppressions de l'application sont logiques : la ligne  │
+   * │  reste en base, marquée. Rien n'était perdu — et pourtant, du point │
+   * │  de vue de celui qui venait de cliquer, c'était définitif.          │
+   * └─────────────────────────────────────────────────────────────────────┘
+   *
+   * Le bandeau reste DEUX FOIS PLUS LONGTEMPS qu'un message ordinaire : le
+   * temps de lire, de comprendre l'erreur, et d'atteindre le bouton. Quatre
+   * secondes suffisent à confirmer ; elles ne suffisent pas à se rattraper.
+   *
+   * @param {string} message      ce qui vient d'être supprimé
+   * @param {() => Promise<unknown>} restore  ce qu'il faut faire pour le rendre
+   */
+  function notifyUndo(message, restore) {
+    return notify(message, 'info', {
+      duration: 8000,
+      action: { label: 'Annuler', run: restore },
+    })
   }
 
   function dismiss(id) {
@@ -139,6 +168,7 @@ export const useUiStore = defineStore('ui', () => {
     restoreSound,
     toggleSidebar,
     notify,
+    notifyUndo,
     dismiss,
   }
 })
