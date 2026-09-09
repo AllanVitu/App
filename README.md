@@ -2,8 +2,8 @@
 
 Application SaaS complète : authentification (avec vérification d'adresse et
 mot de passe oublié), tableau de bord, cinq modules métier, profil et
-paramètres. Interface « poste de travail », animations GSAP, suite de tests
-et intégration continue.
+paramètres, recherche transverse. Interface « poste de travail » à colonnes,
+animations anime.js, suite de tests et intégration continue.
 
 ## Les modules
 
@@ -12,13 +12,13 @@ Les cinq modules ont chacun leur modèle de données, leurs endpoints et leur
 utile JSONB) demeure comme REPLI : un module ajouté en base sans code dédié
 apparaît dans le menu et dispose aussitôt d'un écran, en attendant le sien.
 
-| Module        | Tables                              | Ce que l'écran fait                                    |
-| ------------- | ----------------------------------- | ------------------------------------------------------ |
-| `backend`     | `backend_tables`, `backend_api_keys` | Schémas de données, colonnes typées, clés d'API         |
-| `deploiement` | `deployments`                        | Déploiements Git, journaux, relance                     |
-| `tickets`     | `tickets`, `ticket_counters`         | Suivi clavier-first, priorités, cycle de vie            |
-| `supervision` | `error_groups`, `error_events`       | Erreurs groupées, piles d'appels, courbe sur 14 jours   |
-| `design`      | `design_files`, `design_versions`    | Fichiers et historique de versions                      |
+| Module        | Tables                               | Ce que l'écran fait                                   |
+| ------------- | ------------------------------------ | ----------------------------------------------------- |
+| `backend`     | `backend_tables`, `backend_api_keys` | Schémas de données, colonnes typées, clés d'API       |
+| `deploiement` | `deployments`                        | Déploiements Git, journaux, relance                   |
+| `tickets`     | `tickets`, `ticket_counters`         | Suivi clavier-first, priorités, cycle de vie          |
+| `supervision` | `error_groups`, `error_events`       | Erreurs groupées, piles d'appels, courbe sur 14 jours |
+| `design`      | `design_files`, `design_versions`    | Fichiers et historique de versions                    |
 
 Deux services font converger le tout sans que le client connaisse le métier
 d'aucun module : `ModuleMetrics` décide de ce que signifie le chiffre de
@@ -42,13 +42,13 @@ cp .env.example .env      # puis adapter les secrets
 docker compose up -d --build
 ```
 
-| Service        | URL                                                              |
-|----------------|------------------------------------------------------------------|
-| Client Vue     | http://localhost:5173                                            |
-| API PHP        | http://localhost:8080/api                                        |
-| Santé API      | http://localhost:8080/api/health                                 |
-| Mailpit        | http://localhost:8025 — tous les e-mails sortants                |
-| Adminer (opt.) | http://localhost:8081 — `docker compose --profile tools up -d`   |
+| Service        | URL                                                            |
+| -------------- | -------------------------------------------------------------- |
+| Client Vue     | http://localhost:5173                                          |
+| API PHP        | http://localhost:8080/api                                      |
+| Santé API      | http://localhost:8080/api/health                               |
+| Mailpit        | http://localhost:8025 — tous les e-mails sortants              |
+| Adminer (opt.) | http://localhost:8081 — `docker compose --profile tools up -d` |
 
 **Compte de démonstration :** `demo@saas.local` / `Password123!`
 
@@ -65,22 +65,25 @@ App/
 │   ├── src/
 │   │   ├── Config/Env.php      # accès typé aux variables d'environnement
 │   │   ├── Core/               # Router, Request, Response, Database, Validator
-│   │   ├── Middleware/         # CorsMiddleware, AuthMiddleware
-│   │   ├── Services/           # Jwt, RefreshToken, UserToken, Throttle, Mailer
-│   │   ├── Models/             # dépôts PDO (requêtes préparées)
-│   │   └── Controllers/        # Auth, Account, Dashboard, Module, Item, Profile, Settings
+│   │   ├── Middleware/         # Cors, Auth, Ingest (clés d'API)
+│   │   ├── Services/           # Jwt, RefreshToken, UserToken, Throttle, Mailer,
+│   │   │                       #   SchemaBuilder, Search, ModuleMetrics, AttentionFeed
+│   │   ├── Models/             # 9 dépôts PDO (requêtes préparées)
+│   │   └── Controllers/        # 15 : un par domaine, plus Health et Search
 │   ├── tests/                  # PHPUnit : unit + integration
 │   └── database/
 │       ├── init/               # schéma, joué à la création du volume
 │       └── seeds/              # jeux de données, choisis par DB_SEED
 ├── e2e/                        # Playwright — hors conteneur
 └── front/                      # client Vue 3
+    ├── tests/                  # Vitest — hors de src/
+    ├── scripts/check-chunks.mjs # garde-fou : ce que le chemin public importe
     └── src/
-        ├── animations/         # gsap.js (plugins, courbes) + PLAN.md
-        ├── tests/              # Vitest : formatage, intercepteur HTTP
-        ├── composables/        # useGsap : équivalent Vue de useGSAP
-        ├── router/ stores/ services/ layouts/ components/ views/
-        └── utils/format.js
+        ├── animations/         # motion.js (tronc commun), layout.js, reveal.js + PLAN.md
+        ├── composables/        # drag, gestes, file d'écritures, raccourcis, pagination
+        ├── components/board/   # BoardColumns : le tableau partagé par les cinq modules
+        ├── router/ stores/ services/ layouts/ views/
+        └── utils/              # format (fuseau), modules, text, tickets
 ```
 
 L'API n'a **aucune dépendance tierce** : autoload PSR-4 maison, JWT signé à la
@@ -89,35 +92,84 @@ nécessaire pour démarrer.
 
 ## Endpoints
 
-| Méthode | Route                         | Auth | Rôle                                   |
-|---------|-------------------------------|:----:|----------------------------------------|
-| GET     | `/api/health`                 |      | Sonde de disponibilité                 |
-| POST    | `/api/auth/register`          |      | Inscription (+ e-mail de confirmation) |
-| POST    | `/api/auth/login`             |      | Connexion                              |
-| POST    | `/api/auth/refresh`           |      | Rotation du jeton via cookie HttpOnly  |
-| POST    | `/api/auth/logout`            |      | Révocation de la session               |
-| POST    | `/api/auth/email/verify`      |      | Confirmation d'adresse (jeton e-mail)  |
-| POST    | `/api/auth/password/forgot`   |      | Demande de réinitialisation            |
-| POST    | `/api/auth/password/reset`    |      | Nouveau mot de passe (jeton e-mail)    |
-| POST    | `/api/auth/email/resend`      |  ✓   | Renvoi du lien de confirmation         |
-| GET     | `/api/auth/me`                |  ✓   | Utilisateur + préférences              |
-| GET     | `/api/dashboard`              |  ✓   | Alertes, état des modules, activité    |
-| GET     | `/api/modules`                |  ✓   | Modules accessibles, avec leur état    |
-| GET     | `/api/modules/{slug}`         |  ✓   | Détail d'un module                     |
-| GET     | `/api/modules/{slug}/items`   |  ✓   | Liste paginée, filtrable, triable      |
-| POST    | `/api/modules/{slug}/items`   |  ✓   | Création                               |
-| GET     | `/api/items/{id}`             |  ✓   | Détail                                 |
-| PUT     | `/api/items/{id}`             |  ✓   | Mise à jour partielle                  |
-| DELETE  | `/api/items/{id}`             |  ✓   | Suppression logique                    |
-| GET     | `/api/tickets`                |  ✓   | Liste + indicateurs, projets, étiquettes |
-| POST    | `/api/tickets`                |  ✓   | Création (numéro attribué par la base) |
-| GET     | `/api/tickets/{id}`           |  ✓   | Détail                                 |
-| PUT     | `/api/tickets/{id}`           |  ✓   | Mise à jour partielle                  |
-| DELETE  | `/api/tickets/{id}`           |  ✓   | Suppression logique                    |
-| GET/PUT | `/api/profile`                |  ✓   | Profil                                 |
-| PUT     | `/api/profile/password`       |  ✓   | Changement de mot de passe             |
-| DELETE  | `/api/profile`                |  ✓   | Suppression du compte                  |
-| GET/PUT | `/api/settings`               |  ✓   | Préférences                            |
+Toutes les routes sont déclarées dans [`back/routes/api.php`](back/routes/api.php).
+
+**Ouvertes**
+
+| Méthode | Route                       | Rôle                                   |
+| ------- | --------------------------- | -------------------------------------- |
+| GET     | `/api/health`               | Sonde de disponibilité                 |
+| POST    | `/api/auth/register`        | Inscription (+ e-mail de confirmation) |
+| POST    | `/api/auth/login`           | Connexion                              |
+| POST    | `/api/auth/refresh`         | Rotation du jeton via cookie HttpOnly  |
+| POST    | `/api/auth/logout`          | Révocation de la session               |
+| POST    | `/api/auth/email/verify`    | Confirmation d'adresse (jeton e-mail)  |
+| POST    | `/api/auth/password/forgot` | Demande de réinitialisation            |
+| POST    | `/api/auth/password/reset`  | Nouveau mot de passe (jeton e-mail)    |
+
+**Compte** — jeton d'accès requis
+
+| Méthode | Route                    | Rôle                                |
+| ------- | ------------------------ | ----------------------------------- |
+| GET     | `/api/auth/me`           | Utilisateur + préférences           |
+| POST    | `/api/auth/email/resend` | Renvoi du lien de confirmation      |
+| GET/PUT | `/api/profile`           | Profil                              |
+| PUT     | `/api/profile/password`  | Changement de mot de passe          |
+| DELETE  | `/api/profile`           | Suppression du compte               |
+| GET/PUT | `/api/settings`          | Préférences (thème, fuseau, langue) |
+| GET     | `/api/dashboard`         | Alertes, état des modules, activité |
+| GET     | `/api/search`            | Recherche dans les cinq modules     |
+
+**Modules** — le catalogue, et le repli générique `module_items`
+
+| Méthode        | Route                       | Rôle                                |
+| -------------- | --------------------------- | ----------------------------------- |
+| GET            | `/api/modules`              | Modules accessibles, avec état      |
+| GET            | `/api/modules/{slug}`       | Détail d'un module                  |
+| GET/POST       | `/api/modules/{slug}/items` | Liste paginée, filtrable ; création |
+| GET/PUT/DELETE | `/api/items/{id}`           | Détail, mise à jour, suppression    |
+
+**Les cinq modèles propres** — même forme partout : liste, création, détail,
+mise à jour partielle, suppression logique.
+
+| Méthode        | Route                             | Particularité                               |
+| -------------- | --------------------------------- | ------------------------------------------- |
+| GET/POST       | `/api/tickets`                    | Numéro attribué par la base                 |
+| GET/PUT/DELETE | `/api/tickets/{id}`               | Indicateurs, projets, étiquettes            |
+| GET/POST       | `/api/backend/tables`             | Renvoie AUSSI les clés d'API (§ ci-dessous) |
+| GET/PUT/DELETE | `/api/backend/tables/{id}`        | La structure suit en PostgreSQL             |
+| GET/POST       | `/api/deployments`                | Empreinte de commit validée                 |
+| GET/PUT/DELETE | `/api/deployments/{id}`           | Durée effacée par la base à la relance      |
+| GET/POST       | `/api/errors`                     | Groupées par empreinte                      |
+| GET/PUT/DELETE | `/api/errors/{id}`                | Occurrences agrégées par la base            |
+| GET/POST       | `/api/design/files`               |                                             |
+| GET/PUT/DELETE | `/api/design/files/{id}`          |                                             |
+| POST           | `/api/design/files/{id}/versions` | Ajoute, n'écrase jamais                     |
+
+**Clés d'API et données ingérées** — le module `backend`
+
+| Méthode | Route                            | Auth                                   |
+| ------- | -------------------------------- | -------------------------------------- |
+| POST    | `/api/backend/keys`              | Session                                |
+| DELETE  | `/api/backend/keys/{id}`         | Session                                |
+| GET     | `/api/backend/data/{table}`      | Session **ou** clé `sk_`/`pk_`         |
+| POST    | `/api/backend/data/{table}`      | Session **ou** clé de portée `service` |
+| DELETE  | `/api/backend/data/{table}/{id}` | Session **ou** clé de portée `service` |
+
+Trois choix qui se remarquent en lisant cette liste :
+
+- **Pas de `GET /api/backend/keys`.** Les clés arrivent avec
+  `GET /api/backend/tables`, dans la même réponse : l'écran affiche les deux
+  ensemble, un second aller-retour n'apporterait rien.
+- **Aucun `PUT` sur les données ingérées.** On peut lire, ajouter, supprimer —
+  pas modifier. Une ligne ingérée est un FAIT daté, pas un brouillon ; la
+  corriger effacerait ce qui a été observé.
+- **Les suppressions sont logiques** — un `deleted_at` posé, jamais de ligne
+  perdue. Sauf dans le module `backend`, et de façon dissymétrique : supprimer
+  une table garde sa DESCRIPTION marquée effacée, mais la table PostgreSQL
+  correspondante et ses lignes sont réellement détruites. Conserver des données
+  devenues inatteignables coûterait de l'espace en laissant croire qu'on peut
+  revenir en arrière. L'écran demande confirmation pour cette raison seule.
 
 Réponses : `{ "data": … }` en succès (avec `meta` pour la pagination),
 `{ "message": …, "errors": { champ: message } }` en erreur.
@@ -147,33 +199,39 @@ Réponses : `{ "data": … }` en succès (avec `meta` pour la pagination),
 
 Le compte de démo vit dans `back/database/seeds/dev.sql`, **hors** du dossier
 d'initialisation : rien n'est chargé du seul fait de sa présence dans le dépôt.
-`init/03_seed.sh` choisit le fichier via `DB_SEED` (`dev.sql` ou `none.sql`),
+`init/09_seed.sh` choisit le fichier via `DB_SEED` (`dev.sql` ou `none.sql`),
 et `dev.sql` refuse en plus de s'exécuter si `APP_ENV=production`.
 
 ## Animations
 
-GSAP 3.15, tous les plugins sous licence gratuite. Le plan complet — quel
-plugin, à quel endroit, et pourquoi certains sont volontairement écartés — est
-dans [`front/src/animations/PLAN.md`](front/src/animations/PLAN.md).
+**anime.js 4.5, et lui seul.** Le front en a utilisé deux — anime.js pour les
+écrans publics, GSAP pour l'application — avec une frontière que rien ne
+faisait respecter : un seul composant partagé important GSAP suffisait à le
+ramener dans le chemin de connexion, sans erreur pour le signaler. anime.js 4.5
+couvrant nativement les quatre plugins pour lesquels GSAP avait été retenu, la
+frontière a été supprimée avec lui. Le détail — quel plugin, remplacé par quoi,
+et les pièges de la traduction — est dans
+[`front/src/animations/PLAN.md`](front/src/animations/PLAN.md).
 
-Points saillants : `Flip` pour le rejeu de mise en page au filtrage,
-`MorphSVG` pour la bascule de thème, `SplitText` pour les titres, `Draggable`
-+ `Inertia` pour le tiroir mobile, `DrawSVG` + `Physics2D` pour les écrans de
-confirmation. `prefers-reduced-motion` est respecté globalement.
+Le moteur est servi en trois morceaux, pour que l'écran de connexion ne
+télécharge que ce qu'il anime :
 
-`@gsap/react` n'est pas utilisable en Vue : l'équivalent est le composable
-[`useGsap`](front/src/composables/useGsap.js).
+| Fichier                | Contenu                                    | Chargé par       |
+| ---------------------- | ------------------------------------------ | ---------------- |
+| `animations/motion.js` | tronc commun : durées, courbes, `settle()` | tout le monde    |
+| `animations/layout.js` | `createLayout` (rejeu de mise en page)     | l'application    |
+| `animations/reveal.js` | IntersectionObserver, sans dépendance      | les écrans longs |
 
-Le décor animé est [`TechnicalDiagram.vue`](front/src/components/TechnicalDiagram.vue) :
-orbites et couronne graduée tracées au canvas, sans dépendance. Il a remplacé
-un dégradé WebGL coloré, incompatible avec la direction monochrome retenue.
-Le rendu est suspendu hors écran et onglet masqué.
+Cette séparation n'est pas tenue à la main : `npm run check:chunks` calcule ce
+que le chemin de connexion importe VRAIMENT et échoue s'il y trouve `layout`
+ou `svg`. Le garde-fou a été validé en enfreignant la règle exprès.
 
-**Coût mesuré** : GSAP pèse 236 Ko (92 Ko gzip), isolé dans son propre chunk.
-C'est plus que Vue + Router + Pinia + axios réunis. Retirer un plugin =
-supprimer son import dans `animations/gsap.js`.
+**Deux pièges consignés**, tous deux rencontrés :
 
-## Déploiement
+- anime.js compte en **millisecondes** là où GSAP comptait en secondes ;
+- ses animations partent d'un `[depuis, vers]` explicite, donc
+  `prefers-reduced-motion` doit **poser l'état final** (`settle()`) et non
+  sauter l'animation — sinon l'élément reste dans son état de départ.## Déploiement
 
 ```bash
 cp .env.production.example .env.production   # renseigner les variables
@@ -203,12 +261,18 @@ docker compose exec node npm run check   # ESLint + Prettier + Vitest + build
 cd e2e && npm test                       # parcours navigateur (Playwright)
 ```
 
-| Suite | Portée | Volume |
-|---|---|---|
-| PHPUnit `unit` | Jetons JWT, validation — sans base | 7 tests |
-| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel | 36 tests |
-| Vitest | Formatage des dates, intercepteur HTTP | 17 tests |
-| Playwright | Parcours complets dans Chromium | 16 tests |
+| Suite                 | Portée                                    | Volume   |
+| --------------------- | ----------------------------------------- | -------- |
+| PHPUnit `unit`        | Jetons JWT — sans base                    | 7 tests  |
+| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel     | 94 tests |
+| Vitest                | Formatage, intercepteur HTTP, composables | 42 tests |
+| Playwright            | Parcours complets dans Chromium           | 42 tests |
+
+Les composables portent l'essentiel de la logique du client : file
+d'écritures, glisser-déposer, raccourcis, pagination. Ils sont testés
+directement, pas seulement à travers un parcours navigateur — un délai de
+1,2 seconde ou un écouteur oublié au démontage se vérifient en millisecondes
+sous Vitest, et coûteraient une minute à Playwright.
 
 Les tests d'intégration traversent `App\Core\Kernel` — le même point d'entrée
 que `public/index.php`. Un test empruntant un chemin parallèle ne dirait rien
@@ -231,6 +295,12 @@ Poste de travail : une seule famille typographique (Source Code Pro), fond
 papier chaud, panneaux délimités par des filets, angles vifs. La hiérarchie
 passe par la graisse et l'échelle ; la couleur est réservée au sens — mousse
 pour l'actif, ocre pour l'archivé, brique pour le danger.
+
+Les cinq modules, comme le tableau de bord, s'organisent en **colonnes par
+statut** : un seul composant, [`BoardColumns.vue`](front/src/components/board/BoardColumns.vue),
+avec un réglage par domaine. Le glisser-déposer y est facultatif — un
+déploiement ne se glisse pas d'« en échec » vers « en ligne », parce qu'un
+déploiement est un fait constaté et non un état qu'on décide.
 
 Les jetons vivent dans [`front/src/assets/css/main.css`](front/src/assets/css/main.css) :
 modifier une variable `--c-*` recolore toute l'application, thème sombre
