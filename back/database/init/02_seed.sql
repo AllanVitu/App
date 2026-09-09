@@ -46,7 +46,10 @@ INSERT INTO modules (slug, name, description, icon, position) VALUES
     (
         'supervision',
         'Supervision',
-        'Erreurs de production avec pile d''appels et rejeu de session : le diagnostic arrive avant le signalement.',
+        -- « rejeu de session » a été retiré de cette description : la fonction
+        -- n'existe pas et n'est pas prévue. Une promesse qu'on ne tient pas
+        -- coûte plus cher que la fonction qu'elle annonce.
+        'Erreurs de production groupées par empreinte, avec pile d''appels et compteur d''occurrences : mille fois la même exception reste un seul problème.',
         'bug',
         40
     ),

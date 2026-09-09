@@ -34,10 +34,19 @@ const THEMES = [
   { value: 'system', label: 'Système', icon: 'monitor' },
 ]
 
-const LANGUAGES = [
-  { value: 'fr', label: 'Français' },
-  { value: 'en', label: 'English' },
-]
+/**
+ * UNE SEULE LANGUE, parce qu'il n'y en a qu'une.
+ *
+ * « English » figurait ici et ne traduisait rien : l'interface n'existe qu'en
+ * français, des libellés jusqu'aux messages d'erreur du serveur. Un choix qui
+ * ne change rien est une promesse creuse — exactement ce que cette phase a
+ * corrigé partout ailleurs.
+ *
+ * Le champ RESTE dans l'API et en base : il est validé, testé, et servira le
+ * jour où les traductions existeront. C'est le CHOIX qu'on retire, pas la
+ * possibilité.
+ */
+const LANGUAGES = [{ value: 'fr', label: 'Français' }]
 
 // Sous-ensemble courant ; l'API valide contre la liste complète des fuseaux PHP.
 const TIMEZONES = [
@@ -49,20 +58,6 @@ const TIMEZONES = [
   'America/Montreal',
   'America/New_York',
   'UTC',
-]
-
-const NOTIFICATIONS = [
-  {
-    key: 'email',
-    label: 'Notifications par e-mail',
-    hint: 'Alertes sur les échéances et les modifications.',
-  },
-  { key: 'push', label: 'Notifications push', hint: 'Messages instantanés dans le navigateur.' },
-  {
-    key: 'weekly_digest',
-    label: 'Résumé hebdomadaire',
-    hint: 'Un récapitulatif de votre activité chaque lundi.',
-  },
 ]
 
 function hydrate(settings) {
@@ -164,13 +159,8 @@ onMounted(async () => {
                 {{ lang.label }}
               </option>
             </select>
-            <!-- Dit franchement ce que ce réglage fait AUJOURD'HUI. L'interface
-                 n'existe qu'en français : laisser croire qu'elle bascule en
-                 anglais serait exactement le genre de promesse creuse que ce
-                 projet corrige ailleurs. La préférence est bien enregistrée —
-                 elle servira quand les traductions existeront. -->
             <p class="mt-1.5 text-xs text-ink-3">
-              Enregistrée pour plus tard : l'interface n'est traduite qu'en français.
+              L'interface n'existe qu'en français pour l'instant.
             </p>
             <p v-if="errors.language" class="mt-1.5 text-xs text-brick">{{ errors.language }}</p>
           </div>
@@ -192,44 +182,25 @@ onMounted(async () => {
       <section class="card p-6">
         <h3 class="text-base font-semibold">Notifications</h3>
 
-        <!-- Ces trois préférences sont enregistrées mais rien ne les consomme
-             encore : l'envoi périodique demande un ordonnanceur côté serveur,
-             et le push demande un service worker. Aucun des deux n'existe dans
-             cette pile. Le dire vaut mieux que trois interrupteurs qui donnent
-             le sentiment d'agir. -->
-        <p class="mt-1.5 text-[0.8rem] text-ink-3">
-          Vos choix sont conservés. Aucun envoi n'est encore effectué : cela demande un ordonnanceur
-          côté serveur, qui n'est pas en place.
+        <!-- LES TROIS INTERRUPTEURS ONT ÉTÉ RETIRÉS, pas cachés.
+             Ils étaient enregistrés et consommés par personne : l'envoi
+             périodique demande un ordonnanceur côté serveur, le push un
+             service worker, et cette pile n'a ni l'un ni l'autre. Trois
+             boutons qui donnent le sentiment d'agir sans rien déclencher
+             valent moins qu'une phrase qui dit où on en est.
+             La préférence reste en base et dans l'API : c'est le CONTRÔLE
+             qu'on retire, pas la possibilité. -->
+        <p class="mt-1.5 text-[0.84rem] text-ink-2">
+          Aucune notification n'est envoyée pour l'instant. L'envoi périodique demande un
+          ordonnanceur côté serveur, qui ne fait pas partie de cette installation — les réglages
+          reviendront le jour où il y aura quelque chose à régler.
         </p>
 
-        <div class="mt-4 divide-y divide-line">
-          <label
-            v-for="option in NOTIFICATIONS"
-            :key="option.key"
-            class="flex cursor-pointer items-center justify-between gap-4 py-4"
-          >
-            <span class="min-w-0">
-              <span class="block text-sm font-medium">{{ option.label }}</span>
-              <span class="mt-0.5 block text-sm text-ink-2">{{ option.hint }}</span>
-            </span>
-
-            <!-- Interrupteur : la case native reste présente (accessibilité
-                 clavier et lecteurs d'écran), seule sa présentation change. -->
-            <span class="relative inline-flex shrink-0">
-              <input
-                v-model="form.notifications[option.key]"
-                type="checkbox"
-                class="peer sr-only"
-              />
-              <span
-                class="block h-5 w-9 border border-line bg-raised transition-colors peer-checked:border-ink peer-checked:bg-ink peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink"
-              />
-              <span
-                class="pointer-events-none absolute left-[3px] top-[3px] size-3.5 bg-ink transition-transform peer-checked:translate-x-4 peer-checked:bg-paper"
-              />
-            </span>
-          </label>
-        </div>
+        <p class="mt-3 flex items-start gap-2 text-[0.8rem] text-ink-3">
+          <AppIcon name="info" :size="14" class="mt-0.5 shrink-0" />
+          Ce que l'application signale déjà, elle le fait à l'écran : « demande attention » sur
+          l'accueil, et les compteurs de chaque module.
+        </p>
       </section>
 
       <div class="flex justify-end">
