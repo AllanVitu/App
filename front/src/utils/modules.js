@@ -14,3 +14,41 @@
  * façon dans les deux cas.
  */
 export const modulePath = (slug) => `/modules/${slug}`
+
+/**
+ * La couleur de ligne d'un module.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │  ELLE DIT OÙ ON EST, JAMAIS COMMENT ÇA VA                           │
+ * │                                                                     │
+ * │  L'application a déjà trois couleurs pour l'état — ok, attente,     │
+ * │  danger. En ajouter cinq pour l'identité, sans règle, reviendrait à │
+ * │  parler deux langues avec le même vocabulaire.                      │
+ * │                                                                     │
+ * │  La règle est une règle de FORME, et elle est tenue ici : ces       │
+ * │  classes ne produisent que des FONDS. Aucune ne colore du texte.    │
+ * │  L'état, lui, ne colore que du texte et des points, jamais un       │
+ * │  aplat. Deux formes qui ne se croisent pas ne se confondent pas.    │
+ * └─────────────────────────────────────────────────────────────────────┘
+ *
+ * Les classes sont écrites EN TOUTES LETTRES et non composées à la volée :
+ * Tailwind lit les sources pour savoir quoi générer, et ne trouverait jamais
+ * une classe assemblée par concaténation.
+ */
+const LIGNES = {
+  backend: 'bg-mod-backend',
+  deploiement: 'bg-mod-deploiement',
+  tickets: 'bg-mod-tickets',
+  supervision: 'bg-mod-supervision',
+  design: 'bg-mod-design',
+}
+
+/**
+ * Repli sur l'encre pour un module ajouté en base sans teinte attribuée :
+ * il reste repérable, sans emprunter la couleur d'un autre — deux modules de
+ * la même couleur seraient pires que pas de couleur du tout.
+ *
+ * @param {string} slug
+ * @returns {string} une classe de FOND, à poser sur un bloc
+ */
+export const moduleLine = (slug) => LIGNES[slug] ?? 'bg-ink-3'

@@ -210,6 +210,44 @@ for (const [theme, t] of Object.entries(jetons(readFileSync(CSS, 'utf8')))) {
     )
   }
 
+  // LES CINQ LIGNES DE MODULE.
+  //
+  // Elles n'apparaissent QU'EN BLOC PLEIN (voir la règle de forme dans
+  // main.css), jamais en texte : 3:1 de composant non textuel suffit donc,
+  // et il faut les vérifier sur les DEUX fonds, parce qu'une barre de menu
+  // et un bandeau d'en-tête ne reposent pas sur la même surface.
+  //
+  // Mais surtout : elles forment un JEU. Une couleur de ligne ne vaut que si
+  // on la distingue des quatre autres — c'est tout l'intérêt du dispositif.
+  // Dix paires à mesurer, et une seule qui manque suffit à ce que deux
+  // modules se ressemblent.
+  const lignesModule = Object.keys(t).filter((nom) => nom.startsWith('mod-'))
+
+  for (const ligne of lignesModule) {
+    for (const fond of ['panel', 'paper']) {
+      exiger(
+        contraste(t[ligne], t[fond]) >= APLAT,
+        `${ligne} sur ${fond}`,
+        contraste(t[ligne], t[fond]),
+        APLAT,
+      )
+    }
+  }
+
+  for (let i = 0; i < lignesModule.length; i += 1) {
+    for (let j = i + 1; j < lignesModule.length; j += 1) {
+      const ecart = deltaE(lineaire(t[lignesModule[i]]), lineaire(t[lignesModule[j]]))
+
+      exiger(
+        ecart >= ECART_NORMAL,
+        `${lignesModule[i]} / ${lignesModule[j]}`,
+        ecart,
+        ECART_NORMAL,
+        ' ΔE',
+      )
+    }
+  }
+
   const [un, deux] = [lineaire(t['chart-1']), lineaire(t['chart-2'])]
 
   exiger(

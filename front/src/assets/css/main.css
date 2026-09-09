@@ -1,154 +1,165 @@
 @import 'tailwindcss';
 
 /* ===========================================================================
-   Direction visuelle : SIGNAL
+   Direction visuelle : SIGNALÉTIQUE
    ---------------------------------------------------------------------------
-   Ce que cette application fait, au fond : dire ce qui ne va pas. Cinq
-   modules qui surveillent des déploiements, des erreurs, des tickets — et un
-   accueil dont la première section s'appelle « demande attention ».
+   La langue des plans de transport. Elle n'a pas été inventée pour être jolie
+   mais pour qu'on trouve son chemin dans une information dense, vite, sans
+   tout lire — ce que cinq modules d'exploitation demandent exactement.
 
-   La direction précédente disait l'inverse. « Rien ne claque : la couleur
-   situe, elle n'interpelle pas » — pastel délavé, blanc cassé chaud, coins à
-   20 px. Un carnet de notes posé sur un bureau. C'est beau et c'est calme, et
-   c'est exactement ce qu'une console d'exploitation ne doit pas être : quand
-   tout a la même voix, rien ne s'entend.
+   Elle tient en quatre dispositifs, tous empruntés à la même source.
 
-   D'où le renversement, en quatre gestes.
+   1. UNE COULEUR PAR LIGNE. Chaque module reçoit sa teinte, comme une ligne
+      de métro : le menu, l'en-tête de l'écran et le fil d'ariane la portent.
+      Elle ne dit pas ce qui va bien ou mal — elle dit OÙ ON EST.
 
-   1. LA SURFACE RECULE. Fonds froids et profonds — un écran, pas du papier.
-      Le gris tire vers le bleu, jamais vers le beige : le chaud avance, et on
-      veut que le fond disparaisse.
+   2. DES BLOCS FRANCS. Aplats pleins, arêtes nettes, aucun dégradé. Un
+      panneau émaillé n'a pas de profondeur : il est peint. L'échelle
+      d'élévation de la direction précédente disparaît, sauf pour ce qui
+      passe réellement PAR-DESSUS le reste.
 
-   2. L'ÉTAT AVANCE. La sémantique cesse d'être pastel. Vert franc, ambre,
-      corail : des signaux, lisibles d'un coup d'œil à trois mètres. La
-      couleur ne décore RIEN dans cette application — elle ne dit qu'une
-      chose : où en est ce que tu regardes.
+   3. UN GROTESQUE SERRÉ. Archivo, à graisse et à CHASSE variables. La
+      signalétique se compose serré et gras ; les libellés se condensent, les
+      titres s'épaississent. La hiérarchie ne coûte pas un point de corps.
 
-   3. DES PLAQUES, PAS DES COUSSINS. 20 px de rayon → 6. Un panneau devient
-      une plaque posée, à l'arête nette.
+   4. DES PICTOGRAMMES QUI PORTENT. L'icône n'accompagne pas le mot, elle le
+      devance : c'est elle qu'on voit d'abord.
 
-      La forme dit désormais la nature, et la règle n'a que deux entrées.
-      GÉLULE = JETON : pastille de filtre, étiquette, point de statut — de
-      petits objets qu'on lit ou qu'on bascule. PLAQUE = SURFACE ET ACTION :
-      panneaux, cartes, champs, et les boutons, qui étaient des gélules et ne
-      le sont plus. Un bouton rond au milieu de plaques carrées se lit comme
-      un jeton, c'est-à-dire comme quelque chose de moins important qu'il
-      n'est.
+   ---------------------------------------------------------------------------
+   LA RÈGLE QUI EMPÊCHE LES DEUX VOCABULAIRES DE SE MARCHER DESSUS
 
-   4. LA LUMIÈRE VIENT DE QUELQUE PART. Une échelle d'élévation apparaît. Ce
-      qui flotte réellement au-dessus du reste — fenêtres, palette, menus —
-      porte une ombre et une arête haute éclairée. Ce qui est posé à plat n'a
-      qu'un filet. Le plan de l'interface devient lisible sans y penser.
+   Une signalétique introduit cinq couleurs de plus dans une interface qui en
+   avait déjà trois pour dire l'état. Sans règle, « violet » et « rouge »
+   deviennent deux mots de la même phrase et on ne sait plus lequel parle.
+
+   La règle est une règle de FORME, pas de teinte :
+
+       LA COULEUR DE LIGNE N'EXISTE QU'EN BLOC PLEIN.
+       Une barre, un pavé, un bandeau. JAMAIS du texte, jamais un point.
+
+       LA COULEUR D'ÉTAT N'EXISTE QU'EN TEXTE ET EN POINTS.
+       JAMAIS un aplat, jamais une barre.
+
+   Deux formes qui ne se rencontrent pas peuvent porter la même teinte sans
+   jamais se confondre. Et cette règle a un effet de bord heureux : une
+   couleur de ligne n'ayant jamais à porter de texte, elle n'a plus besoin de
+   tenir 4,5:1 — 3:1 de composant non textuel suffit, ce qui libère assez de
+   saturation pour qu'elle ressemble enfin à une couleur de ligne.
+
+   Les cinq teintes restent malgré tout cantonnées à l'arc froid, du cyan au
+   rose : aucune ne s'approche du vert, de l'ambre ni du rouge. La discipline
+   de forme est une ceinture ; l'arc froid en est les bretelles.
+
+   ---------------------------------------------------------------------------
+   L'ANNEAU DE FOCUS N'A PAS DE TEINTE
+
+   Dans une interface où chaque couleur désigne une ligne ou un état, un
+   anneau coloré prétendrait dire quelque chose. Il prend donc l'encre :
+   contraste maximal, présent partout, signifiant nulle part.
 
    ---------------------------------------------------------------------------
    TROIS RÔLES DE COULEUR, à ne jamais confondre.
 
-   1. SURFACES ET ENCRES (--c-paper, --c-panel, --c-ink…) : neutres froids.
+   1. SURFACES ET ENCRES (--c-paper, --c-panel, --c-ink…) : neutres.
 
    2. SÉMANTIQUE (--c-moss, --c-ochre, --c-brick) : réussi, en attente, en
-      échec. Les noms sont HISTORIQUES — mousse, ocre, brique venaient de la
-      direction pastel et ne décrivent plus les teintes. Ce sont des RÔLES ;
-      les renommer coûterait 141 remplacements dans vingt fichiers pour ne
-      rien changer à l'écran. Lisez-les « ok », « attente », « danger ».
+      échec. Les noms sont HISTORIQUES — ils venaient d'une direction pastel
+      et ne décrivent plus les teintes. Ce sont des RÔLES ; les renommer
+      coûterait 141 remplacements dans vingt fichiers pour ne rien changer à
+      l'écran. Lisez-les « ok », « attente », « danger ».
 
-   3. MARQUES DE GRAPHIQUE (--c-chart-*) : des aplats, pas du texte. Elles
-      obéissent à des règles à elles — chroma plancher, écart mesuré sous
-      dichromatisme — parce qu'un graphique ne se lit pas, il se compare.
+   3. LIGNES DE MODULE (--c-mod-*) : l'identité, jamais l'état.
+
+   Et à part, les MARQUES DE GRAPHIQUE (--c-chart-*), qui obéissent à des
+   règles à elles : un graphique ne se lit pas, il se compare.
 
    ---------------------------------------------------------------------------
-   TOUT CE QUI SUIT EST VÉRIFIÉ PAR « npm run check:contrast ».
-
-   Le script lit ces jetons, calcule les rapports de luminance sur CHACUN des
-   fonds où la couleur se pose réellement, et refuse la chaîne en dessous des
-   seuils. Il a trouvé cinq manquements dans la palette précédente, dont le
-   texte des pastilles « réussi » à 4,11:1 sur sa propre teinte : personne ne
-   les avait vus en deux refontes, parce que personne ne les avait mesurés.
+   TOUT CECI EST VÉRIFIÉ PAR « npm run check:contrast » : rapports de
+   luminance sur chaque fond réel, chroma OKLCH, écart ΔE sous les trois
+   dichromatismes, et séparation mutuelle des cinq lignes.
 
    Le sombre reste porté par « :root » et le clair par « .light ».
 =========================================================================== */
 
-/* --- Sombre : la référence ------------------------------------------------ */
+/* --- Sombre : le panneau éclairé de nuit ---------------------------------- */
 :root {
-  --c-paper: #0b0d11; /* le fond, les gouttières — froid et profond */
-  --c-panel: #12151b; /* les plaques */
-  --c-raised: #1a1e26; /* champs, survol — c'est ici que les encres sont le plus fragiles */
+  --c-paper: #0a0a0c;
+  --c-panel: #131316;
+  --c-raised: #1d1d21;
 
-  --c-ink: #eaeef5;
-  --c-ink-2: #aeb7c6;
-  --c-ink-3: #949eae;
+  --c-ink: #f2f2f4;
+  --c-ink-2: #b4b4bd;
+  --c-ink-3: #97979f;
 
-  --c-line: #232833;
-  --c-line-2: #333a47;
+  --c-line: #26262b;
+  --c-line-2: #3a3a41;
 
-  /* Sémantique : des signaux, pas des teintes. */
-  --c-moss: #45d49b; /* ok, actif, réussi */
-  --c-moss-bg: #0d2620;
-  --c-ochre: #f5b83d; /* en attente, archivé */
-  --c-ochre-bg: #2a2009;
-  --c-brick: #ff7a6e; /* danger, échec */
-  --c-brick-bg: #2c1214;
+  /* Sémantique — en TEXTE et en points, donc 4,5:1 exigés. */
+  --c-moss: #2fd18a;
+  --c-moss-bg: #0b2419;
+  --c-ochre: #ffbe2e;
+  --c-ochre-bg: #2b2005;
+  --c-brick: #ff5f52;
+  --c-brick-bg: #2e1210;
+
+  /* LES CINQ LIGNES — en BLOC uniquement, donc 3:1 suffisent.
+     Un arc froid, du cyan au rose : aucune ne longe le vert, l'ambre ou le
+     rouge de la sémantique. */
+  --c-mod-backend: #00c4cc;
+  --c-mod-deploiement: #3d8bff;
+  --c-mod-tickets: #8b5cf6;
+  --c-mod-supervision: #d946ef;
+  --c-mod-design: #f43f7f;
 
   /* Bleu contre orange : le seul couple qui reste franc sous les trois
      dichromatismes. Le rouge contre vert, qui vient spontanément à l'esprit,
      s'effondre pour un homme sur douze. */
-  --c-chart-1: #4d9dff;
-  --c-chart-2: #ff8a4c;
-  --c-chart-alert: #ff7a6e;
+  --c-chart-1: #38a3ff;
+  --c-chart-2: #ff8a3d;
+  --c-chart-alert: #ff5f52;
 
-  /* L'anneau de focus est un SIGNAL, pas un trait d'encre : il doit se voir
-     sur le panneau comme sur le champ, et ne ressembler à rien d'autre. */
-  --c-focus: #4d9dff;
-
-  /* Des plaques. La gélule reste ronde — sa forme dit « ça bascule ». */
+  /* Des panneaux peints : presque aucun rayon. La gélule reste ronde. */
   --r-pill: 999px;
-  --r-card: 6px;
-  --r-field: 5px;
+  --r-card: 3px;
+  --r-field: 3px;
 
-  /* Élévation. Sur un fond sombre, une ombre seule ne se voit pas : c'est
-     l'arête haute éclairée qui fait le relief, l'ombre ne fait que l'asseoir. */
-  --e-1: 0 1px 2px rgb(0 0 0 / 0.4);
-  --e-2: 0 4px 12px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(255 255 255 / 0.04);
-  --e-3: 0 18px 40px -12px rgb(0 0 0 / 0.65), inset 0 1px 0 rgb(255 255 255 / 0.06);
+  /* Une seule ombre, et elle est DURE — un panneau accroché devant un autre,
+     pas un nuage. Les plaques posées à plat n'en ont aucune. */
+  --e-over: 0 10px 0 -6px rgb(0 0 0 / 0.55), 0 24px 48px -20px rgb(0 0 0 / 0.8);
 }
 
-/* --- Clair : la même direction, retournée --------------------------------- */
+/* --- Clair : le même panneau, de jour ------------------------------------- */
 .light {
-  --c-paper: #eef1f5; /* gris froid : le plan du dessous */
-  --c-panel: #ffffff; /* la plaque est blanche, franche */
-  --c-raised: #eaeef3; /* le champ, creusé dans la plaque blanche */
+  --c-paper: #f0f0f2;
+  --c-panel: #ffffff;
+  --c-raised: #e9e9ec;
 
-  /* DEUX NIVEAUX DE TEXTE SECONDAIRE, ET UN CREUX ÉTROIT ENTRE EUX.
-     Les deux sont du texte, donc les deux doivent tenir 4,5:1 : impossible
-     d'avoir un « gris discret » très clair en thème clair sans sortir de la
-     norme. L'écart se joue donc sur vingt points par canal, mesurés, et non
-     sur une impression. */
-  --c-ink: #171a1f;
-  --c-ink-2: #4c5563;
-  --c-ink-3: #616b79;
+  --c-ink: #0d0d0f;
+  --c-ink-2: #4a4a52;
+  --c-ink-3: #5f5f68;
 
-  --c-line: #dde3ea;
-  --c-line-2: #c5cdd8;
+  --c-line: #dcdce0;
+  --c-line-2: #c2c2c8;
 
-  /* En clair, un signal se fait entendre en s'ASSOMBRISSANT. Le même vert
-     éclatant qu'en sombre disparaîtrait sur du blanc. */
-  --c-moss: #0f7048;
-  --c-moss-bg: #dcf2e6;
-  --c-ochre: #8a5300;
-  --c-ochre-bg: #fbebcd;
-  --c-brick: #bf1f18;
-  --c-brick-bg: #fce0dd;
+  /* En clair, un signal se fait entendre en s'ASSOMBRISSANT. */
+  --c-moss: #04713f;
+  --c-moss-bg: #d9f2e4;
+  --c-ochre: #8a5200;
+  --c-ochre-bg: #fbeacb;
+  --c-brick: #c2160c;
+  --c-brick-bg: #fde0dd;
 
-  --c-chart-1: #1f6fd0;
-  --c-chart-2: #cc4a12;
-  --c-chart-alert: #bf1f18;
+  --c-mod-backend: #007d8a;
+  --c-mod-deploiement: #1d5fd8;
+  --c-mod-tickets: #6d28d9;
+  --c-mod-supervision: #a21caf;
+  --c-mod-design: #c81e5b;
 
-  --c-focus: #1f6fd0;
+  --c-chart-1: #0a63c9;
+  --c-chart-2: #c9490e;
+  --c-chart-alert: #c2160c;
 
-  /* En clair l'ombre porte seule : pas d'arête éclairée sur une plaque
-     blanche, elle n'aurait rien à éclairer. */
-  --e-1: 0 1px 2px rgb(15 23 42 / 0.06);
-  --e-2: 0 4px 12px rgb(15 23 42 / 0.08);
-  --e-3: 0 18px 40px -12px rgb(15 23 42 / 0.18);
+  --e-over: 0 10px 0 -6px rgb(13 13 15 / 0.06), 0 24px 48px -20px rgb(13 13 15 / 0.25);
 }
 
 @theme {
@@ -167,25 +178,29 @@
   --color-ochre-bg: var(--c-ochre-bg);
   --color-brick: var(--c-brick);
   --color-brick-bg: var(--c-brick-bg);
+
+  --color-mod-backend: var(--c-mod-backend);
+  --color-mod-deploiement: var(--c-mod-deploiement);
+  --color-mod-tickets: var(--c-mod-tickets);
+  --color-mod-supervision: var(--c-mod-supervision);
+  --color-mod-design: var(--c-mod-design);
+
   --color-chart-1: var(--c-chart-1);
   --color-chart-2: var(--c-chart-2);
   --color-chart-alert: var(--c-chart-alert);
-  --color-focus: var(--c-focus);
 
   --radius-pill: var(--r-pill);
   --radius-card: var(--r-card);
   --radius-field: var(--r-field);
 
-  --shadow-e1: var(--e-1);
-  --shadow-e2: var(--e-2);
-  --shadow-e3: var(--e-3);
+  --shadow-over: var(--e-over);
 
-  /* Geist pour le texte, Geist Mono pour ce qui s'aligne en colonne :
-     empreintes de commit, durées, compteurs, journaux. Deux familles issues
-     du même dessin — aucune rupture quand les deux se côtoient sur une ligne.
-     La graisse est variable de 100 à 900, et cette refonte s'en sert : c'est
-     elle qui porte la hiérarchie, à la place de la taille. */
-  --font-sans: 'Geist', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  /* Archivo : un grotesque à graisse ET À CHASSE variables. La chasse sert
+     aux libellés en capitales, qui se condensent au lieu de s'allonger — la
+     solution qu'emploie toute signalétique quand le mot ne tient pas.
+     Geist Mono reste pour ce qui s'aligne en colonne : empreintes, durées,
+     compteurs, journaux. */
+  --font-sans: 'Archivo', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
 }
 
@@ -200,30 +215,29 @@
   body {
     background: var(--c-paper);
     color: var(--c-ink);
-    font-family: 'Geist', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+    font-family: 'Archivo', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
     font-size: 15px;
-    line-height: 1.5;
+    line-height: 1.45;
     -webkit-font-smoothing: antialiased;
   }
 
-  /* La hiérarchie passe par la GRAISSE, pas par la taille : un titre à 660
-     sur un corps à 400 se voit à l'échelle d'un écran dense, là où deux points
-     de plus se noieraient. L'interlettrage se resserre à mesure qu'on monte. */
+  /* La signalétique se compose SERRÉ et GRAS. L'interlettrage se resserre à
+     mesure que la graisse monte — sans quoi un titre lourd paraît lâche. */
   h1,
   h2,
   h3 {
-    font-weight: 660;
-    letter-spacing: -0.02em;
+    font-weight: 700;
+    letter-spacing: -0.025em;
     text-wrap: balance;
   }
 
   h1 {
-    letter-spacing: -0.032em;
+    font-weight: 800;
+    letter-spacing: -0.038em;
   }
 
-  /* Les chiffres qui s'empilent doivent s'aligner : compteurs, durées,
-     tableaux. Sans cela, « 11 » est plus étroit que « 88 » et la colonne
-     ondule. */
+  /* Les chiffres qui s'empilent doivent s'aligner : sans cela, « 11 » est
+     plus étroit que « 88 » et la colonne ondule. */
   th,
   td,
   time,
@@ -232,17 +246,16 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* L'anneau porte la couleur de signal et non l'encre : sur un champ déjà
-     bordé d'encre au survol, un anneau d'encre serait invisible. */
+  /* Sans teinte : voir l'en-tête. L'anneau est franc et carré comme le reste. */
   :focus-visible {
-    outline: 2px solid var(--c-focus);
+    outline: 2px solid var(--c-ink);
     outline-offset: 2px;
     border-radius: var(--r-field);
   }
 
   ::selection {
-    background: var(--c-focus);
-    color: #fff;
+    background: var(--c-ink);
+    color: var(--c-paper);
   }
 
   select,
@@ -263,9 +276,7 @@
    Composants
 --------------------------------------------------------------------------- */
 @layer components {
-  /* LA PLAQUE. Posée à plat : un filet la sépare du fond, rien de plus.
-     Lui donner une ombre reviendrait à dire qu'elle flotte, ce qui est faux
-     et ce qui priverait les vraies fenêtres de leur seul signe distinctif. */
+  /* LE PANNEAU. Peint, pas posé : un filet le délimite, rien ne l'ombre. */
   .panel {
     @apply rounded-card border border-line bg-panel;
   }
@@ -274,44 +285,49 @@
     @apply rounded-card border border-line bg-panel;
   }
 
-  /* CE QUI FLOTTE VRAIMENT. Fenêtres, palette de commandes, menus : eux
-     seuls portent l'ombre, et c'est ce qui les fait lire comme un plan
-     au-dessus du reste plutôt que comme une plaque de plus. */
+  /* CE QUI PASSE PAR-DESSUS. Fenêtres, palette, menus : eux seuls portent
+     l'ombre dure, et c'est ce qui les fait lire comme un panneau accroché
+     devant les autres plutôt que comme un panneau de plus. */
   .floating {
-    @apply rounded-card border border-line-2 bg-panel shadow-e3;
+    @apply rounded-card border border-line-2 bg-panel shadow-over;
   }
 
+  /* Le libellé en capitales SE CONDENSE au lieu de s'allonger : c'est ce que
+     fait toute signalétique quand le mot est plus long que la place. */
   .label-caps {
-    @apply text-[0.68rem] font-medium uppercase tracking-[0.16em] text-ink-3;
+    @apply text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-ink-3;
+    font-stretch: 88%;
   }
 
   .label-field {
-    @apply mb-2 block text-[0.75rem] font-medium tracking-wide text-ink-2;
+    @apply mb-1.5 block text-[0.74rem] font-semibold tracking-wide text-ink-2;
   }
 
-  /* Le champ est CREUSÉ dans la plaque, pas posé dessus : fond plus sombre en
-     thème sombre, plus soutenu en clair. C'est ce qui le désigne comme une
-     zone où l'on écrit, sans avoir à l'entourer d'un trait épais. */
   .input-field {
     @apply w-full rounded-field border border-line bg-raised px-3 py-2 text-[0.9rem] text-ink
            transition-colors placeholder:text-ink-3
            hover:border-line-2
-           focus:border-focus focus:outline-none
+           focus:border-ink focus:outline-none
            disabled:cursor-not-allowed disabled:bg-panel disabled:text-ink-3;
   }
 
-  /* LA GÉLULE reste ronde quand tout s'est équarri. Ce n'est pas un reste de
-     l'ancienne direction : sa forme la distingue des plaques et annonce
-     qu'elle bascule au clic. */
+  /* LA GÉLULE reste ronde quand tout s'est équarri : sa forme la distingue
+     des panneaux et annonce qu'elle bascule au clic. */
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-0.5 text-[0.72rem] font-medium;
+    @apply inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-0.5 text-[0.72rem] font-semibold;
+  }
+
+  /* LA BARRE DE LIGNE — le dispositif central de cette direction.
+     Un bloc plein, jamais du texte. Son épaisseur est la même partout, du
+     menu à l'en-tête d'écran : c'est cette constance qui la rend lisible
+     comme un repère plutôt que comme une décoration. */
+  .ligne {
+    @apply block w-1 shrink-0 rounded-pill;
   }
 
   /* Deux classes vivaient ici : « caret », un curseur clignotant, et
      « marquee », un bandeau défilant. La première imitait un terminal sur un
-     écran où rien ne se tape ; la seconde n'était utilisée NULLE PART. Une
-     animation en boucle qui tourne sans fin coûte une image par seconde à
-     composer, pour ne rien apprendre à personne. */
+     écran où rien ne se tape ; la seconde n'était utilisée NULLE PART. */
 }
 
 /* ---------------------------------------------------------------------------

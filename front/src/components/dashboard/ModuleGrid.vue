@@ -14,7 +14,7 @@
  * s'ouvrir dans un onglet, se copier, s'atteindre au clavier.
  */
 import AppIcon from '@/components/AppIcon.vue'
-import { modulePath } from '@/utils/modules'
+import { moduleLine, modulePath } from '@/utils/modules'
 
 defineProps({
   /** Catalogue enrichi par ModuleMetrics : compteur, unité, signaux. */
@@ -45,6 +45,14 @@ const TONES = {
         :to="modulePath(module.slug)"
         class="card group flex flex-col justify-between gap-3 p-3.5 transition-colors hover:border-line-2 hover:bg-raised"
       >
+        <!-- La tuile porte la ligne de son module en bandeau haut : la grille
+             devient un plan du réseau plutôt qu une liste de cartes grises. -->
+        <span
+          class="ligne -mt-0.5 mb-1 h-1 w-full"
+          :class="moduleLine(module.slug)"
+          aria-hidden="true"
+        />
+
         <div class="flex items-center gap-2">
           <AppIcon :name="module.icon" :size="15" class="shrink-0 text-ink-3" />
           <span class="truncate text-[0.8rem] font-semibold lowercase">{{ module.name }}</span>

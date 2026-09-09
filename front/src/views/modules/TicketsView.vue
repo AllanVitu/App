@@ -550,10 +550,18 @@ const SHORTCUTS = [
   <div class="flex h-full min-h-0 flex-col gap-5">
     <!-- ============================ EN-TÊTE ============================ -->
     <header class="shrink-0">
-      <div class="flex flex-wrap items-baseline justify-between gap-3">
-        <div>
-          <p class="label-caps">module</p>
-          <h2 class="mt-1 text-xl font-bold lowercase">tickets</h2>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <!-- Cet écran a son propre en-tête plutôt que « ModuleHeader » : ses
+             quatre chiffres ne se rangent pas comme ceux des autres. La barre
+             de ligne, elle, doit être identique — c'est sa constance qui en
+             fait un repère. -->
+        <div class="flex items-stretch gap-3">
+          <span class="ligne bg-mod-tickets" aria-hidden="true" />
+
+          <div>
+            <p class="label-caps">module</p>
+            <h2 class="mt-0.5 text-2xl font-extrabold lowercase tracking-[-0.03em]">tickets</h2>
+          </div>
         </div>
 
         <div v-if="stats" class="flex items-center gap-4 text-[0.76rem] tabular-nums">

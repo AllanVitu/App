@@ -10,11 +10,25 @@
  * Les chiffres portent un « ton » plutôt qu'une couleur : c'est l'écran qui
  * sait ce qui est alarmant chez lui, pas ce composant.
  */
-defineProps({
+import { computed } from 'vue'
+
+import { moduleLine } from '@/utils/modules'
+
+const props = defineProps({
   title: { type: String, required: true },
   /** [{ label, value, tone: 'alert' | 'good' | 'neutral' }] */
   stats: { type: Array, default: () => [] },
+  /**
+   * Le slug du module, pour sa couleur de ligne.
+   *
+   * Il est demandé plutôt que déduit du titre : le titre est un libellé
+   * d'affichage, traduisible et modifiable, tandis que le slug est la clé.
+   * Les faire coïncider serait vrai aujourd'hui et faux au premier renommage.
+   */
+  slug: { type: String, default: '' },
 })
+
+const ligne = computed(() => moduleLine(props.slug))
 
 const TONES = {
   alert: 'text-brick',
@@ -26,9 +40,18 @@ const TONES = {
 <template>
   <header class="shrink-0">
     <div class="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <p class="label-caps">module</p>
-        <h2 class="mt-1 text-xl font-bold lowercase">{{ title }}</h2>
+      <!-- LA BARRE DE LIGNE, en grand.
+           La même que dans le menu, à la même épaisseur, mais haute comme le
+           titre : c'est la constance de ce trait d'un écran à l'autre qui en
+           fait un repère et non une décoration. Elle répond à une seule
+           question — sur quelle ligne suis-je ? -->
+      <div class="flex items-stretch gap-3">
+        <span class="ligne" :class="ligne" aria-hidden="true" />
+
+        <div>
+          <p class="label-caps">module</p>
+          <h2 class="mt-0.5 text-2xl font-extrabold lowercase tracking-[-0.03em]">{{ title }}</h2>
+        </div>
       </div>
 
       <!-- Les chiffres se lisent en une ligne : la valeur en gras, son

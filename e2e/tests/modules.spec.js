@@ -195,17 +195,38 @@ test.describe('modules', () => {
     const fenetre = page.getByRole('dialog')
     await expect(fenetre).toBeVisible()
 
-    await fenetre.getByRole('button', { name: 'ignorées', exact: true }).click()
-    await expect(fenetre.getByRole('button', { name: 'ignorées', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    // ┌─────────────────────────────────────────────────────────────────────┐
+    // │  LA REMISE EN ÉTAT NE DOIT PAS DÉPENDRE DE LA RÉUSSITE DU TEST      │
+    // │                                                                     │
+    // │  Ce test déplace une erreur du jeu de démonstration, puis la        │
+    // │  remet. Tant que la remise vivait dans le corps du test, un échec   │
+    // │  d'assertion au milieu la laissait déplacée — et c'est             │
+    // │  « dashboard.spec » qui tombait à l'exécution SUIVANTE, en          │
+    // │  affirmant qu'aucune alerte de supervision ne remontait. Le test    │
+    // │  qui échouait n'était pas celui qui avait fauté.                    │
+    // │                                                                     │
+    // │  Observé pour de vrai, sur une exécution interrompue à la main.     │
+    // │  Le « finally » couvre l'échec d'assertion, cas courant ; il ne     │
+    // │  peut évidemment rien contre un processus tué.                      │
+    // └─────────────────────────────────────────────────────────────────────┘
+    try {
+      await fenetre.getByRole('button', { name: 'ignorées', exact: true }).click()
+      await expect(fenetre.getByRole('button', { name: 'ignorées', exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
 
-    // Ce qui compte vraiment sur un tableau : la carte a CHANGÉ DE COLONNE.
-    await expect(ignorees.getByRole('option').filter({ hasText: 'fatale' })).toHaveCount(1)
+      // Ce qui compte vraiment sur un tableau : la carte a CHANGÉ DE COLONNE.
+      await expect(ignorees.getByRole('option').filter({ hasText: 'fatale' })).toHaveCount(1)
+    } finally {
+      await fenetre
+        .getByRole('button', { name: 'non résolues', exact: true })
+        .click()
+        .catch(() => {
+          /* la remise a échoué ; les assertions qui suivent le diront */
+        })
+    }
 
-    // Remise en état : la base de développement doit se retrouver comme avant.
-    await fenetre.getByRole('button', { name: 'non résolues', exact: true }).click()
     await expect(
       fenetre.getByRole('button', { name: 'non résolues', exact: true }),
     ).toHaveAttribute('aria-pressed', 'true')

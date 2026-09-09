@@ -16,7 +16,7 @@ import { useDrawerGestures } from '@/composables/useDrawerGestures'
 import { useAuthStore } from '@/stores/auth'
 import { useModulesStore } from '@/stores/modules'
 import { useUiStore } from '@/stores/ui'
-import { modulePath } from '@/utils/modules'
+import { moduleLine, modulePath } from '@/utils/modules'
 
 const auth = useAuthStore()
 const ui = useUiStore()
@@ -35,9 +35,26 @@ useDrawerGestures(aside, {
   setOpen: (open) => ui.toggleSidebar(open),
 })
 
-const linkBase = 'flex items-center gap-2.5 px-3 py-1.5 text-[0.8rem] transition-colors border-l-2'
-const linkIdle = 'border-l-transparent text-ink-2 hover:bg-raised hover:text-ink'
-const linkActive = 'border-l-ink bg-raised text-ink font-semibold'
+/**
+ * LA BARRE REMPLACE LA BORDURE.
+ *
+ * Une bordure gauche marquait déjà l'entrée active. Elle devient un vrai
+ * BLOC — un élément à part, coloré par la ligne du module — parce que c'est
+ * ce que la règle de forme exige : la couleur d'identité n'existe qu'en
+ * aplat. Une bordure teintée aurait fait le même effet à l'œil et aurait
+ * demandé cinq classes « border-l-mod-* » de plus, pour un dispositif qu'on
+ * veut voir grossir ailleurs (en-tête d'écran, fil d'ariane).
+ *
+ * Elle est présente sur TOUTES les entrées de module, allumée sur l'active et
+ * atténuée sur les autres : c'est ce qui en fait un plan de lignes plutôt
+ * qu'un simple curseur de sélection.
+ */
+const linkBase = 'flex items-center gap-2.5 py-1.5 pl-2 pr-3 text-[0.8rem] transition-colors'
+const linkIdle = 'text-ink-2 hover:bg-raised hover:text-ink'
+const linkActive = 'bg-raised text-ink font-semibold'
+
+/** Les entrées hors modules n'ont pas de ligne : leur repère prend l'encre. */
+const repere = (actif) => (actif ? 'bg-ink' : 'bg-transparent')
 </script>
 
 <template>
@@ -55,8 +72,21 @@ const linkActive = 'border-l-ink bg-raised text-ink font-semibold'
   >
     <!-- Marque -->
     <div class="shrink-0 border-b border-line px-3 py-3">
-      <p class="text-[0.9rem] font-bold tracking-[0.08em]">SAAS OS</p>
-      <p class="text-[0.68rem] text-ink-3">v1.0.0</p>
+      <div class="flex items-center gap-2">
+        <!-- Les cinq lignes réunies : le plan du réseau, en miniature. -->
+        <span class="flex h-5 gap-px" aria-hidden="true">
+          <span class="ligne w-0.75 bg-mod-backend" />
+          <span class="ligne w-0.75 bg-mod-deploiement" />
+          <span class="ligne w-0.75 bg-mod-tickets" />
+          <span class="ligne w-0.75 bg-mod-supervision" />
+          <span class="ligne w-0.75 bg-mod-design" />
+        </span>
+
+        <div class="min-w-0">
+          <p class="text-[0.86rem] font-extrabold tracking-[0.06em]">SAAS OS</p>
+          <p class="text-[0.66rem] text-ink-3">v1.0.0</p>
+        </div>
+      </div>
     </div>
 
     <!-- Navigation -->
@@ -67,6 +97,7 @@ const linkActive = 'border-l-ink bg-raised text-ink font-semibold'
           :class="[linkBase, $route.name === 'dashboard' ? linkActive : linkIdle]"
           @click="ui.toggleSidebar(false)"
         >
+          <span class="ligne h-5" :class="repere($route.name === 'dashboard')" aria-hidden="true" />
           <AppIcon name="home" :size="15" />
           accueil
         </RouterLink>
@@ -87,6 +118,20 @@ const linkActive = 'border-l-ink bg-raised text-ink font-semibold'
             :class="[linkBase, $route.path === modulePath(module.slug) ? linkActive : linkIdle]"
             @click="ui.toggleSidebar(false)"
           >
+            <!-- LA LIGNE ACTIVE SE DRESSE, les autres restent des repères.
+                 Toutes présentes — c'est ce qui fait un plan de lignes plutôt
+                 qu'un curseur de sélection — mais celle où l'on se trouve
+                 occupe toute la hauteur de sa ligne et retrouve sa
+                 saturation. La différence se lit sans avoir à comparer les
+                 teintes entre elles. -->
+            <span
+              class="ligne transition-all"
+              :class="[
+                moduleLine(module.slug),
+                $route.path === modulePath(module.slug) ? 'h-7' : 'h-3.5 opacity-60',
+              ]"
+              aria-hidden="true"
+            />
             <AppIcon :name="module.icon" :size="15" />
             <span class="flex-1 truncate">{{ module.name.toLowerCase() }}</span>
             <span v-if="module.items_count" class="text-[0.7rem] text-ink-3 tabular-nums">
@@ -104,6 +149,7 @@ const linkActive = 'border-l-ink bg-raised text-ink font-semibold'
           :class="[linkBase, $route.name === 'profile' ? linkActive : linkIdle]"
           @click="ui.toggleSidebar(false)"
         >
+          <span class="ligne h-5" :class="repere($route.name === 'profile')" aria-hidden="true" />
           <AppIcon name="user" :size="15" />
           profil
         </RouterLink>
@@ -113,6 +159,7 @@ const linkActive = 'border-l-ink bg-raised text-ink font-semibold'
           :class="[linkBase, $route.name === 'settings' ? linkActive : linkIdle]"
           @click="ui.toggleSidebar(false)"
         >
+          <span class="ligne h-5" :class="repere($route.name === 'settings')" aria-hidden="true" />
           <AppIcon name="settings" :size="15" />
           paramètres
         </RouterLink>

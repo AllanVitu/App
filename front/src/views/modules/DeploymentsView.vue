@@ -237,7 +237,7 @@ onMounted(load)
 
 <template>
   <div class="flex h-full min-h-0 flex-col gap-5">
-    <ModuleHeader title="déploiement" :stats="headerStats">
+    <ModuleHeader slug="deploiement" title="déploiement" :stats="headerStats">
       <template #filters>
         <SearchField
           v-model="search"

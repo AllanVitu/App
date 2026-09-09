@@ -275,7 +275,7 @@ onMounted(load)
 
 <template>
   <div class="flex h-full min-h-0 flex-col gap-5">
-    <ModuleHeader title="supervision" :stats="headerStats">
+    <ModuleHeader slug="supervision" title="supervision" :stats="headerStats">
       <template #aside>
         <!-- La courbe répond à une question que les compteurs ne traitent
              pas : est-ce que ça empire ? -->

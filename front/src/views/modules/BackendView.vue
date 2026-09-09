@@ -293,7 +293,7 @@ onMounted(load)
 
 <template>
   <div class="flex h-full min-h-0 flex-col gap-5">
-    <ModuleHeader title="backend" :stats="headerStats">
+    <ModuleHeader slug="backend" title="backend" :stats="headerStats">
       <template #filters>
         <div class="flex items-center gap-0.5 rounded-pill border border-line bg-panel p-0.5">
           <button

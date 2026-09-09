@@ -2,9 +2,9 @@
 
 Application SaaS complète : authentification (avec vérification d'adresse et
 mot de passe oublié), tableau de bord, cinq modules métier, profil et
-paramètres, recherche transverse. Interface « signal » à colonnes — console
-froide, plaques à arêtes nettes, couleur réservée à l'état. Animations
-anime.js, suite de tests et intégration continue.
+paramètres, recherche transverse. Interface « signalétique » à colonnes :
+une couleur de ligne par module, des blocs francs, un grotesque serré.
+Animations anime.js, suite de tests et intégration continue.
 
 ## Les modules
 
@@ -294,64 +294,86 @@ cd e2e && npm install && npx playwright install chromium
 
 ## Direction visuelle
 
-**« Signal ».** Ce que fait l'application, au fond, c'est dire ce qui ne va
-pas : cinq modules qui surveillent des déploiements, des erreurs, des tickets,
-et un accueil dont la première section s'appelle « demande attention ». La
-direction précédente — pastel délavé, blanc cassé chaud, coins à 20 px —
-posait pour principe que « rien ne claque ». C'est calme et c'est joli, et
-c'est exactement ce qu'une console d'exploitation ne doit pas être : quand
-tout a la même voix, rien ne s'entend.
+**« Signalétique ».** La langue des plans de transport — inventée non pour
+être jolie, mais pour qu'on trouve son chemin dans une information dense,
+vite, sans tout lire. C'est exactement ce que demandent cinq modules
+d'exploitation.
 
-Le renversement tient en quatre gestes.
+Elle tient en quatre dispositifs, tous empruntés à la même source.
 
-**La surface recule.** Fonds froids et profonds, gris tirant vers le bleu —
-un écran, pas du papier. La chrome (menu, chemin, barre d'état) est une
-plaque ; le contenu repose sur le FOND, et les cartes qu'il porte redeviennent
-donc des plaques posées. Sans cela, en thème clair, on empilait du blanc sur
-du blanc.
+**Une couleur par ligne.** Chaque module reçoit sa teinte, comme une ligne de
+métro. Elle apparaît dans le menu, dans le fil d'ariane, en grand sur
+l'en-tête de l'écran, en bandeau sur sa tuile du tableau de bord, et en barre
+devant chaque alerte du fil « demande attention ». Elle ne dit jamais si ça va
+bien ou mal — elle dit **où on est**.
 
-**L'état avance.** La sémantique cesse d'être pastel : vert franc, ambre,
-corail. La couleur ne décore rien ici — elle ne dit qu'une chose, où en est ce
-qu'on regarde.
+**Des blocs francs.** Aplats pleins, arêtes nettes, 3 px de rayon, aucun
+dégradé. Un panneau émaillé n'a pas de profondeur : il est peint. Seul ce qui
+passe réellement par-dessus le reste — fenêtres, palette de commandes — porte
+une ombre, et elle est dure.
 
-**Des plaques, pas des coussins.** 20 px de rayon → 6. La forme dit la nature,
-et la règle n'a que deux entrées : **gélule = jeton** (pastille de filtre,
-étiquette, point de statut), **plaque = surface et action** (panneaux, cartes,
-champs — et les boutons, qui étaient des gélules et ne le sont plus).
+**Un grotesque serré.** Archivo, à graisse **et à chasse** variables. Les
+libellés en capitales se condensent au lieu de s'allonger — ce que fait toute
+signalétique quand le mot est plus long que la place. Geist Mono demeure pour
+ce qui s'aligne en colonne : empreintes de commit, durées, compteurs.
 
-**La lumière vient de quelque part.** Une échelle d'élévation apparaît. Seul
-ce qui flotte réellement — fenêtres, palette de commandes — porte une ombre.
-Ce qui est posé à plat n'a qu'un filet, et le plan de l'interface se lit sans
-y penser.
+**Des pictogrammes qui portent.** L'icône ne suit pas le mot, elle le devance.
 
-Une famille typographique, Geist, avec Geist Mono pour ce qui s'aligne en
-colonne : empreintes de commit, durées, compteurs. La hiérarchie passe par la
-GRAISSE — 660 pour un titre, 400 pour le corps — plutôt que par la taille :
-deux points de plus se noieraient sur un écran dense.
+### La règle qui empêche les deux vocabulaires de se marcher dessus
+
+Une signalétique introduit cinq couleurs d'identité dans une interface qui en
+avait déjà trois pour l'état. Sans règle, « violet » et « rouge » deviennent
+deux mots de la même phrase et on ne sait plus lequel parle.
+
+La règle est une règle de **forme**, pas de teinte :
+
+- la **couleur de ligne** n'existe qu'en **bloc plein** — une barre, un pavé,
+  un bandeau. Jamais du texte, jamais un point ;
+- la **couleur d'état** n'existe qu'en **texte et en points**. Jamais un
+  aplat, jamais une barre.
+
+Deux formes qui ne se rencontrent pas peuvent porter la même teinte sans
+jamais se confondre. Le fil « demande attention » le montre en une ligne : la
+barre dit sur quelle ligne ça se passe, le point à côté dit à quel point c'est
+grave.
+
+Cette règle a un effet de bord heureux. Une couleur de ligne n'ayant jamais à
+porter de texte, elle n'a plus besoin de tenir 4,5:1 — les 3:1 d'un composant
+non textuel suffisent, ce qui lui laisse assez de saturation pour ressembler
+enfin à une couleur de ligne. Les cinq teintes restent malgré tout cantonnées
+à l'arc froid, du cyan au rose : aucune ne s'approche du vert, de l'ambre ni
+du rouge. La discipline de forme est une ceinture, l'arc froid en est les
+bretelles.
+
+**L'anneau de focus, lui, n'a pas de teinte.** Dans une interface où chaque
+couleur désigne une ligne ou un état, un anneau coloré prétendrait dire
+quelque chose. Il prend l'encre : contraste maximal, présent partout,
+signifiant nulle part.
 
 ### La couleur est la seule partie du dessin qui se mesure
 
-`npm run check:contrast` lit les jetons, calcule les rapports de luminance sur
-**chacun** des fonds où chaque couleur se pose réellement, mesure le chroma
-OKLCH des marques de graphique et leur écart ΔE sous les trois dichromatismes
-— puis refuse la chaîne en dessous des seuils.
+`npm run check:contrast` lit les jetons de
+[`main.css`](front/src/assets/css/main.css) et refuse la chaîne en dessous des
+seuils. Il vérifie, pour chaque thème :
 
-Écrit avant la refonte et passé sur la palette PRÉCÉDENTE, il y a trouvé cinq
-manquements que deux refontes successives n'avaient pas vus : le texte des
-pastilles « réussi » à 4,11:1 sur sa propre teinte, les libellés secondaires à
-4,11:1 sur les champs. Rien d'autre dans la chaîne ne pouvait les signaler —
-ni ESLint, ni le compilateur, ni un parcours navigateur, qui ne sait pas lire
-un rapport de luminance.
+| Famille              | Contrôle                                                     |
+| -------------------- | ------------------------------------------------------------ |
+| encres, sémantique   | 4,5:1 sur **chacun** des fonds où la couleur se pose         |
+| marques de graphique | 3:1, chroma OKLCH ≥ 0,10, ΔE ≥ 15 en vision normale          |
+| marques de graphique | ΔE ≥ 8 sous protanopie, deutéranopie et tritanopie           |
+| lignes de module     | 3:1 sur panneau et sur fond, et ΔE ≥ 15 entre les dix paires |
 
-Les cinq modules, comme le tableau de bord, s'organisent en **colonnes par
-statut** : un seul composant, [`BoardColumns.vue`](front/src/components/board/BoardColumns.vue),
-avec un réglage par domaine. Le glisser-déposer y est facultatif — un
-déploiement ne se glisse pas d'« en échec » vers « en ligne », parce qu'un
-déploiement est un fait constaté et non un état qu'on décide.
+La simulation des dichromatismes emploie les matrices de Viénot, Brettel &
+Mollon (1999), appliquées en RGB **linéaire** — les appliquer sur du sRGB
+donnerait des couleurs plausibles et des écarts faux.
 
-Les jetons vivent dans [`front/src/assets/css/main.css`](front/src/assets/css/main.css) :
-modifier une variable `--c-*` recolore toute l'application, thème sombre
-compris.
+Écrit avant la refonte précédente et passé sur la palette d'alors, ce script y
+a trouvé cinq manquements que deux refontes successives n'avaient pas vus : le
+texte des pastilles « réussi » à 4,11:1 sur sa propre teinte, les libellés
+secondaires à 4,11:1 sur les champs. Elle n'avait jamais été mesurée que
+contre `panel`. Rien d'autre dans la chaîne ne pouvait le dire — ni ESLint, ni
+le compilateur, ni un parcours navigateur, qui ne sait pas lire un rapport de
+luminance.
 
 ## Adresse, clavier, erreurs
 

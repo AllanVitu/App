@@ -15,6 +15,7 @@ import SoundToggle from '@/components/SoundToggle.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import { moduleLine } from '@/utils/modules'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,6 +27,21 @@ const loggingOut = ref(false)
 
 /** Chemin lisible : la racine s'écrit « /accueil » plutôt que « / ». */
 const path = computed(() => (route.path === '/' ? '/accueil' : route.path))
+
+/**
+ * La ligne sur laquelle on se trouve, en PAVÉ et non en texte.
+ *
+ * Le fil d'ariane est l'endroit qui répond à « où suis-je » ; il porte donc
+ * le repère de ligne. Un pavé, jamais du texte coloré : c'est la règle de
+ * forme qui empêche les couleurs d'identité et les couleurs d'état de se
+ * confondre — et elle dispense au passage ce pavé de tenir un contraste de
+ * texte, ce qui lui laisse sa saturation.
+ */
+const ligne = computed(() => {
+  const trouve = route.path.match(/^\/modules\/([a-z0-9-]+)/)
+
+  return trouve ? moduleLine(trouve[1]) : null
+})
 
 // --- Horloge ----------------------------------------------------------------
 const now = ref(new Date())
@@ -92,8 +108,10 @@ async function logout() {
       <AppIcon name="menu" :size="17" />
     </button>
 
-    <!-- Chemin courant -->
-    <p class="min-w-0 flex-1 truncate text-[0.78rem] tracking-tight">
+    <!-- Chemin courant, précédé de sa ligne quand on est dans un module -->
+    <span v-if="ligne" class="ligne h-4 shrink-0" :class="ligne" aria-hidden="true" />
+
+    <p class="min-w-0 flex-1 truncate text-[0.78rem] font-medium tracking-tight">
       <span class="text-ink-3">{{ path.slice(0, path.lastIndexOf('/') + 1) }}</span
       ><span class="text-ink">{{ path.slice(path.lastIndexOf('/') + 1) }}</span>
     </p>

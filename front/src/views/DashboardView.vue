@@ -39,7 +39,7 @@ import { dashboardApi } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { formatRelative } from '@/utils/format'
-import { modulePath } from '@/utils/modules'
+import { moduleLine, modulePath } from '@/utils/modules'
 
 const auth = useAuthStore()
 const ui = useUiStore()
@@ -248,10 +248,20 @@ onBeforeUnmount(() => {
           <li v-for="item in attention" :key="item.id">
             <RouterLink
               :to="modulePath(item.module)"
-              class="flex items-center gap-3 px-4 py-2 transition-colors hover:bg-raised"
+              class="flex items-center gap-3 py-2 pl-2 pr-4 transition-colors hover:bg-raised"
             >
-              <!-- Une pastille de la couleur du motif : l'identité passe par
-                   la marque, jamais par la couleur du texte seule. -->
+              <!-- ┌───────────────────────────────────────────────────────┐
+                   │  LES DEUX VOCABULAIRES, CÔTE À CÔTE, SANS SE MÊLER    │
+                   │                                                       │
+                   │  C'est la seule liste de l'application où l'identité  │
+                   │  du module et la gravité de l'alerte se lisent d'un   │
+                   │  même coup d'œil. La règle de forme fait tout le      │
+                   │  travail : la BARRE, en aplat, dit sur quelle ligne   │
+                   │  ça se passe ; le POINT, à côté, dit à quel point     │
+                   │  c'est grave. Deux formes, deux questions.            │
+                   └───────────────────────────────────────────────────────┘ -->
+              <span class="ligne h-6" :class="moduleLine(item.module)" aria-hidden="true" />
+
               <span
                 class="size-2 shrink-0 rounded-pill"
                 :class="reasonOf(item).dot"
