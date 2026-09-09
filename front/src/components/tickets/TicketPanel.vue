@@ -16,6 +16,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 import TicketPriorityIcon from '@/components/tickets/TicketPriorityIcon.vue'
 import TicketStatusIcon from '@/components/tickets/TicketStatusIcon.vue'
+import FilterChip from '@/components/ui/FilterChip.vue'
 import { PRIORITIES, STATUSES, formatDue, isOverdue } from '@/utils/tickets'
 
 const props = defineProps({
@@ -191,22 +192,15 @@ defineExpose({ focusTitle })
       <div>
         <p class="label-caps mb-2">statut</p>
         <div class="flex flex-wrap gap-1">
-          <button
+          <FilterChip
             v-for="option in STATUSES"
             :key="option.value"
-            type="button"
-            class="chip transition-colors"
-            :class="
-              ticket.status === option.value
-                ? 'border-ink bg-raised text-ink'
-                : 'border-line text-ink-3 hover:border-ink-3 hover:text-ink'
-            "
-            :aria-pressed="ticket.status === option.value"
+            :active="ticket.status === option.value"
             @click="commit('status', option.value)"
           >
             <TicketStatusIcon :status="option.value" :size="12" />
             {{ option.label }}
-          </button>
+          </FilterChip>
         </div>
       </div>
 
@@ -214,22 +208,15 @@ defineExpose({ focusTitle })
       <div>
         <p class="label-caps mb-2">priorité</p>
         <div class="flex flex-wrap gap-1">
-          <button
+          <FilterChip
             v-for="option in PRIORITIES"
             :key="option.value"
-            type="button"
-            class="chip transition-colors"
-            :class="
-              ticket.priority === option.value
-                ? 'border-ink bg-raised text-ink'
-                : 'border-line text-ink-3 hover:border-ink-3 hover:text-ink'
-            "
-            :aria-pressed="ticket.priority === option.value"
+            :active="ticket.priority === option.value"
             @click="commit('priority', option.value)"
           >
             <TicketPriorityIcon :priority="option.value" :size="12" />
             {{ option.label }}
-          </button>
+          </FilterChip>
         </div>
       </div>
 

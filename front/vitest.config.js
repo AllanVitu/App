@@ -11,10 +11,16 @@ import vue from '@vitejs/plugin-vue'
  * dans un vrai navigateur — monter des composants dans jsdom pour vérifier
  * qu'ils affichent un texte n'apporterait pas grand-chose de plus.
  *
- * Un composable à cycle de vie (`onMounted`, `onScopeDispose`) fait exception :
- * il n'existe que dans un composant, donc son test en monte un — vide, réduit
- * à appeler le composable. Ce qui est vérifié reste la logique, jamais le
- * rendu ; c'est pourquoi `@vue/test-utils` est là sans que le périmètre change.
+ * Des composants sont tout de même montés, dans deux cas — et jamais pour
+ * constater qu'ils affichent un texte :
+ *
+ *   — un composable à cycle de vie (`onMounted`, `onScopeDispose`) n'existe
+ *     que dans un composant ; son test en monte un vide, réduit à l'appeler ;
+ *   — un composant partagé porte un CONTRAT envers ses appelants (ce qu'il
+ *     émet, ce qu'il expose, ce qu'il laisse passer). C'est de la logique,
+ *     elle se vérifie ici plutôt qu'en pilotant six écrans.
+ *
+ * D'où `@vue/test-utils`, sans que le périmètre change pour autant.
  */
 export default defineConfig({
   plugins: [vue()],

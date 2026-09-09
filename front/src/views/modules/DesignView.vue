@@ -25,6 +25,8 @@ import BoardColumns from '@/components/board/BoardColumns.vue'
 import DesignCard from '@/components/modules/DesignCard.vue'
 import ModuleHeader from '@/components/modules/ModuleHeader.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
+import FilterChip from '@/components/ui/FilterChip.vue'
+import SearchField from '@/components/ui/SearchField.vue'
 import TruncationNotice from '@/components/ui/TruncationNotice.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { appEnter, prefersReducedMotion } from '@/animations/motion'
@@ -339,50 +341,22 @@ onMounted(load)
   <div class="flex h-full min-h-0 flex-col gap-5">
     <ModuleHeader title="design" :stats="headerStats">
       <template #filters>
-        <div class="relative min-w-52 flex-1">
-          <AppIcon
-            name="search"
-            :size="14"
-            class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3"
-          />
-          <input
-            v-model="search"
-            type="search"
-            class="input-field py-2 pl-9 text-[0.82rem]"
-            placeholder="Nom ou description"
-            aria-label="Rechercher un fichier"
-          />
-        </div>
+        <SearchField
+          v-model="search"
+          placeholder="Nom ou description"
+          label="Rechercher un fichier"
+        />
 
-        <button
-          type="button"
-          class="chip transition-colors"
-          :class="
-            kindFilter === null
-              ? 'border-ink bg-raised text-ink'
-              : 'border-line text-ink-3 hover:border-ink-3 hover:text-ink'
-          "
-          :aria-pressed="kindFilter === null"
-          @click="kindFilter = null"
-        >
-          tous
-        </button>
+        <FilterChip :active="kindFilter === null" @click="kindFilter = null"> tous </FilterChip>
 
-        <button
+        <FilterChip
           v-for="kind in KINDS"
           :key="kind.value"
-          type="button"
-          class="chip transition-colors"
-          :class="
-            kindFilter === kind.value
-              ? 'border-ink bg-raised text-ink'
-              : 'border-line text-ink-3 hover:border-ink-3 hover:text-ink'
-          "
-          :aria-pressed="kindFilter === kind.value"
+          :active="kindFilter === kind.value"
           @click="kindFilter = kindFilter === kind.value ? null : kind.value"
         >
           {{ kind.label }}
-        </button>
+        </FilterChip>
 
         <span class="flex-1" />
 
@@ -547,21 +521,14 @@ onMounted(load)
           <div>
             <p class="label-caps mb-2">type</p>
             <div class="flex flex-wrap gap-1">
-              <button
+              <FilterChip
                 v-for="kind in KINDS"
                 :key="kind.value"
-                type="button"
-                class="chip transition-colors"
-                :class="
-                  detail.kind === kind.value
-                    ? 'border-ink bg-raised text-ink'
-                    : 'border-line text-ink-3 hover:border-ink-3 hover:text-ink'
-                "
-                :aria-pressed="detail.kind === kind.value"
+                :active="detail.kind === kind.value"
                 @click="patch({ kind: kind.value })"
               >
                 {{ kind.label }}
-              </button>
+              </FilterChip>
             </div>
           </div>
 

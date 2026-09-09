@@ -21,6 +21,8 @@ import IngestGuide from '@/components/modules/IngestGuide.vue'
 import ModuleHeader from '@/components/modules/ModuleHeader.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
+import FilterChip from '@/components/ui/FilterChip.vue'
+import SearchField from '@/components/ui/SearchField.vue'
 import TruncationNotice from '@/components/ui/TruncationNotice.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { appEnter, prefersReducedMotion } from '@/animations/motion'
@@ -270,50 +272,24 @@ onMounted(load)
       </template>
 
       <template #filters>
-        <div class="relative min-w-52 flex-1">
-          <AppIcon
-            name="search"
-            :size="14"
-            class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3"
-          />
-          <input
-            v-model="search"
-            type="search"
-            class="input-field py-2 pl-9 text-[0.82rem]"
-            placeholder="Message ou origine"
-            aria-label="Rechercher une erreur"
-          />
-        </div>
+        <SearchField
+          v-model="search"
+          placeholder="Message ou origine"
+          label="Rechercher une erreur"
+        />
 
-        <button
-          type="button"
-          class="chip transition-colors"
-          :class="
-            statusFilter === null
-              ? 'border-ink bg-raised text-ink'
-              : 'border-line text-ink-3 hover:border-ink-3 hover:text-ink'
-          "
-          :aria-pressed="statusFilter === null"
-          @click="statusFilter = null"
-        >
+        <FilterChip :active="statusFilter === null" @click="statusFilter = null">
           toutes
-        </button>
+        </FilterChip>
 
-        <button
+        <FilterChip
           v-for="status in STATUSES"
           :key="status.value"
-          type="button"
-          class="chip transition-colors"
-          :class="
-            statusFilter === status.value
-              ? 'border-ink bg-raised text-ink'
-              : 'border-line text-ink-3 hover:border-ink-3 hover:text-ink'
-          "
-          :aria-pressed="statusFilter === status.value"
+          :active="statusFilter === status.value"
           @click="statusFilter = statusFilter === status.value ? null : status.value"
         >
           {{ status.label }}
-        </button>
+        </FilterChip>
 
         <span class="flex-1" />
 
@@ -414,21 +390,14 @@ onMounted(load)
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-          <button
+          <FilterChip
             v-for="status in STATUSES"
             :key="status.value"
-            type="button"
-            class="chip transition-colors"
-            :class="
-              openGroup.status === status.value
-                ? 'border-ink bg-raised text-ink'
-                : 'border-line text-ink-3 hover:border-ink-3 hover:text-ink'
-            "
-            :aria-pressed="openGroup.status === status.value"
+            :active="openGroup.status === status.value"
             @click="setStatus(openGroup, status.value)"
           >
             {{ status.label }}
-          </button>
+          </FilterChip>
 
           <span class="flex-1" />
 

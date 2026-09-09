@@ -21,6 +21,8 @@ import DeploymentCard from '@/components/modules/DeploymentCard.vue'
 import ModuleHeader from '@/components/modules/ModuleHeader.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
+import FilterChip from '@/components/ui/FilterChip.vue'
+import SearchField from '@/components/ui/SearchField.vue'
 import TruncationNotice from '@/components/ui/TruncationNotice.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { deploymentsApi } from '@/services/api'
@@ -224,69 +226,34 @@ onMounted(load)
   <div class="flex h-full min-h-0 flex-col gap-5">
     <ModuleHeader title="déploiement" :stats="headerStats">
       <template #filters>
-        <div class="relative min-w-52 flex-1">
-          <AppIcon
-            name="search"
-            :size="14"
-            class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3"
-          />
-          <input
-            v-model="search"
-            type="search"
-            class="input-field py-2 pl-9 text-[0.82rem]"
-            placeholder="Branche, empreinte ou message"
-            aria-label="Rechercher un déploiement"
-          />
-        </div>
+        <SearchField
+          v-model="search"
+          placeholder="Branche, empreinte ou message"
+          label="Rechercher un déploiement"
+        />
 
-        <button
-          type="button"
-          class="chip transition-colors"
-          :class="
-            envFilter === null
-              ? 'border-ink bg-raised text-ink'
-              : 'border-line text-ink-3 hover:border-ink-3 hover:text-ink'
-          "
-          :aria-pressed="envFilter === null"
-          @click="envFilter = null"
-        >
-          tous
-        </button>
+        <FilterChip :active="envFilter === null" @click="envFilter = null"> tous </FilterChip>
 
-        <button
+        <FilterChip
           v-for="env in ENVIRONMENTS"
           :key="env.value"
-          type="button"
-          class="chip transition-colors"
-          :class="
-            envFilter === env.value
-              ? 'border-ink bg-raised text-ink'
-              : 'border-line text-ink-3 hover:border-ink-3 hover:text-ink'
-          "
-          :aria-pressed="envFilter === env.value"
+          :active="envFilter === env.value"
           @click="envFilter = envFilter === env.value ? null : env.value"
         >
           {{ env.label }}
-        </button>
+        </FilterChip>
 
         <span class="mx-1 h-4 w-px bg-line" aria-hidden="true" />
 
-        <button
+        <FilterChip
           v-for="status in STATUSES"
           :key="status.value"
-          type="button"
-          class="chip transition-colors"
-          :class="
-            statusFilter === status.value
-              ? 'border-ink bg-raised text-ink'
-              : 'border-line text-ink-3 hover:border-ink-3 hover:text-ink'
-          "
-          :aria-pressed="statusFilter === status.value"
+          :active="statusFilter === status.value"
           @click="statusFilter = statusFilter === status.value ? null : status.value"
         >
           <span class="size-1.5 rounded-pill" :class="status.dot" aria-hidden="true" />
           {{ status.label }}
-        </button>
+        </FilterChip>
 
         <span class="flex-1" />
 

@@ -126,6 +126,13 @@ onMounted(async () => {
           « Système » suit le réglage clair/sombre de votre appareil.
         </p>
 
+        <!-- CE N'EST PAS UNE PASTILLE, malgré le même vocabulaire d'états.
+             `FilterChip` est un jeton d'une ligne dans une barre d'outils ;
+             ceci est une carte en colonne, icône au-dessus du libellé, dans
+             une grille. Seule la façon de dire « choisi » est commune — le
+             survol de l'état inactif s'aligne donc sur celui des pastilles,
+             là où il ne faisait rien du tout (`hover:border-line` sur un
+             élément déjà `border-line`). -->
         <div class="mt-5 grid gap-3 sm:grid-cols-3">
           <button
             v-for="option in THEMES"
@@ -134,8 +141,8 @@ onMounted(async () => {
             class="flex flex-col items-center gap-2 border-2 px-4 py-4 transition"
             :class="
               form.theme === option.value
-                ? 'border-ink bg-raised text-ink '
-                : 'border-line text-ink-2 hover:border-line '
+                ? 'border-ink bg-raised text-ink'
+                : 'border-line text-ink-2 hover:border-ink-3 hover:text-ink'
             "
             :aria-pressed="form.theme === option.value"
             @click="previewTheme(option.value)"

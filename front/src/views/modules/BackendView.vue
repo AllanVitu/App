@@ -21,6 +21,7 @@ import ModuleHeader from '@/components/modules/ModuleHeader.vue'
 import TableEndpoints from '@/components/modules/TableEndpoints.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import SearchField from '@/components/ui/SearchField.vue'
 import { backendApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useWriteQueue } from '@/composables/useWriteQueue'
@@ -301,20 +302,12 @@ onMounted(load)
           </button>
         </div>
 
-        <div v-if="tab === 'tables'" class="relative min-w-52 flex-1">
-          <AppIcon
-            name="search"
-            :size="14"
-            class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3"
-          />
-          <input
-            v-model="search"
-            type="search"
-            class="input-field py-2 pl-9 text-[0.82rem]"
-            placeholder="Nom ou description"
-            aria-label="Rechercher une table"
-          />
-        </div>
+        <SearchField
+          v-if="tab === 'tables'"
+          v-model="search"
+          placeholder="Nom ou description"
+          label="Rechercher une table"
+        />
 
         <span class="flex-1" />
 

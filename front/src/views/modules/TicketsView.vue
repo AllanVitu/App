@@ -28,6 +28,8 @@ import TicketCard from '@/components/tickets/TicketCard.vue'
 import TicketPanel from '@/components/tickets/TicketPanel.vue'
 import TicketStatusIcon from '@/components/tickets/TicketStatusIcon.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
+import FilterChip from '@/components/ui/FilterChip.vue'
+import SearchField from '@/components/ui/SearchField.vue'
 import TruncationNotice from '@/components/ui/TruncationNotice.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { appEnter, prefersReducedMotion } from '@/animations/motion'
@@ -557,52 +559,24 @@ const SHORTCUTS = [
 
       <!-- Barre de filtres -->
       <div class="mt-4 flex flex-wrap items-center gap-2">
-        <div class="relative min-w-52 flex-1">
-          <AppIcon
-            name="search"
-            :size="14"
-            class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3"
-          />
-          <input
-            ref="searchInput"
-            v-model="search"
-            type="search"
-            class="input-field py-2 pl-9 text-[0.82rem]"
-            placeholder="Rechercher — touche /"
-            aria-label="Rechercher un ticket"
-          />
-        </div>
+        <SearchField
+          ref="searchInput"
+          v-model="search"
+          placeholder="Rechercher — touche /"
+          label="Rechercher un ticket"
+        />
 
-        <button
-          type="button"
-          class="chip transition-colors"
-          :class="
-            statusFilter === null
-              ? 'border-ink bg-raised text-ink'
-              : 'border-line text-ink-3 hover:border-ink-3 hover:text-ink'
-          "
-          :aria-pressed="statusFilter === null"
-          @click="statusFilter = null"
-        >
-          tous
-        </button>
+        <FilterChip :active="statusFilter === null" @click="statusFilter = null"> tous </FilterChip>
 
-        <button
+        <FilterChip
           v-for="status in BOARD_ORDER"
           :key="status.value"
-          type="button"
-          class="chip transition-colors"
-          :class="
-            statusFilter === status.value
-              ? 'border-ink bg-raised text-ink'
-              : 'border-line text-ink-3 hover:border-ink-3 hover:text-ink'
-          "
-          :aria-pressed="statusFilter === status.value"
+          :active="statusFilter === status.value"
           @click="statusFilter = statusFilter === status.value ? null : status.value"
         >
           <TicketStatusIcon :status="status.value" :size="12" />
           {{ status.short }}
-        </button>
+        </FilterChip>
 
         <span class="flex-1" />
 

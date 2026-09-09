@@ -18,6 +18,7 @@ import BaseBadge from '@/components/ui/BaseBadge.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import SearchField from '@/components/ui/SearchField.vue'
 import { itemsApi, modulesApi } from '@/services/api'
 import { useModulesStore } from '@/stores/modules'
 import { useUiStore } from '@/stores/ui'
@@ -354,21 +355,15 @@ onBeforeUnmount(() => {
 
     <!-- Barre d'outils -->
     <div class="flex flex-wrap items-center gap-3">
-      <div class="relative min-w-56 flex-1">
-        <AppIcon
-          name="search"
-          :size="16"
-          class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3"
-        />
-        <input
-          v-model="filters.search"
-          type="search"
-          placeholder="Rechercher…"
-          class="input-field pl-9"
-          aria-label="Rechercher un élément"
-          @input="onSearchInput"
-        />
-      </div>
+      <!-- « input » remonte du champ à la racine du composant, où Vue reporte
+           l'écouteur : la temporisation se déclenche comme avant l'extraction. -->
+      <SearchField
+        v-model="filters.search"
+        size="regular"
+        placeholder="Rechercher…"
+        label="Rechercher un élément"
+        @input="onSearchInput"
+      />
 
       <select
         v-model="filters.status"
