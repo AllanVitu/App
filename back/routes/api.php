@@ -15,6 +15,7 @@ use App\Controllers\AccountController;
 use App\Controllers\AuthController;
 use App\Controllers\BackendController;
 use App\Controllers\DashboardController;
+use App\Controllers\DataController;
 use App\Controllers\DeploymentController;
 use App\Controllers\DesignController;
 use App\Controllers\ErrorController;
@@ -111,6 +112,13 @@ $router->delete('/api/backend/tables/{id}', [BackendController::class, 'destroy'
 // déjà été distribué, en changer la portée après coup induirait en erreur.
 $router->post('/api/backend/keys', [BackendController::class, 'storeKey'], $auth);
 $router->delete('/api/backend/keys/{id}', [BackendController::class, 'revokeKey'], $auth);
+
+// Les DONNÉES des tables créées ci-dessus. C'est ce qui fait du module un
+// backend plutôt qu'un éditeur de diagrammes : une application tierce s'y
+// connecte avec une clé de service, comme pour l'ingestion d'erreurs.
+$router->get('/api/backend/data/{table}', [DataController::class, 'index'], $ingest);
+$router->post('/api/backend/data/{table}', [DataController::class, 'store'], $ingest);
+$router->delete('/api/backend/data/{table}/{id}', [DataController::class, 'destroy'], $ingest);
 
 // --- Déploiement -----------------------------------------------------------
 $router->get('/api/deployments', [DeploymentController::class, 'index'], $auth);

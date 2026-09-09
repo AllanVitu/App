@@ -16,7 +16,9 @@
 import { computed, onMounted, ref } from 'vue'
 
 import AppIcon from '@/components/AppIcon.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ModuleHeader from '@/components/modules/ModuleHeader.vue'
+import TableEndpoints from '@/components/modules/TableEndpoints.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { backendApi } from '@/services/api'
@@ -201,7 +203,19 @@ function removeColumn(table, index) {
   patch(table, { columns: table.columns.filter((_, i) => i !== index) })
 }
 
+/**
+ * Table à supprimer, en attente de confirmation.
+ *
+ * La confirmation est NOUVELLE, et elle est due : supprimer une table
+ * détruisait jusqu'ici une description. Elle détruit désormais une VRAIE table
+ * PostgreSQL et tout ce qu'elle contient — un geste irréversible mérite qu'on
+ * s'arrête une seconde.
+ */
+const toRemove = ref(null)
+
 async function removeTable(table) {
+  toRemove.value = null
+
   const index = tables.value.findIndex((entry) => entry.id === table.id)
   const previous = tables.value[index]
 
@@ -436,7 +450,7 @@ onMounted(load)
                   type="button"
                   class="chip border-line text-ink-3 transition-colors hover:border-brick hover:text-brick"
                   :aria-label="`Supprimer la table ${opened.name}`"
-                  @click="removeTable(opened)"
+                  @click="toRemove = opened"
                 >
                   <AppIcon name="trash" :size="13" />
                 </button>
@@ -488,6 +502,12 @@ onMounted(load)
                   </button>
                 </li>
               </ul>
+
+              <!-- Les adresses de la table. Sans elles, personne ne saurait
+                   que ce schéma est devenu une vraie table interrogeable. -->
+              <div class="mt-3">
+                <TableEndpoints :name="opened.name" :columns="opened.columns" />
+              </div>
             </div>
           </li>
         </ul>
@@ -642,5 +662,20 @@ onMounted(load)
         </ul>
       </div>
     </template>
+
+    <!-- Une table n'est plus une description : c'est une vraie table
+         PostgreSQL. La supprimer efface ses lignes, et ça se dit AVANT. -->
+    <ConfirmDialog
+      :open="Boolean(toRemove)"
+      title="Supprimer la table"
+      :message="
+        toRemove
+          ? `« ${toRemove.name} » et toutes ses lignes seront définitivement supprimées. Cette action ne peut pas être annulée.`
+          : ''
+      "
+      confirm-label="Supprimer définitivement"
+      @confirm="removeTable(toRemove)"
+      @close="toRemove = null"
+    />
   </div>
 </template>

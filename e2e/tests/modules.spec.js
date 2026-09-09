@@ -27,9 +27,17 @@ test.describe('modules', () => {
     await page.getByPlaceholder('commandes').fill(nom)
     await page.getByRole('button', { name: /^créer$/i }).click()
 
-    // On cible la LIGNE de liste, pas un bouton de la page : les pastilles de
-    // filtre en haut d'écran portent les mêmes mots que les lignes.
-    const ligne = page.getByRole('listitem').filter({ hasText: nom })
+    // La ligne est cherchée par son BOUTON DE SUPPRESSION, dont le nom
+    // accessible désigne la table sans ambiguïté.
+    //
+    // Le nom de la table apparaît désormais dans plusieurs éléments de liste :
+    // la ligne elle-même, et les trois adresses REST affichées sous son schéma
+    // (GET, POST, DELETE /backend/data/<table>). Un locateur fondé sur le seul
+    // texte en retiendrait quatre.
+    const ligne = page
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('button', { name: `Supprimer la table ${nom}` }) })
+
     await expect(ligne).toBeVisible()
 
     // La table naît avec sa colonne « id » — et déjà dépliée, puisqu'on vient
@@ -39,7 +47,14 @@ test.describe('modules', () => {
     await ligne.getByRole('button', { name: /^colonne$/i }).click()
     await expect(ligne).toContainText('2 col.')
 
-    await ligne.getByRole('button', { name: new RegExp(`Supprimer la table ${nom}`) }).click()
+    // La suppression détruit maintenant une VRAIE table et ses lignes : elle
+    // demande confirmation, et c'est le point de ce passage.
+    await ligne.getByRole('button', { name: `Supprimer la table ${nom}` }).click()
+
+    const confirmation = page.getByRole('dialog', { name: /supprimer la table/i })
+    await expect(confirmation).toContainText(nom)
+    await confirmation.getByRole('button', { name: /supprimer définitivement/i }).click()
+
     await expect(page.getByText(nom, { exact: true })).toBeHidden()
   })
 

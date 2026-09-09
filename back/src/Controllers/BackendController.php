@@ -9,6 +9,7 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Core\Validator;
 use App\Models\BackendRepository;
+use App\Services\SchemaBuilder;
 
 /**
  * Module « Backend » : schémas de données et clés d'API.
@@ -30,9 +31,16 @@ final class BackendController
 
     private BackendRepository $backend;
 
+    /**
+     * Matérialise les schémas décrits en VRAIES tables PostgreSQL. Sans lui,
+     * ce module ne faisait que décrire : rien n'était interrogeable.
+     */
+    private SchemaBuilder $schema;
+
     public function __construct()
     {
         $this->backend = new BackendRepository();
+        $this->schema  = new SchemaBuilder();
     }
 
     // ---------------------------------------------------------------------
@@ -65,9 +73,21 @@ final class BackendController
      */
     public function store(Request $request): void
     {
-        Response::created(
-            $this->backend->createTable($request->userId(), $this->validateTable($request)),
-        );
+        $userId = $request->userId();
+        $table  = $this->backend->createTable($userId, $this->validateTable($request));
+
+        // La table PHYSIQUE suit la description. En cas d'échec du DDL, la
+        // description est retirée : laisser une table décrite sans table réelle
+        // ferait un écran qui ment sur ce qui existe.
+        try {
+            $this->schema->sync($userId, $table['name'], $table['columns']);
+        } catch (\Throwable $e) {
+            $this->backend->deleteTable($table['id'], $userId);
+
+            throw $e;
+        }
+
+        Response::created($table);
     }
 
     /**
@@ -85,15 +105,21 @@ final class BackendController
     {
         $existing = $this->findOrFail($request);
 
+        $userId  = $request->userId();
         $updated = $this->backend->updateTable(
             (string) $request->param('id'),
-            $request->userId(),
+            $userId,
             $this->validateTable($request, $existing),
         );
 
         if ($updated === null) {
             throw HttpException::notFound('Table introuvable.');
         }
+
+        // Le renommage vient AVANT la synchronisation des colonnes : ALTER
+        // COLUMN s'adresse à la table par son nom, donc au nouveau.
+        $this->schema->rename($userId, $existing['name'], $updated['name']);
+        $this->schema->sync($userId, $updated['name'], $updated['columns'], $existing['columns']);
 
         Response::json($updated);
     }
@@ -103,9 +129,18 @@ final class BackendController
      */
     public function destroy(Request $request): void
     {
-        if (!$this->backend->deleteTable($this->validateId($request), $request->userId())) {
+        $existing = $this->findOrFail($request);
+        $userId   = $request->userId();
+
+        if (!$this->backend->deleteTable($this->validateId($request), $userId)) {
             throw HttpException::notFound('Table introuvable.');
         }
+
+        // La DESCRIPTION garde son « deleted_at » ; la table physique, elle,
+        // est réellement supprimée. Conserver des données inatteignables
+        // consommerait de l'espace en laissant croire qu'on peut revenir en
+        // arrière. L'interface le dit avant d'agir.
+        $this->schema->drop($userId, $existing['name']);
 
         Response::noContent();
     }
