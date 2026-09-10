@@ -9,6 +9,7 @@ use App\Core\HttpException;
 use App\Core\Request;
 use App\Core\Response;
 use App\Core\Validator;
+use App\Models\OrganizationRepository;
 use App\Models\SettingsRepository;
 use App\Models\UserRepository;
 use App\Services\AccountMailer;
@@ -92,6 +93,31 @@ final class AuthController
             $fullName,
             Terms::CURRENT_VERSION,
         );
+
+        // ┌───────────────────────────────────────────────────────────────────┐
+        // │  UN COMPTE SANS ESPACE DE TRAVAIL NE PEUT RIEN FAIRE              │
+        // │                                                                   │
+        // │  AuthMiddleware refuse toute requête d'un compte sans             │
+        // │  appartenance : ce n'est donc pas une commodité, c'est ce qui rend │
+        // │  le compte utilisable. Créée ici plutôt que par un déclencheur     │
+        // │  parce qu'elle porte un NOM, et qu'un nom se choisit — celui de    │
+        // │  la personne, faute de mieux, et qu'elle renommera.                │
+        // └───────────────────────────────────────────────────────────────────┘
+        //
+        // L'invitation, si le parcours vient d'un lien, est traitée APRÈS :
+        // cf. la lecture de « invitation_token » plus bas. Le compte a de
+        // toute façon le sien, dont il reste propriétaire.
+        $organizations = new OrganizationRepository();
+        $organizations->create($fullName, $user['id']);
+
+        // Un lien d'invitation en poche : on y entre dans la foulée, et c'est
+        // cet espace-là qui devient l'espace actif. Personne n'accepte une
+        // invitation pour atterrir ailleurs.
+        $invitationToken = $request->string('invitation_token');
+
+        if ($invitationToken !== null) {
+            $organizations->acceptInvitation($invitationToken, $user['id']);
+        }
 
         $this->users->touchLastLogin($user['id']);
 
@@ -221,6 +247,11 @@ final class AuthController
         Response::json([
             'user'     => $request->user(),
             'settings' => SettingsRepository::present((new SettingsRepository())->findOrCreate($request->userId())),
+            // L'espace courant ET la liste des autres : le sélecteur d'espace
+            // est affiché en permanence, il n'a donc pas de moment où aller
+            // chercher sa propre garniture.
+            'organization'  => $request->organization(),
+            'organizations' => (new OrganizationRepository())->forUser($request->userId()),
         ]);
     }
 
@@ -236,10 +267,18 @@ final class AuthController
             $this->refreshTokens->issue($user['id'], $request),
         );
 
+        // Relue depuis la base plutôt que déduite de ce qui vient d'être créé :
+        // à la connexion, l'espace actif peut avoir été supprimé ou
+        // l'appartenance révoquée depuis la dernière visite, et c'est
+        // activeFor() qui sait retomber sur ses pieds.
+        $organizations = new OrganizationRepository();
+
         return [
-            'user'         => $user,
-            'access_token' => Jwt::issue($user['id'], $user['role']),
-            'expires_in'   => Jwt::ttl(),
+            'user'          => $user,
+            'organization'  => $organizations->activeFor($user['id'], $user['active_organization_id'] ?? null),
+            'organizations' => $organizations->forUser($user['id']),
+            'access_token'  => Jwt::issue($user['id'], $user['role']),
+            'expires_in'    => Jwt::ttl(),
         ];
     }
 }

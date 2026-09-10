@@ -44,8 +44,11 @@ abstract class ApiTestCase extends TestCase
         'error_groups',
         'design_versions',
         'design_files',
-        'user_modules',
+        'organization_modules',
         'user_settings',
+        'invitations',
+        'memberships',
+        'organizations',
         'users',
     ];
 
@@ -98,9 +101,10 @@ abstract class ApiTestCase extends TestCase
     }
 
     /**
-     * Crée un compte et renvoie son jeton d'accès et son identifiant.
+     * Crée un compte et renvoie son jeton d'accès, son identifiant et celui de
+     * l'espace de travail créé avec lui.
      *
-     * @return array{token: string, id: string, email: string}
+     * @return array{token: string, id: string, email: string, org: string}
      */
     protected function register(
         string $email = 'utilisateur@test.local',
@@ -122,6 +126,10 @@ abstract class ApiTestCase extends TestCase
             'token' => $response['body']['data']['access_token'],
             'id'    => $response['body']['data']['user']['id'],
             'email' => $email,
+            // L'espace de travail créé avec le compte. Les tests qui écrivent
+            // directement en base — sans passer par l'API — en ont besoin :
+            // c'est lui qui cloisonne, et non plus l'identifiant du compte.
+            'org'   => $response['body']['data']['organization']['id'],
         ];
     }
 

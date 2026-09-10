@@ -75,7 +75,7 @@ final class SchemaTest extends ApiTestCase
 
         foreach ($hostiles as $nom) {
             try {
-                $schema->sync($session['id'], $nom, $this->schemaMinimal());
+                $schema->sync($session['org'], $nom, $this->schemaMinimal());
                 $this->fail("« {$nom} » aurait dû être refusé");
             } catch (RuntimeException $e) {
                 $this->assertStringContainsString('refusé', $e->getMessage());
@@ -97,7 +97,7 @@ final class SchemaTest extends ApiTestCase
 
         foreach (['text; DROP TABLE users', 'serial', 'TEXT', ''] as $type) {
             try {
-                $schema->sync($session['id'], 't_essai', [$this->colonne('a', $type)]);
+                $schema->sync($session['org'], 't_essai', [$this->colonne('a', $type)]);
                 $this->fail("le type « {$type} » aurait dû être refusé");
             } catch (RuntimeException $e) {
                 $this->assertStringContainsString('Type SQL refusé', $e->getMessage());
@@ -113,7 +113,7 @@ final class SchemaTest extends ApiTestCase
 
         $this->expectException(RuntimeException::class);
 
-        $schema->sync($session['id'], 't_essai', [$this->colonne('a"; DROP TABLE users; --')]);
+        $schema->sync($session['org'], 't_essai', [$this->colonne('a"; DROP TABLE users; --')]);
     }
 
     // =====================================================================
@@ -121,33 +121,36 @@ final class SchemaTest extends ApiTestCase
     // =====================================================================
 
     /**
-     * Le cloisonnement est STRUCTUREL : les tables d'un compte vivent dans son
+     * Le cloisonnement est STRUCTUREL : les tables d'un espace vivent dans son
      * propre schéma PostgreSQL. Il n'y a pas de clause WHERE à oublier, parce
      * qu'il n'y a rien à traverser.
+     *
+     * Ce qui sépare est passé du compte à l'ORGANISATION, et le test le dit
+     * jusque dans son dernier assert : deux espaces, deux schémas.
      */
     #[Test]
-    public function deux_comptes_peuvent_avoir_une_table_du_meme_nom_sans_se_voir(): void
+    public function deux_espaces_peuvent_avoir_une_table_du_meme_nom_sans_se_voir(): void
     {
         $mien   = $this->register('mien-schema@test.local');
         $autrui = $this->register('autrui-schema@test.local');
         $schema = new SchemaBuilder();
 
         foreach ([$mien, $autrui] as $session) {
-            $schema->sync($session['id'], 'clients', $this->schemaMinimal());
+            $schema->sync($session['org'], 'clients', $this->schemaMinimal());
         }
 
-        $schema->insert($mien['id'], 'clients', ['email' => 'a-moi@exemple.fr']);
-        $schema->insert($autrui['id'], 'clients', ['email' => 'a-lui@exemple.fr']);
+        $schema->insert($mien['org'], 'clients', ['email' => 'a-moi@exemple.fr']);
+        $schema->insert($autrui['org'], 'clients', ['email' => 'a-lui@exemple.fr']);
 
-        $miennes  = $schema->rows($mien['id'], 'clients');
-        $siennes  = $schema->rows($autrui['id'], 'clients');
+        $miennes = $schema->rows($mien['org'], 'clients');
+        $siennes = $schema->rows($autrui['org'], 'clients');
 
         $this->assertSame(1, $miennes['total']);
         $this->assertSame(1, $siennes['total']);
         $this->assertSame('a-moi@exemple.fr', $miennes['rows'][0]['email']);
         $this->assertSame('a-lui@exemple.fr', $siennes['rows'][0]['email']);
 
-        $this->assertNotSame($schema->schemaFor($mien['id']), $schema->schemaFor($autrui['id']));
+        $this->assertNotSame($schema->schemaFor($mien['org']), $schema->schemaFor($autrui['org']));
     }
 
     // =====================================================================
@@ -160,12 +163,12 @@ final class SchemaTest extends ApiTestCase
         $session = $this->register('reelle@test.local');
         $schema  = new SchemaBuilder();
 
-        $this->assertFalse($schema->tableExists($session['id'], 'clients'));
+        $this->assertFalse($schema->tableExists($session['org'], 'clients'));
 
-        $schema->sync($session['id'], 'clients', $this->schemaMinimal());
+        $schema->sync($session['org'], 'clients', $this->schemaMinimal());
 
-        $this->assertTrue($schema->tableExists($session['id'], 'clients'));
-        $this->assertSame(['id', 'email'], $schema->physicalColumns($session['id'], 'clients'));
+        $this->assertTrue($schema->tableExists($session['org'], 'clients'));
+        $this->assertSame(['id', 'email'], $schema->physicalColumns($session['org'], 'clients'));
     }
 
     /**
@@ -179,9 +182,9 @@ final class SchemaTest extends ApiTestCase
         $session = $this->register('idauto@test.local');
         $schema  = new SchemaBuilder();
 
-        $schema->sync($session['id'], 'clients', $this->schemaMinimal());
+        $schema->sync($session['org'], 'clients', $this->schemaMinimal());
 
-        $ligne = $schema->insert($session['id'], 'clients', ['email' => 'sans-id@exemple.fr']);
+        $ligne = $schema->insert($session['org'], 'clients', ['email' => 'sans-id@exemple.fr']);
 
         $this->assertNotEmpty($ligne['id']);
         $this->assertMatchesRegularExpression('/^[0-9a-f-]{36}$/', (string) $ligne['id']);
@@ -202,15 +205,15 @@ final class SchemaTest extends ApiTestCase
         $schema  = new SchemaBuilder();
         $avant   = $this->schemaMinimal();
 
-        $schema->sync($session['id'], 'clients', $avant);
-        $schema->insert($session['id'], 'clients', ['email' => 'a-conserver@exemple.fr']);
+        $schema->sync($session['org'], 'clients', $avant);
+        $schema->insert($session['org'], 'clients', ['email' => 'a-conserver@exemple.fr']);
 
         $apres = [$this->colonne('id', 'uuid', false), $this->colonne('courriel', 'text', false)];
-        $schema->sync($session['id'], 'clients', $apres, $avant);
+        $schema->sync($session['org'], 'clients', $apres, $avant);
 
-        $lignes = $schema->rows($session['id'], 'clients');
+        $lignes = $schema->rows($session['org'], 'clients');
 
-        $this->assertSame(['id', 'courriel'], $schema->physicalColumns($session['id'], 'clients'));
+        $this->assertSame(['id', 'courriel'], $schema->physicalColumns($session['org'], 'clients'));
         $this->assertSame('a-conserver@exemple.fr', $lignes['rows'][0]['courriel']);
     }
 
@@ -221,14 +224,14 @@ final class SchemaTest extends ApiTestCase
         $schema  = new SchemaBuilder();
         $base    = $this->schemaMinimal();
 
-        $schema->sync($session['id'], 'clients', $base);
+        $schema->sync($session['org'], 'clients', $base);
 
         $avecActif = [...$base, $this->colonne('actif', 'boolean')];
-        $schema->sync($session['id'], 'clients', $avecActif, $base);
-        $this->assertContains('actif', $schema->physicalColumns($session['id'], 'clients'));
+        $schema->sync($session['org'], 'clients', $avecActif, $base);
+        $this->assertContains('actif', $schema->physicalColumns($session['org'], 'clients'));
 
-        $schema->sync($session['id'], 'clients', $base, $avecActif);
-        $this->assertNotContains('actif', $schema->physicalColumns($session['id'], 'clients'));
+        $schema->sync($session['org'], 'clients', $base, $avecActif);
+        $this->assertNotContains('actif', $schema->physicalColumns($session['org'], 'clients'));
     }
 
     // =====================================================================
@@ -245,7 +248,7 @@ final class SchemaTest extends ApiTestCase
         $session = $this->register('inconnue@test.local');
         $schema  = new SchemaBuilder();
 
-        $schema->sync($session['id'], 'clients', $this->schemaMinimal());
+        $schema->sync($session['org'], 'clients', $this->schemaMinimal());
 
         $reponse = $this->call(
             'POST',
@@ -327,10 +330,10 @@ final class SchemaTest extends ApiTestCase
         $id     = $table['body']['data']['id'];
         $schema = new SchemaBuilder();
 
-        $this->assertTrue($schema->tableExists($session['id'], 'ephemere'));
+        $this->assertTrue($schema->tableExists($session['org'], 'ephemere'));
 
         $this->call('DELETE', "/api/backend/tables/{$id}", [], $entete);
 
-        $this->assertFalse($schema->tableExists($session['id'], 'ephemere'));
+        $this->assertFalse($schema->tableExists($session['org'], 'ephemere'));
     }
 }

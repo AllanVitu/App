@@ -10,7 +10,7 @@ use PDO;
 /**
  * Module « Déploiement ».
  *
- * Comme tous les dépôts, CHAQUE requête est filtrée sur user_id.
+ * Comme tous les dépôts, CHAQUE requête est filtrée sur organization_id.
  *
  * « finished_at » et « duration_ms » ne figurent dans aucune écriture : ils
  * sont dérivés du statut par trigger (cf. 07_modules.sql). Les fournir ici
@@ -20,8 +20,14 @@ final class DeploymentRepository
 {
     private const SORTABLE = ['created_at', 'finished_at', 'duration_ms', 'branch'];
 
+    /**
+     * Sous-requête scalaire plutôt que jointure : la liste sert aussi bien à
+     * des SELECT qu'à des RETURNING, et ces derniers n'acceptent pas de JOIN.
+     * « created_by » y reste sans qualificatif pour valoir dans les deux cas.
+     */
     private const COLUMNS = 'id, environment, branch, commit_sha, commit_message, status,
-                             url, log, finished_at, duration_ms, created_at, updated_at';
+                             url, log, finished_at, duration_ms, created_at, updated_at, created_by,
+                             (SELECT u.full_name FROM users u WHERE u.id = created_by) AS author_name';
 
     /**
      * @param array{environment?: string|null, status?: string|null, branch?: string|null,
@@ -29,13 +35,13 @@ final class DeploymentRepository
      * @return array{deployments: list<array<string, mixed>>, total: int}
      */
     public function search(
-        string $userId,
+        string $organizationId,
         array $filters,
         int $limit = 200,
         int $offset = 0,
     ): array {
-        $conditions = ['user_id = :user_id', 'deleted_at IS NULL'];
-        $params     = ['user_id' => $userId];
+        $conditions = ['organization_id = :organization_id', 'deleted_at IS NULL'];
+        $params     = ['organization_id' => $organizationId];
 
         if (!empty($filters['environment'])) {
             $conditions[]          = 'environment = :environment::deployment_env';
@@ -93,15 +99,15 @@ final class DeploymentRepository
     /**
      * @return array<string, mixed>|null
      */
-    public function find(string $id, string $userId): ?array
+    public function find(string $id, string $organizationId): ?array
     {
         $statement = Database::connection()->prepare(
             'SELECT ' . self::COLUMNS . '
                FROM deployments
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
         $row = $statement->fetch();
 
         return $row === false ? null : $this->hydrate($row);
@@ -111,12 +117,13 @@ final class DeploymentRepository
      * @param array<string, mixed> $attributes
      * @return array<string, mixed>
      */
-    public function create(string $userId, array $attributes): array
+    public function create(string $organizationId, ?string $authorId, array $attributes): array
     {
         $statement = Database::connection()->prepare(
-            'INSERT INTO deployments (user_id, environment, branch, commit_sha, commit_message, status, url, log)
+            'INSERT INTO deployments (organization_id, created_by, environment, branch, commit_sha, commit_message, status, url, log)
              VALUES (
-                 :user_id,
+                 :organization_id,
+                 :created_by,
                  :environment::deployment_env,
                  :branch,
                  :commit_sha,
@@ -128,7 +135,10 @@ final class DeploymentRepository
              RETURNING ' . self::COLUMNS,
         );
 
-        $statement->execute($this->bindings($attributes) + ['user_id' => $userId]);
+        $statement->execute($this->bindings($attributes) + [
+            'organization_id' => $organizationId,
+            'created_by'      => $authorId,
+        ]);
 
         /** @var array<string, mixed> $row */
         $row = $statement->fetch();
@@ -140,7 +150,7 @@ final class DeploymentRepository
      * @param array<string, mixed> $attributes
      * @return array<string, mixed>|null
      */
-    public function update(string $id, string $userId, array $attributes): ?array
+    public function update(string $id, string $organizationId, array $attributes): ?array
     {
         $statement = Database::connection()->prepare(
             'UPDATE deployments
@@ -151,26 +161,26 @@ final class DeploymentRepository
                     status         = :status::deployment_status,
                     url            = :url,
                     log            = :log
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL
           RETURNING ' . self::COLUMNS,
         );
 
-        $statement->execute($this->bindings($attributes) + ['id' => $id, 'user_id' => $userId]);
+        $statement->execute($this->bindings($attributes) + ['id' => $id, 'organization_id' => $organizationId]);
 
         $row = $statement->fetch();
 
         return $row === false ? null : $this->hydrate($row);
     }
 
-    public function softDelete(string $id, string $userId): bool
+    public function softDelete(string $id, string $organizationId): bool
     {
         $statement = Database::connection()->prepare(
             'UPDATE deployments
                 SET deleted_at = NOW()
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
 
         return $statement->rowCount() > 0;
     }
@@ -182,15 +192,15 @@ final class DeploymentRepository
      * seulement sa trace visible. Son statut, sa durée et son journal sont
      * exactement ceux qu'il avait.
      */
-    public function restore(string $id, string $userId): bool
+    public function restore(string $id, string $organizationId): bool
     {
         $statement = Database::connection()->prepare(
             'UPDATE deployments
                 SET deleted_at = NULL
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NOT NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
 
         return $statement->rowCount() > 0;
     }
@@ -200,16 +210,16 @@ final class DeploymentRepository
      *
      * @return list<string>
      */
-    public function branchesForUser(string $userId): array
+    public function branchesForOrganization(string $organizationId): array
     {
         $statement = Database::connection()->prepare(
             'SELECT DISTINCT branch
                FROM deployments
-              WHERE user_id = :user_id AND deleted_at IS NULL
+              WHERE organization_id = :organization_id AND deleted_at IS NULL
               ORDER BY branch',
         );
 
-        $statement->execute(['user_id' => $userId]);
+        $statement->execute(['organization_id' => $organizationId]);
 
         return array_map(static fn (array $row): string => (string) $row['branch'], $statement->fetchAll());
     }
@@ -223,7 +233,7 @@ final class DeploymentRepository
      *
      * @return list<array<string, mixed>>
      */
-    public function needsAttention(string $userId, int $limit = 3): array
+    public function needsAttention(string $organizationId, int $limit = 3): array
     {
         $statement = Database::connection()->prepare(
             // La MÊME liste de colonnes que partout ailleurs : hydrate() les
@@ -231,14 +241,14 @@ final class DeploymentRepository
             // manquantes plutôt qu'une erreur franche.
             'SELECT ' . self::COLUMNS . "
                FROM deployments
-              WHERE user_id = :user_id
+              WHERE organization_id = :organization_id
                 AND deleted_at IS NULL
                 AND status = 'error'
               ORDER BY (environment = 'production') DESC, created_at DESC
               LIMIT :limit",
         );
 
-        $statement->bindValue('user_id', $userId);
+        $statement->bindValue('organization_id', $organizationId);
         $statement->bindValue('limit', $limit, PDO::PARAM_INT);
         $statement->execute();
 
@@ -249,7 +259,7 @@ final class DeploymentRepository
      * @return array{total: int, running: int, ready: int, failed: int, production: int,
      *               last_success_at: string|null, median_ms: int}
      */
-    public function statsForUser(string $userId): array
+    public function statsForOrganization(string $organizationId): array
     {
         $statement = Database::connection()->prepare(
             "SELECT
@@ -268,10 +278,10 @@ final class DeploymentRepository
                      0
                  )                                                                 AS median_ms
                FROM deployments
-              WHERE user_id = :user_id AND deleted_at IS NULL",
+              WHERE organization_id = :organization_id AND deleted_at IS NULL",
         );
 
-        $statement->execute(['user_id' => $userId]);
+        $statement->execute(['organization_id' => $organizationId]);
         $row = $statement->fetch() ?: [];
 
         return [
@@ -326,6 +336,10 @@ final class DeploymentRepository
             'duration_ms'    => $row['duration_ms'] !== null ? (int) $row['duration_ms'] : null,
             'created_at'     => Database::toIso($row['created_at']),
             'updated_at'     => Database::toIso($row['updated_at']),
+            // « Qui a lancé ça ? » — la question qu'on pose devant un
+            // déploiement en échec qu'on n'a pas déclenché soi-même.
+            'created_by'     => $row['created_by'] !== null ? (string) $row['created_by'] : null,
+            'author_name'    => $row['author_name'] !== null ? (string) $row['author_name'] : null,
         ];
     }
 }

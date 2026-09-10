@@ -25,7 +25,7 @@ final class SearchController
         $terme = trim($request->queryParam('q') ?? '');
 
         Response::json(
-            (new SearchService())->search($request->userId(), $terme),
+            (new SearchService())->search($request->organizationId(), $terme),
             200,
             // Le terme est renvoyé pour que le client puisse ignorer une
             // réponse périmée : on tape plus vite que le réseau ne répond, et

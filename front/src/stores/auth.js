@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { authApi } from '@/services/api'
+import { authApi, organizationsApi } from '@/services/api'
 import { configureSession, setAccessToken } from '@/services/http'
 import { setTimeZone } from '@/utils/format'
 // Importé pour ce seul appel : les préférences d'affichage arrivent ici, et
@@ -20,6 +20,25 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
   const settings = ref(null)
   const accessToken = ref(null)
+
+  /**
+   * Espace de travail courant, et la liste de ceux auxquels le compte
+   * appartient.
+   *
+   * ┌───────────────────────────────────────────────────────────────────────┐
+   * │  LE CLIENT NE CHOISIT PAS LE CLOISONNEMENT, IL LE CONSTATE            │
+   * │                                                                       │
+   * │  Aucune requête ne porte d'identifiant d'espace : le serveur le résout │
+   * │  à chaque appel depuis l'appartenance en base. Ce qui est gardé ici    │
+   * │  sert à AFFICHER — un nom dans le sélecteur, un rôle qui décide des    │
+   * │  commandes montrées — jamais à filtrer.                               │
+   * │                                                                       │
+   * │  Conséquence : masquer un bouton selon « role » est un confort, pas    │
+   * │  une sécurité. Les routes le vérifient de leur côté.                  │
+   * └───────────────────────────────────────────────────────────────────────┘
+   */
+  const organization = ref(null)
+  const organizations = ref([])
 
   /** Passe à true une fois la session restaurée (ou son absence confirmée). */
   const ready = ref(false)
@@ -44,11 +63,19 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = payload.user
     accessToken.value = payload.access_token
     setAccessToken(payload.access_token)
+
+    // Présents sur /login, /register et /refresh : la session est complète dès
+    // le premier appel, sans aller-retour supplémentaire pour savoir où l'on
+    // se trouve.
+    if (payload.organization) organization.value = payload.organization
+    if (payload.organizations) organizations.value = payload.organizations
   }
 
   function clearSession() {
     user.value = null
     settings.value = null
+    organization.value = null
+    organizations.value = []
     setTimeZone(null)
     accessToken.value = null
     setAccessToken(null)
@@ -75,7 +102,32 @@ export const useAuthStore = defineStore('auth', () => {
   async function loadProfile() {
     const payload = await authApi.me()
     user.value = payload.user
+    organization.value = payload.organization ?? null
+    organizations.value = payload.organizations ?? []
     applySettings(payload.settings)
+  }
+
+  /**
+   * Bascule d'espace de travail.
+   *
+   * TOUT ce qui est affiché change : les cinq modules, le tableau de bord, la
+   * recherche. Plutôt que d'essayer de rafraîchir chaque écran ouvert — et
+   * d'en oublier un — l'appelant recharge la page. C'est le geste franc, et il
+   * est rare.
+   */
+  async function switchOrganization(id) {
+    if (id === organization.value?.id) return organization.value
+
+    organization.value = await organizationsApi.activate(id)
+
+    return organization.value
+  }
+
+  /**
+   * Recharge la liste des espaces, après en avoir créé, renommé ou quitté un.
+   */
+  async function reloadOrganizations() {
+    organizations.value = await organizationsApi.list()
   }
 
   async function logout() {
@@ -152,7 +204,11 @@ export const useAuthStore = defineStore('auth', () => {
     refresh,
     initialize,
     loadProfile,
+    organization,
+    organizations,
     setUser,
     setSettings,
+    switchOrganization,
+    reloadOrganizations,
   }
 })

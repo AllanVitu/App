@@ -449,6 +449,12 @@ onMounted(load)
                   ~{{ opened.row_estimate.toLocaleString('fr-FR') }} lignes
                 </span>
 
+                <!-- Qui a déclaré ce schéma. Un nom de table ne dit pas
+                     toujours à quoi elle sert ; savoir à qui demander, si. -->
+                <span v-if="opened.author_name" class="text-[0.72rem] text-ink-3">
+                  déclarée par {{ opened.author_name }}
+                </span>
+
                 <span class="flex-1" />
 
                 <button
@@ -653,6 +659,14 @@ onMounted(load)
             </span>
 
             <span class="flex-1" />
+
+            <!-- Qui l'a émise : c'est ce qu'on regarde avant de révoquer une
+                 clé dont on ne sait plus à quoi elle sert. Elle survit au
+                 départ de son auteur — la mention disparaît alors, pas la
+                 clé. -->
+            <span v-if="key.author_name" class="hidden text-[0.72rem] text-ink-3 sm:inline">
+              {{ key.author_name }}
+            </span>
 
             <span class="text-[0.72rem] text-ink-3">
               <template v-if="key.revoked_at"

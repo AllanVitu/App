@@ -22,6 +22,7 @@ use App\Controllers\ErrorController;
 use App\Controllers\HealthController;
 use App\Controllers\ItemController;
 use App\Controllers\ModuleController;
+use App\Controllers\OrganizationController;
 use App\Controllers\ProfileController;
 use App\Controllers\SearchController;
 use App\Controllers\SessionController;
@@ -30,10 +31,18 @@ use App\Controllers\TicketController;
 use App\Core\Router;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\IngestMiddleware;
+use App\Middleware\RequireAdmin;
+use App\Middleware\RequireOwner;
 
 $router = new Router();
 
 $auth = [AuthMiddleware::class];
+
+// Rôle DANS L'ORGANISATION, à ne pas confondre avec « users.role », qui reste
+// l'administration de l'instance. Les gardes s'empilent après AuthMiddleware :
+// c'est lui qui pose l'organisation dont elles lisent le rôle.
+$admin = [AuthMiddleware::class, RequireAdmin::class];
+$owner = [AuthMiddleware::class, RequireOwner::class];
 
 // Ingestion : accepte AUSSI une clé d'API de service, parce qu'une
 // application qui signale une erreur ne peut pas détenir de session
@@ -68,6 +77,41 @@ $router->post('/api/auth/email/resend', [AccountController::class, 'resendVerifi
 $router->get('/api/auth/sessions', [SessionController::class, 'index'], $auth);
 $router->delete('/api/auth/sessions', [SessionController::class, 'destroyOthers'], $auth);
 $router->delete('/api/auth/sessions/{id}', [SessionController::class, 'destroy'], $auth);
+
+// --- Espaces de travail -----------------------------------------------------
+//
+// LE CLOISONNEMENT DE TOUTE L'API TIENT À CES ROUTES. Les autres reçoivent leur
+// « organization_id » d'AuthMiddleware et ne peuvent pas en changer ; ici seul
+// « activate » le déplace, après avoir vérifié l'appartenance.
+//
+// Les rôles apparaissent enfin dans la pile de middlewares : $admin pour ce qui
+// gère l'équipe, $owner pour ce qui est définitif. Ce qu'ils ne savent pas
+// dire — « pas le dernier propriétaire », « pas soi-même » — dépend de la
+// cible et se vérifie dans le contrôleur.
+$router->get('/api/organizations', [OrganizationController::class, 'index'], $auth);
+$router->post('/api/organizations', [OrganizationController::class, 'store'], $auth);
+
+// Avant « /{id} », qui capturerait « members » comme identifiant.
+$router->get('/api/organizations/members', [OrganizationController::class, 'members'], $auth);
+$router->put('/api/organizations/members/{id}', [OrganizationController::class, 'updateMember'], $admin);
+$router->delete('/api/organizations/members/{id}', [OrganizationController::class, 'removeMember'], $admin);
+
+// Partir de soi-même : ouvert à tous, c'est le pendant volontaire de
+// l'exclusion.
+$router->post('/api/organizations/leave', [OrganizationController::class, 'leave'], $auth);
+
+$router->post('/api/organizations/invitations', [OrganizationController::class, 'invite'], $admin);
+$router->delete('/api/organizations/invitations/{id}', [OrganizationController::class, 'revokeInvitation'], $admin);
+
+$router->put('/api/organizations/{id}', [OrganizationController::class, 'update'], $admin);
+$router->delete('/api/organizations/{id}', [OrganizationController::class, 'destroy'], $owner);
+$router->post('/api/organizations/{id}/activate', [OrganizationController::class, 'activate'], $auth);
+
+// Accueil d'un lien d'invitation : PUBLIQUE, parce que l'invité n'a le plus
+// souvent pas encore de compte et doit savoir à quoi il est convié avant d'en
+// créer un. Elle ne révèle que ce que le porteur du lien sait déjà.
+$router->get('/api/invitations/{token}', [OrganizationController::class, 'showInvitation']);
+$router->post('/api/invitations/{token}/accept', [OrganizationController::class, 'acceptInvitation'], $auth);
 
 // --- Tableau de bord -------------------------------------------------------
 $router->get('/api/dashboard', [DashboardController::class, 'index'], $auth);

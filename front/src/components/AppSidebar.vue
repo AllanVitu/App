@@ -12,6 +12,7 @@ import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
 
 import AppIcon from '@/components/AppIcon.vue'
+import WorkspaceSwitcher from '@/components/WorkspaceSwitcher.vue'
 import { useDrawerGestures } from '@/composables/useDrawerGestures'
 import { useAuthStore } from '@/stores/auth'
 import { useModulesStore } from '@/stores/modules'
@@ -89,6 +90,12 @@ const repere = (actif) => (actif ? 'bg-ink' : 'bg-transparent')
       </div>
     </div>
 
+    <!-- L'ESPACE DE TRAVAIL, JUSTE SOUS LA MARQUE.
+         Tout ce qui suit lui appartient : les modules, leurs compteurs, le
+         tableau de bord. Le nommer avant de les lister, c'est l'ordre dans
+         lequel la question se pose. -->
+    <WorkspaceSwitcher class="shrink-0" />
+
     <!-- Navigation -->
     <nav class="flex-1 space-y-5 overflow-y-auto py-4" aria-label="Navigation principale">
       <div>
@@ -139,6 +146,20 @@ const repere = (actif) => (actif ? 'bg-ink' : 'bg-transparent')
             </span>
           </RouterLink>
         </div>
+      </div>
+
+      <div>
+        <p class="label-caps px-3 pb-1.5">espace</p>
+
+        <RouterLink
+          :to="{ name: 'team' }"
+          :class="[linkBase, $route.name === 'team' ? linkActive : linkIdle]"
+          @click="ui.toggleSidebar(false)"
+        >
+          <span class="ligne h-5" :class="repere($route.name === 'team')" aria-hidden="true" />
+          <AppIcon name="users" :size="15" />
+          équipe
+        </RouterLink>
       </div>
 
       <div>

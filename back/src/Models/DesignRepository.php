@@ -10,8 +10,8 @@ use PDO;
 /**
  * Module « Design » : fichiers et historique de versions.
  *
- * Comme tous les dépôts, CHAQUE requête est filtrée sur user_id — y compris
- * pour les versions, dont la table porte une copie de user_id pour que le
+ * Comme tous les dépôts, CHAQUE requête est filtrée sur organization_id — y compris
+ * pour les versions, dont la table porte une copie de organization_id pour que le
  * cloisonnement ne dépende jamais d'une jointure correctement écrite.
  *
  * Le numéro de version est attribué PAR FICHIER par un trigger : il n'est
@@ -36,13 +36,13 @@ final class DesignRepository
      * @return array{files: list<array<string, mixed>>, total: int}
      */
     public function search(
-        string $userId,
+        string $organizationId,
         array $filters,
         int $limit = 200,
         int $offset = 0,
     ): array {
-        $conditions = ['f.user_id = :user_id', 'f.deleted_at IS NULL'];
-        $params     = ['user_id' => $userId];
+        $conditions = ['f.organization_id = :organization_id', 'f.deleted_at IS NULL'];
+        $params     = ['organization_id' => $organizationId];
 
         if (!empty($filters['kind'])) {
             $conditions[]   = 'f.kind = :kind::design_kind';
@@ -97,7 +97,7 @@ final class DesignRepository
      *
      * @return array<string, mixed>|null
      */
-    public function find(string $id, string $userId): ?array
+    public function find(string $id, string $organizationId): ?array
     {
         $statement = Database::connection()->prepare(
             'SELECT ' . self::COLUMNS . ', v.versions, v.last_version_at
@@ -107,10 +107,10 @@ final class DesignRepository
                      FROM design_versions
                     WHERE file_id = f.id
                ) v ON TRUE
-              WHERE f.id = :id AND f.user_id = :user_id AND f.deleted_at IS NULL',
+              WHERE f.id = :id AND f.organization_id = :organization_id AND f.deleted_at IS NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
         $row = $statement->fetch();
 
         if ($row === false) {
@@ -118,7 +118,7 @@ final class DesignRepository
         }
 
         $file = $this->hydrateFile($row);
-        $file['history'] = $this->versionsForFile($id, $userId);
+        $file['history'] = $this->versionsForFile($id, $organizationId);
 
         return $file;
     }
@@ -126,31 +126,26 @@ final class DesignRepository
     /**
      * @return list<array<string, mixed>>
      */
-    public function versionsForFile(string $fileId, string $userId, int $limit = 50): array
+    public function versionsForFile(string $fileId, string $organizationId, int $limit = 50): array
     {
         $statement = Database::connection()->prepare(
-            'SELECT id, number, label, notes, created_at
-               FROM design_versions
-              WHERE file_id = :file_id AND user_id = :user_id
-              ORDER BY number DESC
+            'SELECT v.id, v.number, v.label, v.notes, v.created_at, v.created_by, u.full_name AS author_name
+               FROM design_versions v
+          LEFT JOIN users u ON u.id = v.created_by
+              WHERE v.file_id = :file_id AND v.organization_id = :organization_id
+              ORDER BY v.number DESC
               LIMIT :limit',
         );
 
         $statement->bindValue('file_id', $fileId);
-        $statement->bindValue('user_id', $userId);
+        $statement->bindValue('organization_id', $organizationId);
         $statement->bindValue('limit', $limit, PDO::PARAM_INT);
         $statement->execute();
 
-        return array_map(
-            static fn (array $row): array => [
-                'id'         => (string) $row['id'],
-                'number'     => (int) $row['number'],
-                'label'      => $row['label'] !== null ? (string) $row['label'] : null,
-                'notes'      => $row['notes'] !== null ? (string) $row['notes'] : null,
-                'created_at' => Database::toIso($row['created_at']),
-            ],
-            $statement->fetchAll(),
-        );
+        // LEFT JOIN, pas INNER : une version publiée par quelqu'un qui a
+        // depuis supprimé son compte reste dans l'historique. La faire
+        // disparaître réécrirait le passé.
+        return array_map($this->hydrateVersion(...), $statement->fetchAll());
     }
 
     /**
@@ -162,22 +157,25 @@ final class DesignRepository
      * @param  array<string, mixed> $attributes
      * @return array<string, mixed>
      */
-    public function createFile(string $userId, array $attributes): array
+    public function createFile(string $organizationId, ?string $authorId, array $attributes): array
     {
-        return Database::transaction(function () use ($userId, $attributes): array {
+        return Database::transaction(function () use ($organizationId, $authorId, $attributes): array {
             $statement = Database::connection()->prepare(
-                'INSERT INTO design_files (user_id, name, kind, description, accent)
-                 VALUES (:user_id, :name, :kind::design_kind, :description, :accent)
+                'INSERT INTO design_files (organization_id, created_by, name, kind, description, accent)
+                 VALUES (:organization_id, :created_by, :name, :kind::design_kind, :description, :accent)
                  RETURNING id',
             );
 
-            $statement->execute($this->fileBindings($attributes) + ['user_id' => $userId]);
+            $statement->execute($this->fileBindings($attributes) + [
+                'organization_id' => $organizationId,
+                'created_by'      => $authorId,
+            ]);
             $fileId = (string) $statement->fetchColumn();
 
-            $this->addVersion($fileId, $userId, ['label' => 'Version initiale', 'notes' => null]);
+            $this->addVersion($fileId, $organizationId, $authorId, ['label' => 'Version initiale', 'notes' => null]);
 
             /** @var array<string, mixed> $created */
-            $created = $this->find($fileId, $userId);
+            $created = $this->find($fileId, $organizationId);
 
             return $created;
         });
@@ -187,7 +185,7 @@ final class DesignRepository
      * @param  array<string, mixed> $attributes
      * @return array<string, mixed>|null
      */
-    public function updateFile(string $id, string $userId, array $attributes): ?array
+    public function updateFile(string $id, string $organizationId, array $attributes): ?array
     {
         $statement = Database::connection()->prepare(
             'UPDATE design_files
@@ -195,23 +193,23 @@ final class DesignRepository
                     kind        = :kind::design_kind,
                     description = :description,
                     accent      = :accent
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL',
         );
 
-        $statement->execute($this->fileBindings($attributes) + ['id' => $id, 'user_id' => $userId]);
+        $statement->execute($this->fileBindings($attributes) + ['id' => $id, 'organization_id' => $organizationId]);
 
-        return $statement->rowCount() > 0 ? $this->find($id, $userId) : null;
+        return $statement->rowCount() > 0 ? $this->find($id, $organizationId) : null;
     }
 
-    public function deleteFile(string $id, string $userId): bool
+    public function deleteFile(string $id, string $organizationId): bool
     {
         $statement = Database::connection()->prepare(
             'UPDATE design_files
                 SET deleted_at = NOW()
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
 
         return $statement->rowCount() > 0;
     }
@@ -224,15 +222,15 @@ final class DesignRepository
      * « f.deleted_at IS NULL » — c'est-à-dire par l'état du fichier. Un
      * historique de douze versions restauré est le même qu'avant.
      */
-    public function restoreFile(string $id, string $userId): bool
+    public function restoreFile(string $id, string $organizationId): bool
     {
         $statement = Database::connection()->prepare(
             'UPDATE design_files
                 SET deleted_at = NULL
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NOT NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
 
         return $statement->rowCount() > 0;
     }
@@ -243,30 +241,45 @@ final class DesignRepository
      * @param  array<string, mixed> $attributes
      * @return array<string, mixed>
      */
-    public function addVersion(string $fileId, string $userId, array $attributes): array
+    public function addVersion(string $fileId, string $organizationId, ?string $authorId, array $attributes): array
     {
         $statement = Database::connection()->prepare(
-            'INSERT INTO design_versions (file_id, user_id, label, notes)
-             VALUES (:file_id, :user_id, :label, :notes)
-             RETURNING id, number, label, notes, created_at',
+            'INSERT INTO design_versions (file_id, organization_id, created_by, label, notes)
+             VALUES (:file_id, :organization_id, :created_by, :label, :notes)
+             RETURNING id, number, label, notes, created_at, created_by,
+                       (SELECT u.full_name FROM users u WHERE u.id = created_by) AS author_name',
         );
 
         $statement->execute([
-            'file_id' => $fileId,
-            'user_id' => $userId,
-            'label'   => $attributes['label'],
-            'notes'   => $attributes['notes'],
+            'file_id'         => $fileId,
+            'organization_id' => $organizationId,
+            'created_by'      => $authorId,
+            'label'           => $attributes['label'],
+            'notes'           => $attributes['notes'],
         ]);
 
         /** @var array<string, mixed> $row */
         $row = $statement->fetch();
 
+        return $this->hydrateVersion($row);
+    }
+
+    /**
+     * @param  array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function hydrateVersion(array $row): array
+    {
         return [
-            'id'         => (string) $row['id'],
-            'number'     => (int) $row['number'],
-            'label'      => $row['label'] !== null ? (string) $row['label'] : null,
-            'notes'      => $row['notes'] !== null ? (string) $row['notes'] : null,
-            'created_at' => Database::toIso($row['created_at']),
+            'id'          => (string) $row['id'],
+            'number'      => (int) $row['number'],
+            'label'       => $row['label'] !== null ? (string) $row['label'] : null,
+            'notes'       => $row['notes'] !== null ? (string) $row['notes'] : null,
+            'created_at'  => Database::toIso($row['created_at']),
+            // « Qui a publié cette version » : à plusieurs, un historique
+            // anonyme ne dit qu'une moitié de ce qu'on lui demande.
+            'created_by'  => $row['created_by'] !== null ? (string) $row['created_by'] : null,
+            'author_name' => $row['author_name'] !== null ? (string) $row['author_name'] : null,
         ];
     }
 
@@ -274,7 +287,7 @@ final class DesignRepository
      * @return array{files: int, versions: int, maquette: int, prototype: int,
      *               systeme: int, updated_this_week: int}
      */
-    public function statsForUser(string $userId): array
+    public function statsForOrganization(string $organizationId): array
     {
         $statement = Database::connection()->prepare(
             "SELECT
@@ -284,10 +297,10 @@ final class DesignRepository
                  COUNT(*) FILTER (WHERE kind = 'systeme')                         AS systeme,
                  COUNT(*) FILTER (WHERE updated_at > NOW() - INTERVAL '7 days')   AS updated_this_week
                FROM design_files
-              WHERE user_id = :user_id AND deleted_at IS NULL",
+              WHERE organization_id = :organization_id AND deleted_at IS NULL",
         );
 
-        $statement->execute(['user_id' => $userId]);
+        $statement->execute(['organization_id' => $organizationId]);
         $row = $statement->fetch() ?: [];
 
         // Les versions des fichiers supprimés ne comptent pas : la suppression
@@ -296,9 +309,9 @@ final class DesignRepository
             'SELECT COUNT(*)
                FROM design_versions v
                JOIN design_files f ON f.id = v.file_id AND f.deleted_at IS NULL
-              WHERE v.user_id = :user_id',
+              WHERE v.organization_id = :organization_id',
         );
-        $versions->execute(['user_id' => $userId]);
+        $versions->execute(['organization_id' => $organizationId]);
 
         return [
             'files'             => (int) ($row['files'] ?? 0),

@@ -52,9 +52,9 @@ final class BackendController
      */
     public function index(Request $request): void
     {
-        $userId = $request->userId();
+        $orgId = $request->organizationId();
 
-        $result = $this->backend->searchTables($userId, [
+        $result = $this->backend->searchTables($orgId, [
             'search'    => $request->queryParam('search'),
             'sort'      => $request->queryParam('sort', 'created_at'),
             'direction' => $request->queryParam('direction', 'desc'),
@@ -62,8 +62,8 @@ final class BackendController
 
         Response::json($result['tables'], 200, [
             'total' => $result['total'],
-            'stats' => $this->backend->statsForUser($userId),
-            'keys'  => $this->backend->keysForUser($userId),
+            'stats' => $this->backend->statsForOrganization($orgId),
+            'keys'  => $this->backend->keysForOrganization($orgId),
             'types' => self::COLUMN_TYPES,
         ]);
     }
@@ -73,16 +73,16 @@ final class BackendController
      */
     public function store(Request $request): void
     {
-        $userId = $request->userId();
-        $table  = $this->backend->createTable($userId, $this->validateTable($request));
+        $orgId = $request->organizationId();
+        $table  = $this->backend->createTable($orgId, $request->actorId(), $this->validateTable($request));
 
         // La table PHYSIQUE suit la description. En cas d'échec du DDL, la
         // description est retirée : laisser une table décrite sans table réelle
         // ferait un écran qui ment sur ce qui existe.
         try {
-            $this->schema->sync($userId, $table['name'], $table['columns']);
+            $this->schema->sync($orgId, $table['name'], $table['columns']);
         } catch (\Throwable $e) {
-            $this->backend->deleteTable($table['id'], $userId);
+            $this->backend->deleteTable($table['id'], $orgId);
 
             throw $e;
         }
@@ -105,10 +105,10 @@ final class BackendController
     {
         $existing = $this->findOrFail($request);
 
-        $userId  = $request->userId();
+        $orgId   = $request->organizationId();
         $updated = $this->backend->updateTable(
             (string) $request->param('id'),
-            $userId,
+            $orgId,
             $this->validateTable($request, $existing),
         );
 
@@ -118,8 +118,8 @@ final class BackendController
 
         // Le renommage vient AVANT la synchronisation des colonnes : ALTER
         // COLUMN s'adresse à la table par son nom, donc au nouveau.
-        $this->schema->rename($userId, $existing['name'], $updated['name']);
-        $this->schema->sync($userId, $updated['name'], $updated['columns'], $existing['columns']);
+        $this->schema->rename($orgId, $existing['name'], $updated['name']);
+        $this->schema->sync($orgId, $updated['name'], $updated['columns'], $existing['columns']);
 
         Response::json($updated);
     }
@@ -130,9 +130,9 @@ final class BackendController
     public function destroy(Request $request): void
     {
         $existing = $this->findOrFail($request);
-        $userId   = $request->userId();
+        $orgId   = $request->organizationId();
 
-        if (!$this->backend->deleteTable($this->validateId($request), $userId)) {
+        if (!$this->backend->deleteTable($this->validateId($request), $orgId)) {
             throw HttpException::notFound('Table introuvable.');
         }
 
@@ -140,7 +140,7 @@ final class BackendController
         // est réellement supprimée. Conserver des données inatteignables
         // consommerait de l'espace en laissant croire qu'on peut revenir en
         // arrière. L'interface le dit avant d'agir.
-        $this->schema->drop($userId, $existing['name']);
+        $this->schema->drop($orgId, $existing['name']);
 
         Response::noContent();
     }
@@ -165,7 +165,7 @@ final class BackendController
 
         $validator->check();
 
-        $created = $this->backend->createKey($request->userId(), (string) $label, (string) $scope);
+        $created = $this->backend->createKey($request->organizationId(), $request->actorId(), (string) $label, (string) $scope);
 
         Response::created([
             'key'   => $created['key'],
@@ -179,7 +179,7 @@ final class BackendController
      */
     public function revokeKey(Request $request): void
     {
-        if (!$this->backend->revokeKey($this->validateId($request), $request->userId())) {
+        if (!$this->backend->revokeKey($this->validateId($request), $request->organizationId())) {
             // 404 aussi bien pour une clé inexistante que pour une clé déjà
             // révoquée : dans les deux cas, il n'y a rien à révoquer.
             throw HttpException::notFound('Clé introuvable ou déjà révoquée.');
@@ -315,7 +315,7 @@ final class BackendController
      */
     private function findOrFail(Request $request): array
     {
-        $table = $this->backend->findTable($this->validateId($request), $request->userId());
+        $table = $this->backend->findTable($this->validateId($request), $request->organizationId());
 
         if ($table === null) {
             throw HttpException::notFound('Table introuvable.');

@@ -41,7 +41,7 @@ final class ErrorController
      */
     public function index(Request $request): void
     {
-        $userId = $request->userId();
+        $userId = $request->organizationId();
 
         // Décalage borné : au-delà du plafond, la page demandée n'existe pas.
         $offset = $request->queryInt('offset', 0, 0, 100000);
@@ -57,7 +57,7 @@ final class ErrorController
         Response::json($result['groups'], 200, [
             'offset'  => $offset,
             'total'  => $result['total'],
-            'stats'  => $this->errors->statsForUser($userId),
+            'stats'  => $this->errors->statsForOrganization($userId),
             // Courbe des 14 derniers jours : une erreur qui se répète et une
             // erreur qui vient d'apparaître demandent des réactions
             // différentes, et seul l'historique les distingue.
@@ -95,7 +95,7 @@ final class ErrorController
 
         $validator->check();
 
-        Response::created($this->errors->record($request->userId(), [
+        Response::created($this->errors->record($request->organizationId(), [
             'fingerprint' => $fingerprint,
             'title'       => $title,
             'culprit'     => $culprit,
@@ -122,7 +122,7 @@ final class ErrorController
 
         $updated = $this->errors->updateStatus(
             (string) $request->param('id'),
-            $request->userId(),
+            $request->organizationId(),
             (string) $status,
         );
 
@@ -138,7 +138,7 @@ final class ErrorController
      */
     public function destroy(Request $request): void
     {
-        if (!$this->errors->softDelete($this->validateId($request), $request->userId())) {
+        if (!$this->errors->softDelete($this->validateId($request), $request->organizationId())) {
             throw HttpException::notFound('Erreur introuvable.');
         }
 
@@ -152,11 +152,11 @@ final class ErrorController
     {
         $id = $this->validateId($request);
 
-        if (!$this->errors->restore($id, $request->userId())) {
+        if (!$this->errors->restore($id, $request->organizationId())) {
             throw HttpException::notFound('Erreur introuvable.');
         }
 
-        Response::json($this->errors->find($id, $request->userId()));
+        Response::json($this->errors->find($id, $request->organizationId()));
     }
 
     /**
@@ -178,7 +178,7 @@ final class ErrorController
      */
     private function findOrFail(Request $request): array
     {
-        $group = $this->errors->find($this->validateId($request), $request->userId());
+        $group = $this->errors->find($this->validateId($request), $request->organizationId());
 
         if ($group === null) {
             throw HttpException::notFound('Erreur introuvable.');

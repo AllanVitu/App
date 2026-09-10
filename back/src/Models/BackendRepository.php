@@ -10,7 +10,7 @@ use PDO;
 /**
  * Module « Backend » : schémas de données et clés d'API.
  *
- * Comme tous les dépôts, CHAQUE requête est filtrée sur user_id.
+ * Comme tous les dépôts, CHAQUE requête est filtrée sur organization_id.
  *
  * Les clés d'API ne sont jamais stockées en clair : seuls leur empreinte
  * SHA-256 et leur préfixe le sont, comme les jetons de rafraîchissement de
@@ -21,8 +21,14 @@ final class BackendRepository
 {
     private const SORTABLE = ['created_at', 'updated_at', 'name', 'row_estimate'];
 
+    /**
+     * Sous-requête scalaire plutôt que jointure : la liste sert aussi bien à
+     * des SELECT qu'à des RETURNING, et ces derniers n'acceptent pas de JOIN.
+     * « created_by » y reste sans qualificatif pour valoir dans les deux cas.
+     */
     private const TABLE_COLUMNS = 'id, name, description, columns, rls_enabled,
-                                   row_estimate, created_at, updated_at';
+                                   row_estimate, created_at, updated_at,
+                                   (SELECT u.full_name FROM users u WHERE u.id = created_by) AS author_name';
 
     // ---------------------------------------------------------------------
     //  Schémas de données
@@ -32,10 +38,10 @@ final class BackendRepository
      * @param array{search?: string|null, sort?: string|null, direction?: string|null} $filters
      * @return array{tables: list<array<string, mixed>>, total: int}
      */
-    public function searchTables(string $userId, array $filters, int $limit = 200): array
+    public function searchTables(string $organizationId, array $filters, int $limit = 200): array
     {
-        $conditions = ['user_id = :user_id', 'deleted_at IS NULL'];
-        $params     = ['user_id' => $userId];
+        $conditions = ['organization_id = :organization_id', 'deleted_at IS NULL'];
+        $params     = ['organization_id' => $organizationId];
 
         if (!empty($filters['search'])) {
             $conditions[]     = '(name ILIKE :search OR description ILIKE :search)';
@@ -77,37 +83,41 @@ final class BackendRepository
     /**
      * @return array<string, mixed>|null
      */
-    public function findTable(string $id, string $userId): ?array
+    public function findTable(string $id, string $organizationId): ?array
     {
         $statement = Database::connection()->prepare(
             'SELECT ' . self::TABLE_COLUMNS . '
                FROM backend_tables
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
         $row = $statement->fetch();
 
         return $row === false ? null : $this->hydrateTable($row);
     }
 
     /**
-     * Le nom d'une table est unique par compte : l'unicité est garantie par
-     * un index partiel, donc une collision remonte en violation de contrainte
-     * plutôt qu'en écrasement silencieux.
+     * Le nom d'une table est unique DANS L'ORGANISATION : l'unicité est
+     * garantie par un index partiel, donc une collision remonte en violation
+     * de contrainte plutôt qu'en écrasement silencieux. Deux coéquipiers ne
+     * peuvent pas déclarer deux « clients » qui se croiraient distincts.
      *
      * @param array<string, mixed> $attributes
      * @return array<string, mixed>
      */
-    public function createTable(string $userId, array $attributes): array
+    public function createTable(string $organizationId, ?string $authorId, array $attributes): array
     {
         $statement = Database::connection()->prepare(
-            'INSERT INTO backend_tables (user_id, name, description, columns, rls_enabled, row_estimate)
-             VALUES (:user_id, :name, :description, :columns::jsonb, :rls_enabled, :row_estimate)
+            'INSERT INTO backend_tables (organization_id, created_by, name, description, columns, rls_enabled, row_estimate)
+             VALUES (:organization_id, :created_by, :name, :description, :columns::jsonb, :rls_enabled, :row_estimate)
              RETURNING ' . self::TABLE_COLUMNS,
         );
 
-        $statement->execute($this->tableBindings($attributes) + ['user_id' => $userId]);
+        $statement->execute($this->tableBindings($attributes) + [
+            'organization_id' => $organizationId,
+            'created_by'      => $authorId,
+        ]);
 
         /** @var array<string, mixed> $row */
         $row = $statement->fetch();
@@ -119,7 +129,7 @@ final class BackendRepository
      * @param array<string, mixed> $attributes
      * @return array<string, mixed>|null
      */
-    public function updateTable(string $id, string $userId, array $attributes): ?array
+    public function updateTable(string $id, string $organizationId, array $attributes): ?array
     {
         $statement = Database::connection()->prepare(
             'UPDATE backend_tables
@@ -128,12 +138,12 @@ final class BackendRepository
                     columns      = :columns::jsonb,
                     rls_enabled  = :rls_enabled,
                     row_estimate = :row_estimate
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL
           RETURNING ' . self::TABLE_COLUMNS,
         );
 
         $statement->execute(
-            $this->tableBindings($attributes) + ['id' => $id, 'user_id' => $userId],
+            $this->tableBindings($attributes) + ['id' => $id, 'organization_id' => $organizationId],
         );
 
         $row = $statement->fetch();
@@ -141,15 +151,15 @@ final class BackendRepository
         return $row === false ? null : $this->hydrateTable($row);
     }
 
-    public function deleteTable(string $id, string $userId): bool
+    public function deleteTable(string $id, string $organizationId): bool
     {
         $statement = Database::connection()->prepare(
             'UPDATE backend_tables
                 SET deleted_at = NOW()
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
 
         return $statement->rowCount() > 0;
     }
@@ -164,16 +174,21 @@ final class BackendRepository
      *
      * @return list<array<string, mixed>>
      */
-    public function keysForUser(string $userId): array
+    public function keysForOrganization(string $organizationId): array
     {
         $statement = Database::connection()->prepare(
-            'SELECT id, label, scope, token_prefix, last_used_at, revoked_at, created_at
-               FROM backend_api_keys
-              WHERE user_id = :user_id
-              ORDER BY revoked_at IS NOT NULL, created_at DESC',
+            // LEFT JOIN, pas INNER : une clé émise par quelqu'un qui a depuis
+            // quitté l'équipe reste vivante — c'est même la raison pour
+            // laquelle elle appartient à l'organisation et non à lui.
+            'SELECT k.id, k.label, k.scope, k.token_prefix, k.last_used_at, k.revoked_at,
+                    k.created_at, u.full_name AS author_name
+               FROM backend_api_keys k
+          LEFT JOIN users u ON u.id = k.created_by
+              WHERE k.organization_id = :organization_id
+              ORDER BY k.revoked_at IS NOT NULL, k.created_at DESC',
         );
 
-        $statement->execute(['user_id' => $userId]);
+        $statement->execute(['organization_id' => $organizationId]);
 
         return array_map($this->hydrateKey(...), $statement->fetchAll());
     }
@@ -186,7 +201,7 @@ final class BackendRepository
      *
      * @return array{key: array<string, mixed>, token: string}
      */
-    public function createKey(string $userId, string $label, string $scope): array
+    public function createKey(string $organizationId, ?string $authorId, string $label, string $scope): array
     {
         // 32 octets d'aléa cryptographique, comme les jetons de session. Le
         // préfixe lisible sert à reconnaître la clé dans la liste ; il fait
@@ -196,17 +211,19 @@ final class BackendRepository
         $token  = $prefix . '_' . substr($secret, 8);
 
         $statement = Database::connection()->prepare(
-            'INSERT INTO backend_api_keys (user_id, label, scope, token_prefix, token_hash)
-             VALUES (:user_id, :label, :scope::api_key_scope, :prefix, :hash)
-             RETURNING id, label, scope, token_prefix, last_used_at, revoked_at, created_at',
+            'INSERT INTO backend_api_keys (organization_id, created_by, label, scope, token_prefix, token_hash)
+             VALUES (:organization_id, :created_by, :label, :scope::api_key_scope, :prefix, :hash)
+             RETURNING id, label, scope, token_prefix, last_used_at, revoked_at, created_at,
+                       (SELECT u.full_name FROM users u WHERE u.id = created_by) AS author_name',
         );
 
         $statement->execute([
-            'user_id' => $userId,
-            'label'   => $label,
-            'scope'   => $scope,
-            'prefix'  => $prefix,
-            'hash'    => hash('sha256', $token),
+            'organization_id' => $organizationId,
+            'created_by'      => $authorId,
+            'label'           => $label,
+            'scope'           => $scope,
+            'prefix'          => $prefix,
+            'hash'            => hash('sha256', $token),
         ]);
 
         /** @var array<string, mixed> $row */
@@ -217,11 +234,17 @@ final class BackendRepository
 
 
     /**
-     * Résout le compte propriétaire d'une clé d'API, à partir du jeton EN CLAIR.
+     * Résout l'ORGANISATION destinataire d'une clé d'API, à partir du jeton
+     * EN CLAIR.
      *
      * C'est ce qui donne enfin une utilité aux clés : jusqu'ici elles étaient
      * créées, affichées une fois, révoquées — et n'ouvraient rien. Elles
      * authentifient désormais l'ingestion d'erreurs (cf. IngestMiddleware).
+     *
+     * ELLE RÉSOUT UN ESPACE, PAS UNE PERSONNE, et ce n'est pas un détail : une
+     * intégration de production doit continuer de fonctionner le jour où celui
+     * qui a émis la clé quitte l'équipe. C'est aussi pourquoi « created_by »
+     * n'est pas lu ici — il ne sert qu'à l'affichage.
      *
      * TROIS RÈGLES DE SÉCURITÉ, toutes appliquées ici et pas ailleurs.
      *
@@ -243,9 +266,9 @@ final class BackendRepository
      * elle, on ne peut pas distinguer une clé vivante d'une clé oubliée, et
      * c'est précisément ce qu'on regarde avant d'en révoquer une.
      *
-     * @return array{user_id: string, key_id: string, label: string}|null
+     * @return array{organization_id: string, key_id: string, label: string}|null
      */
-    public function findUserByKey(string $token): ?array
+    public function findOrganizationByKey(string $token): ?array
     {
         $statement = Database::connection()->prepare(
             "UPDATE backend_api_keys
@@ -253,7 +276,7 @@ final class BackendRepository
               WHERE token_hash = :hash
                 AND revoked_at IS NULL
                 AND scope = 'service'
-          RETURNING user_id::text AS user_id, id::text AS key_id, label",
+          RETURNING organization_id::text AS organization_id, id::text AS key_id, label",
         );
 
         $statement->execute(['hash' => hash('sha256', $token)]);
@@ -265,25 +288,26 @@ final class BackendRepository
         }
 
         return [
-            'user_id' => (string) $row['user_id'],
-            'key_id'  => (string) $row['key_id'],
-            'label'   => (string) $row['label'],
+            'organization_id' => (string) $row['organization_id'],
+            'key_id'          => (string) $row['key_id'],
+            'label'           => (string) $row['label'],
         ];
     }
+
     /**
      * Révocation : la ligne demeure, la clé cesse d'être utilisable.
      * Idempotente — révoquer deux fois n'est pas une erreur, mais la seconde
      * ne doit pas repousser la date de révocation.
      */
-    public function revokeKey(string $id, string $userId): bool
+    public function revokeKey(string $id, string $organizationId): bool
     {
         $statement = Database::connection()->prepare(
             'UPDATE backend_api_keys
                 SET revoked_at = NOW()
-              WHERE id = :id AND user_id = :user_id AND revoked_at IS NULL',
+              WHERE id = :id AND organization_id = :organization_id AND revoked_at IS NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
 
         return $statement->rowCount() > 0;
     }
@@ -295,26 +319,26 @@ final class BackendRepository
     /**
      * @return array{tables: int, columns: int, unprotected: int, keys: int, active_keys: int}
      */
-    public function statsForUser(string $userId): array
+    public function statsForOrganization(string $organizationId): array
     {
         $statement = Database::connection()->prepare(
             'SELECT
                  (SELECT COUNT(*) FROM backend_tables
-                   WHERE user_id = :user_id AND deleted_at IS NULL)                     AS tables,
+                   WHERE organization_id = :organization_id AND deleted_at IS NULL)                     AS tables,
                  -- jsonb_array_length par ligne, sommé : le nombre total de
                  -- colonnes conçues, tous schémas confondus.
                  (SELECT COALESCE(SUM(jsonb_array_length(columns)), 0) FROM backend_tables
-                   WHERE user_id = :user_id AND deleted_at IS NULL)                     AS columns,
+                   WHERE organization_id = :organization_id AND deleted_at IS NULL)                     AS columns,
                  -- Sans sécurité au niveau ligne : le seul chiffre de ce
                  -- module qui mérite une alerte.
                  (SELECT COUNT(*) FROM backend_tables
-                   WHERE user_id = :user_id AND deleted_at IS NULL AND NOT rls_enabled) AS unprotected,
-                 (SELECT COUNT(*) FROM backend_api_keys WHERE user_id = :user_id)       AS keys,
+                   WHERE organization_id = :organization_id AND deleted_at IS NULL AND NOT rls_enabled) AS unprotected,
+                 (SELECT COUNT(*) FROM backend_api_keys WHERE organization_id = :organization_id)       AS keys,
                  (SELECT COUNT(*) FROM backend_api_keys
-                   WHERE user_id = :user_id AND revoked_at IS NULL)                     AS active_keys',
+                   WHERE organization_id = :organization_id AND revoked_at IS NULL)                     AS active_keys',
         );
 
-        $statement->execute(['user_id' => $userId]);
+        $statement->execute(['organization_id' => $organizationId]);
         $row = $statement->fetch() ?: [];
 
         return [
@@ -365,6 +389,9 @@ final class BackendRepository
             'row_estimate' => (int) $row['row_estimate'],
             'created_at'   => Database::toIso($row['created_at']),
             'updated_at'   => Database::toIso($row['updated_at']),
+            // Null si le compte a été supprimé : le schéma appartient à
+            // l'organisation, il survit à son auteur.
+            'author_name'  => $row['author_name'] !== null ? (string) $row['author_name'] : null,
         ];
     }
 
@@ -382,6 +409,9 @@ final class BackendRepository
             'last_used_at' => Database::toIso($row['last_used_at']),
             'revoked_at'   => Database::toIso($row['revoked_at']),
             'created_at'   => Database::toIso($row['created_at']),
+            // Null si le compte a été supprimé : la clé appartient à
+            // l'organisation, elle survit à celui qui l'a émise.
+            'author_name'  => $row['author_name'] !== null ? (string) $row['author_name'] : null,
         ];
     }
 }

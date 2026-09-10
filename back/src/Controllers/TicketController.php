@@ -54,7 +54,7 @@ final class TicketController
         // Décalage borné : au-delà du plafond, la page demandée n'existe pas.
         $offset = $request->queryInt('offset', 0, 0, 100000);
 
-        $result = $this->tickets->search($request->userId(), [
+        $result = $this->tickets->search($request->organizationId(), [
             'status'    => $status,
             'priority'  => $priority,
             'project'   => $request->queryParam('project'),
@@ -68,9 +68,9 @@ final class TicketController
         Response::json($result['tickets'], 200, [
             'offset'    => $offset,
             'total'    => $result['total'],
-            'stats'    => $this->tickets->statsForUser($request->userId()),
-            'projects' => $this->tickets->projectsForUser($request->userId()),
-            'labels'   => $this->tickets->labelsForUser($request->userId()),
+            'stats'    => $this->tickets->statsForOrganization($request->organizationId()),
+            'projects' => $this->tickets->projectsForOrganization($request->organizationId()),
+            'labels'   => $this->tickets->labelsForOrganization($request->organizationId()),
         ]);
     }
 
@@ -80,7 +80,7 @@ final class TicketController
     public function store(Request $request): void
     {
         Response::created(
-            $this->tickets->create($request->userId(), $this->validatePayload($request)),
+            $this->tickets->create($request->organizationId(), $request->actorId(), $this->validatePayload($request)),
         );
     }
 
@@ -106,7 +106,7 @@ final class TicketController
 
         $updated = $this->tickets->update(
             (string) $request->param('id'),
-            $request->userId(),
+            $request->organizationId(),
             $this->validatePayload($request, $existing),
         );
 
@@ -122,7 +122,7 @@ final class TicketController
      */
     public function destroy(Request $request): void
     {
-        if (!$this->tickets->softDelete($this->validateId($request), $request->userId())) {
+        if (!$this->tickets->softDelete($this->validateId($request), $request->organizationId())) {
             throw HttpException::notFound('Ticket introuvable.');
         }
 
@@ -156,11 +156,11 @@ final class TicketController
     {
         $id = $this->validateId($request);
 
-        if (!$this->tickets->restore($id, $request->userId())) {
+        if (!$this->tickets->restore($id, $request->organizationId())) {
             throw HttpException::notFound('Ticket introuvable.');
         }
 
-        Response::json($this->tickets->find($id, $request->userId()));
+        Response::json($this->tickets->find($id, $request->organizationId()));
     }
 
     /**
@@ -247,7 +247,7 @@ final class TicketController
      */
     private function findOrFail(Request $request): array
     {
-        $ticket = $this->tickets->find($this->validateId($request), $request->userId());
+        $ticket = $this->tickets->find($this->validateId($request), $request->organizationId());
 
         if ($ticket === null) {
             throw HttpException::notFound('Ticket introuvable.');

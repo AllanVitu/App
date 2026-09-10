@@ -117,9 +117,9 @@ final class ModulesTest extends ApiTestCase
         // La base ne contient QUE l'empreinte. Une fuite ne livre donc aucune
         // clé utilisable.
         $statement = Database::connection()->prepare(
-            'SELECT token_hash, token_prefix FROM backend_api_keys WHERE user_id = :id',
+            'SELECT token_hash, token_prefix FROM backend_api_keys WHERE organization_id = :id',
         );
-        $statement->execute(['id' => $session['id']]);
+        $statement->execute(['id' => $session['org']]);
         $row = $statement->fetch();
 
         $this->assertSame(hash('sha256', $token), $row['token_hash']);

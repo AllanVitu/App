@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Config\Env;
 use App\Core\Request;
+use App\Models\OrganizationRepository;
 use Throwable;
 
 /**
@@ -120,6 +121,46 @@ final class AccountMailer
     }
 
     /**
+     * Invitation à rejoindre un espace de travail.
+     *
+     * LE DESTINATAIRE N'A SOUVENT PAS DE COMPTE — c'est même le cas le plus
+     * courant. Le message ne suppose donc rien : il nomme l'espace, nomme qui
+     * invite, et laisse le lien mener soit à la connexion, soit à
+     * l'inscription. C'est l'écran d'accueil du lien qui tranche.
+     */
+    public function sendInvitation(
+        string $email,
+        string $organizationName,
+        string $inviterName,
+        string $token,
+    ): bool {
+        $link = $this->frontendUrl('/invitation', $token);
+
+        return $this->deliver(
+            $email,
+            // Aucun nom à afficher : on ne connaît que l'adresse. La partie
+            // locale vaut mieux que « Bonjour , » — ou qu'un « cher
+            // utilisateur » qui sonne faux.
+            $this->nameFromEmail($email),
+            "{$inviterName} vous invite à rejoindre {$organizationName}",
+            $this->layout(
+                'Une invitation vous attend',
+                $this->nameFromEmail($email),
+                "{$inviterName} vous invite à rejoindre l'espace de travail « {$organizationName} ». "
+                . 'En acceptant, vous partagerez ses tickets, ses déploiements et ses données.',
+                'Rejoindre ' . $organizationName,
+                $link,
+                'Cette invitation est valable ' . OrganizationRepository::INVITATION_TTL_DAYS
+                . ' jours. Si vous ne connaissez pas son auteur, ignorez ce message : '
+                . 'aucun compte ne sera créé sans votre intervention.',
+            ),
+            "Bonjour,\n\n{$inviterName} vous invite à rejoindre l'espace « {$organizationName} ».\n"
+            . "Ouvrez ce lien pour accepter :\n{$link}\n\n"
+            . 'Cette invitation est valable ' . OrganizationRepository::INVITATION_TTL_DAYS . " jours.\n",
+        );
+    }
+
+    /**
      * Avertissement après un changement de mot de passe réussi.
      * C'est le signal qui permet à un utilisateur de réagir si le changement
      * ne vient pas de lui.
@@ -185,6 +226,17 @@ final class AccountMailer
 
             return false;
         }
+    }
+
+    /**
+     * Faute de nom, la partie locale de l'adresse — capitalisée, et débarrassée
+     * des séparateurs. « marie.dupont@… » donne « Marie Dupont ».
+     */
+    private function nameFromEmail(string $email): string
+    {
+        $local = str_replace(['.', '_', '-', '+'], ' ', strstr($email, '@', true) ?: $email);
+
+        return ucwords(trim($local)) ?: $email;
     }
 
     private function frontendUrl(string $path, string $token): string

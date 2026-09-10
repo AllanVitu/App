@@ -507,6 +507,12 @@ onBeforeUnmount(() => {
                 <AppIcon name="calendar" :size="13" />
                 Échéance {{ formatDate(item.due_date) }}
               </span>
+              <!-- L'auteur, depuis que l'espace se partage : la liste ne
+                   contient plus seulement ce qu'on y a mis soi-même. -->
+              <span v-if="item.author_name" class="inline-flex items-center gap-1">
+                <AppIcon name="user" :size="13" />
+                {{ item.author_name }}
+              </span>
             </div>
           </div>
 

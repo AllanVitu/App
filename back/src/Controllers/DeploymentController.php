@@ -37,7 +37,7 @@ final class DeploymentController
      */
     public function index(Request $request): void
     {
-        $userId = $request->userId();
+        $userId = $request->organizationId();
 
         // Décalage borné : au-delà du plafond, la page demandée n'existe pas.
         $offset = $request->queryInt('offset', 0, 0, 100000);
@@ -54,8 +54,8 @@ final class DeploymentController
         Response::json($result['deployments'], 200, [
             'offset'    => $offset,
             'total'    => $result['total'],
-            'stats'    => $this->deployments->statsForUser($userId),
-            'branches' => $this->deployments->branchesForUser($userId),
+            'stats'    => $this->deployments->statsForOrganization($userId),
+            'branches' => $this->deployments->branchesForOrganization($userId),
         ]);
     }
 
@@ -65,7 +65,7 @@ final class DeploymentController
     public function store(Request $request): void
     {
         Response::created(
-            $this->deployments->create($request->userId(), $this->validatePayload($request)),
+            $this->deployments->create($request->organizationId(), $request->actorId(), $this->validatePayload($request)),
         );
     }
 
@@ -86,7 +86,7 @@ final class DeploymentController
 
         $updated = $this->deployments->update(
             (string) $request->param('id'),
-            $request->userId(),
+            $request->organizationId(),
             $this->validatePayload($request, $existing),
         );
 
@@ -102,7 +102,7 @@ final class DeploymentController
      */
     public function destroy(Request $request): void
     {
-        if (!$this->deployments->softDelete($this->validateId($request), $request->userId())) {
+        if (!$this->deployments->softDelete($this->validateId($request), $request->organizationId())) {
             throw HttpException::notFound('Déploiement introuvable.');
         }
 
@@ -116,11 +116,11 @@ final class DeploymentController
     {
         $id = $this->validateId($request);
 
-        if (!$this->deployments->restore($id, $request->userId())) {
+        if (!$this->deployments->restore($id, $request->organizationId())) {
             throw HttpException::notFound('Déploiement introuvable.');
         }
 
-        Response::json($this->deployments->find($id, $request->userId()));
+        Response::json($this->deployments->find($id, $request->organizationId()));
     }
 
     /**
@@ -213,7 +213,7 @@ final class DeploymentController
      */
     private function findOrFail(Request $request): array
     {
-        $deployment = $this->deployments->find($this->validateId($request), $request->userId());
+        $deployment = $this->deployments->find($this->validateId($request), $request->organizationId());
 
         if ($deployment === null) {
             throw HttpException::notFound('Déploiement introuvable.');

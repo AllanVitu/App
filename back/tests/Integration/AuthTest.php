@@ -27,14 +27,16 @@ final class AuthTest extends ApiTestCase
         $this->assertSame(201, $response['status']);
         $this->assertNotEmpty($response['body']['data']['access_token']);
 
-        // Le trigger de base attribue les modules et crée les préférences :
-        // l'API n'a rien à orchestrer, mais le résultat doit être vérifié.
+        // Deux provisionnements, et non plus un : les préférences suivent le
+        // COMPTE, les modules suivent l'ORGANISATION. Activer un module est
+        // une décision d'équipe ; le thème ne l'est pas.
         $userId = $response['body']['data']['user']['id'];
+        $orgId  = $response['body']['data']['organization']['id'];
 
         $modules = Database::connection()->prepare(
-            'SELECT count(*) FROM user_modules WHERE user_id = :id',
+            'SELECT count(*) FROM organization_modules WHERE organization_id = :id',
         );
-        $modules->execute(['id' => $userId]);
+        $modules->execute(['id' => $orgId]);
         $this->assertSame(5, (int) $modules->fetchColumn(), 'modules non attribués');
 
         $settings = Database::connection()->prepare(

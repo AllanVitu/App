@@ -48,7 +48,7 @@ final class ItemController
         }
 
         $result = $this->items->paginate(
-            $request->userId(),
+            $request->organizationId(),
             $module['id'],
             [
                 'status'    => $status,
@@ -77,7 +77,7 @@ final class ItemController
         $module     = ModuleController::resolveModule($request);
         $attributes = $this->validatePayload($request);
 
-        Response::created($this->items->create($request->userId(), $module['id'], $attributes));
+        Response::created($this->items->create($request->organizationId(), $request->actorId(), $module['id'], $attributes));
     }
 
     /**
@@ -96,7 +96,7 @@ final class ItemController
         $existing   = $this->findOrFail($request);
         $attributes = $this->validatePayload($request, $existing);
 
-        $updated = $this->items->update((string) $request->param('id'), $request->userId(), $attributes);
+        $updated = $this->items->update((string) $request->param('id'), $request->organizationId(), $attributes);
 
         if ($updated === null) {
             throw HttpException::notFound('Élément introuvable.');
@@ -112,7 +112,7 @@ final class ItemController
     {
         $id = $this->validateId($request);
 
-        if (!$this->items->softDelete($id, $request->userId())) {
+        if (!$this->items->softDelete($id, $request->organizationId())) {
             throw HttpException::notFound('Élément introuvable.');
         }
 
@@ -126,11 +126,11 @@ final class ItemController
     {
         $id = $this->validateId($request);
 
-        if (!$this->items->restore($id, $request->userId())) {
+        if (!$this->items->restore($id, $request->organizationId())) {
             throw HttpException::notFound('Élément introuvable.');
         }
 
-        Response::json($this->items->find($id, $request->userId()));
+        Response::json($this->items->find($id, $request->organizationId()));
     }
 
     /**
@@ -192,7 +192,7 @@ final class ItemController
      */
     private function findOrFail(Request $request): array
     {
-        $item = $this->items->find($this->validateId($request), $request->userId());
+        $item = $this->items->find($this->validateId($request), $request->organizationId());
 
         if ($item === null) {
             throw HttpException::notFound('Élément introuvable.');

@@ -49,15 +49,15 @@ final class ModuleMetrics
      * @param  list<array<string, mixed>> $modules
      * @return list<array<string, mixed>>
      */
-    public function decorate(array $modules, string $userId): array
+    public function decorate(array $modules, string $organizationId): array
     {
         foreach ($modules as $index => $module) {
             $state = match ($module['slug']) {
-                'tickets'     => $this->ticketState($userId),
-                'backend'     => $this->backendState($userId),
-                'deploiement' => $this->deploymentState($userId),
-                'supervision' => $this->errorState($userId),
-                'design'      => $this->designState($userId),
+                'tickets'     => $this->ticketState($organizationId),
+                'backend'     => $this->backendState($organizationId),
+                'deploiement' => $this->deploymentState($organizationId),
+                'supervision' => $this->errorState($organizationId),
+                'design'      => $this->designState($organizationId),
                 // Module ajouté en base sans code dédié : il reste adossé à la
                 // table générique, et le catalogue continue de fonctionner.
                 default       => $this->genericState($module),
@@ -82,9 +82,9 @@ final class ModuleMetrics
      * @param  callable(): array<string, mixed> $compute
      * @return array<string, mixed>
      */
-    private function stats(string $key, string $userId, callable $compute): array
+    private function stats(string $key, string $organizationId, callable $compute): array
     {
-        return $this->cache[$key . ':' . $userId] ??= $compute();
+        return $this->cache[$key . ':' . $organizationId] ??= $compute();
     }
 
     /**
@@ -92,9 +92,9 @@ final class ModuleMetrics
      *
      * @return array<string, mixed>
      */
-    private function ticketState(string $userId): array
+    private function ticketState(string $organizationId): array
     {
-        $stats = $this->stats('tickets', $userId, fn (): array => (new TicketRepository())->statsForUser($userId));
+        $stats = $this->stats('tickets', $organizationId, fn (): array => (new TicketRepository())->statsForOrganization($organizationId));
 
         $signals = [];
 
@@ -125,9 +125,9 @@ final class ModuleMetrics
      *
      * @return array<string, mixed>
      */
-    private function backendState(string $userId): array
+    private function backendState(string $organizationId): array
     {
-        $stats = $this->stats('backend', $userId, fn (): array => (new BackendRepository())->statsForUser($userId));
+        $stats = $this->stats('backend', $organizationId, fn (): array => (new BackendRepository())->statsForOrganization($organizationId));
 
         $signals = [];
 
@@ -147,12 +147,12 @@ final class ModuleMetrics
      *
      * @return array<string, mixed>
      */
-    private function deploymentState(string $userId): array
+    private function deploymentState(string $organizationId): array
     {
         $stats = $this->stats(
             'deploiement',
-            $userId,
-            fn (): array => (new DeploymentRepository())->statsForUser($userId),
+            $organizationId,
+            fn (): array => (new DeploymentRepository())->statsForOrganization($organizationId),
         );
 
         $signals = [];
@@ -177,9 +177,9 @@ final class ModuleMetrics
      *
      * @return array<string, mixed>
      */
-    private function errorState(string $userId): array
+    private function errorState(string $organizationId): array
     {
-        $stats = $this->stats('supervision', $userId, fn (): array => (new ErrorRepository())->statsForUser($userId));
+        $stats = $this->stats('supervision', $organizationId, fn (): array => (new ErrorRepository())->statsForOrganization($organizationId));
 
         $signals = [];
 
@@ -203,9 +203,9 @@ final class ModuleMetrics
      *
      * @return array<string, mixed>
      */
-    private function designState(string $userId): array
+    private function designState(string $organizationId): array
     {
-        $stats = $this->stats('design', $userId, fn (): array => (new DesignRepository())->statsForUser($userId));
+        $stats = $this->stats('design', $organizationId, fn (): array => (new DesignRepository())->statsForOrganization($organizationId));
 
         $signals = [];
 

@@ -28,7 +28,7 @@ final class ActivityFeed
     /**
      * @return list<array<string, mixed>>
      */
-    public function forUser(string $userId, int $limit = 8): array
+    public function forOrganization(string $organizationId, int $limit = 8): array
     {
         $statement = Database::connection()->prepare(
             "SELECT module, id::text AS id, ref, title, happened_at
@@ -39,7 +39,7 @@ final class ActivityFeed
                           t.title           AS title,
                           t.updated_at      AS happened_at
                      FROM tickets t
-                    WHERE t.user_id = :user_id AND t.deleted_at IS NULL
+                    WHERE t.organization_id = :organization_id AND t.deleted_at IS NULL
 
                    UNION ALL
 
@@ -49,7 +49,7 @@ final class ActivityFeed
                           COALESCE(b.description, 'Schéma de données'),
                           b.updated_at
                      FROM backend_tables b
-                    WHERE b.user_id = :user_id AND b.deleted_at IS NULL
+                    WHERE b.organization_id = :organization_id AND b.deleted_at IS NULL
 
                    UNION ALL
 
@@ -59,7 +59,7 @@ final class ActivityFeed
                           COALESCE(d.commit_message, 'Déploiement'),
                           d.updated_at
                      FROM deployments d
-                    WHERE d.user_id = :user_id AND d.deleted_at IS NULL
+                    WHERE d.organization_id = :organization_id AND d.deleted_at IS NULL
 
                    UNION ALL
 
@@ -72,7 +72,7 @@ final class ActivityFeed
                           g.title,
                           g.last_seen_at
                      FROM error_groups g
-                    WHERE g.user_id = :user_id AND g.deleted_at IS NULL
+                    WHERE g.organization_id = :organization_id AND g.deleted_at IS NULL
 
                    UNION ALL
 
@@ -82,13 +82,13 @@ final class ActivityFeed
                           f.name,
                           f.updated_at
                      FROM design_files f
-                    WHERE f.user_id = :user_id AND f.deleted_at IS NULL
+                    WHERE f.organization_id = :organization_id AND f.deleted_at IS NULL
                ) AS activite
               ORDER BY happened_at DESC
               LIMIT :limit",
         );
 
-        $statement->bindValue('user_id', $userId);
+        $statement->bindValue('organization_id', $organizationId);
         $statement->bindValue('limit', $limit, PDO::PARAM_INT);
         $statement->execute();
 
@@ -124,7 +124,7 @@ final class ActivityFeed
      *
      * @return list<array{date: string, deployments: int, errors: int}>
      */
-    public function dailySeries(string $userId, int $days = 14): array
+    public function dailySeries(string $organizationId, int $days = 14): array
     {
         $statement = Database::connection()->prepare(
             "WITH jours AS (
@@ -139,7 +139,7 @@ final class ActivityFeed
              deploiements AS (
                  SELECT created_at::date AS jour, COUNT(*) AS total
                    FROM deployments
-                  WHERE user_id = :user_id
+                  WHERE organization_id = :organization_id
                     AND deleted_at IS NULL
                     AND created_at >= (SELECT depuis FROM bornes)
                   GROUP BY 1
@@ -147,7 +147,7 @@ final class ActivityFeed
              erreurs AS (
                  SELECT occurred_at::date AS jour, COUNT(*) AS total
                    FROM error_events
-                  WHERE user_id = :user_id
+                  WHERE organization_id = :organization_id
                     AND occurred_at >= (SELECT depuis FROM bornes)
                   GROUP BY 1
              )
@@ -160,7 +160,7 @@ final class ActivityFeed
               ORDER BY j.jour",
         );
 
-        $statement->bindValue('user_id', $userId);
+        $statement->bindValue('organization_id', $organizationId);
         $statement->bindValue('days', $days, PDO::PARAM_INT);
         $statement->execute();
 
@@ -186,7 +186,7 @@ final class ActivityFeed
      *
      * @return array<string, mixed>
      */
-    public function summary(string $userId, int $days = 7): array
+    public function summary(string $organizationId, int $days = 7): array
     {
         $statement = Database::connection()->prepare(
             "WITH fenetre AS (
@@ -195,35 +195,35 @@ final class ActivityFeed
              )
              SELECT
                  (SELECT COUNT(*) FROM deployments, fenetre
-                   WHERE user_id = :user_id AND deleted_at IS NULL
+                   WHERE organization_id = :organization_id AND deleted_at IS NULL
                      AND created_at >= fenetre.debut)                      AS deployments,
                  (SELECT COUNT(*) FROM deployments, fenetre
-                   WHERE user_id = :user_id AND deleted_at IS NULL
+                   WHERE organization_id = :organization_id AND deleted_at IS NULL
                      AND created_at >= fenetre.debut_precedent
                      AND created_at <  fenetre.debut)                      AS deployments_before,
                  (SELECT COUNT(*) FROM deployments, fenetre
-                   WHERE user_id = :user_id AND deleted_at IS NULL
+                   WHERE organization_id = :organization_id AND deleted_at IS NULL
                      AND status = 'error'
                      AND created_at >= fenetre.debut)                      AS failed,
                  (SELECT COUNT(*) FROM deployments, fenetre
-                   WHERE user_id = :user_id AND deleted_at IS NULL
+                   WHERE organization_id = :organization_id AND deleted_at IS NULL
                      AND status = 'error'
                      AND created_at >= fenetre.debut_precedent
                      AND created_at <  fenetre.debut)                      AS failed_before,
                  (SELECT COUNT(*) FROM error_events, fenetre
-                   WHERE user_id = :user_id
+                   WHERE organization_id = :organization_id
                      AND occurred_at >= fenetre.debut)                     AS errors,
                  (SELECT COUNT(*) FROM error_events, fenetre
-                   WHERE user_id = :user_id
+                   WHERE organization_id = :organization_id
                      AND occurred_at >= fenetre.debut_precedent
                      AND occurred_at <  fenetre.debut)                     AS errors_before,
                  -- État, pas flux : aucune fenêtre, aucune comparaison.
                  (SELECT COUNT(*) FROM tickets
-                   WHERE user_id = :user_id AND deleted_at IS NULL
+                   WHERE organization_id = :organization_id AND deleted_at IS NULL
                      AND status <> 'done')                                 AS open_tickets",
         );
 
-        $statement->bindValue('user_id', $userId);
+        $statement->bindValue('organization_id', $organizationId);
         $statement->bindValue('days', $days, PDO::PARAM_INT);
         $statement->execute();
 

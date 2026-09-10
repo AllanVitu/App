@@ -314,6 +314,59 @@ final class Request
         return (string) $this->user()['id'];
     }
 
+    /**
+     * Compte à l'origine de l'appel, ou null si c'est une clé d'API.
+     *
+     * ┌───────────────────────────────────────────────────────────────────────┐
+     * │  « QUI A ÉCRIT CETTE LIGNE » N'A PAS TOUJOURS DE RÉPONSE              │
+     * │                                                                       │
+     * │  Une erreur signalée par un serveur de production arrive avec une clé │
+     * │  de service : il y a bien une organisation destinataire, mais aucune  │
+     * │  personne derrière. C'est ce que cette méthode dit, là où userId()    │
+     * │  refuserait la requête.                                               │
+     * └───────────────────────────────────────────────────────────────────────┘
+     */
+    public function actorId(): ?string
+    {
+        $user = $this->attribute('user');
+
+        return is_array($user) ? (string) $user['id'] : null;
+    }
+
+    // --- Organisation courante ----------------------------------------------
+
+    /**
+     * Espace de travail de la requête, posé par AuthMiddleware ou
+     * IngestMiddleware. Garanti non nul sur une route protégée.
+     *
+     * @return array{id: string, name: string, slug: string, role: string}
+     */
+    public function organization(): array
+    {
+        $organization = $this->attribute('organization');
+
+        if (!is_array($organization)) {
+            throw HttpException::unauthorized();
+        }
+
+        /** @var array{id: string, name: string, slug: string, role: string} $organization */
+        return $organization;
+    }
+
+    /**
+     * LA valeur de cloisonnement : tout ce qu'un dépôt lit ou écrit en dépend.
+     */
+    public function organizationId(): string
+    {
+        return $this->organization()['id'];
+    }
+
+    /** Rôle du demandeur DANS cette organisation — owner, admin ou member. */
+    public function organizationRole(): string
+    {
+        return $this->organization()['role'];
+    }
+
     // --- Paramètres de route ------------------------------------------------
 
     /** @param array<string, string> $params */

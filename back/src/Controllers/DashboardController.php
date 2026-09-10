@@ -40,9 +40,9 @@ final class DashboardController
      */
     public function index(Request $request): void
     {
-        $userId = $request->userId();
+        $userId = $request->organizationId();
 
-        $modules = (new ModuleRepository())->listForUser($userId);
+        $modules = (new ModuleRepository())->listForOrganization($userId);
         $feed    = new ActivityFeed();
 
         Response::json([
@@ -51,7 +51,7 @@ final class DashboardController
             'summary'   => $feed->summary($userId, 7),
             // Tous modules confondus, et hiérarchisé : un déploiement en
             // échec passe avant un ticket marqué urgent (cf. AttentionFeed).
-            'attention' => (new AttentionFeed())->forUser($userId, 5),
+            'attention' => (new AttentionFeed())->forOrganization($userId, 5),
             'modules'   => (new ModuleMetrics())->decorate($modules, $userId),
             // Deux séries quotidiennes, tracées dans DEUX cadres distincts :
             // un déploiement par jour et quarante erreurs par jour n'ont pas
@@ -60,7 +60,7 @@ final class DashboardController
             // Transversale elle aussi : chaque module ayant sa propre table,
             // lire module_items montrerait des lignes qu'aucun écran
             // n'affiche plus.
-            'recent'    => $feed->forUser($userId, 8),
+            'recent'    => $feed->forOrganization($userId, 8),
         ]);
     }
 }

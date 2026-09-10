@@ -28,7 +28,7 @@ final class IngestTest extends ApiTestCase
     private function serviceKey(string $email = 'ingestion@test.local'): array
     {
         $session = $this->register($email);
-        $created = (new BackendRepository())->createKey($session['id'], 'Rapporteur', 'service');
+        $created = (new BackendRepository())->createKey($session['org'], $session['id'], 'Rapporteur', 'service');
 
         return ['token' => $created['token'], 'session' => $session, 'key' => $created['key']];
     }
@@ -70,7 +70,7 @@ final class IngestTest extends ApiTestCase
     public function une_cle_publique_ne_peut_pas_ecrire(): void
     {
         $session = $this->register('publique@test.local');
-        $created = (new BackendRepository())->createKey($session['id'], 'Navigateur', 'anon');
+        $created = (new BackendRepository())->createKey($session['org'], $session['id'], 'Navigateur', 'anon');
 
         $reponse = $this->call(
             'POST',
@@ -95,7 +95,7 @@ final class IngestTest extends ApiTestCase
         $avant = $this->call('POST', '/api/errors', $this->erreur(), $this->bearer($token));
         $this->assertSame(201, $avant['status'], 'la clé devait fonctionner avant révocation');
 
-        (new BackendRepository())->revokeKey($key['id'], $session['id']);
+        (new BackendRepository())->revokeKey($key['id'], $session['org']);
 
         $apres = $this->call('POST', '/api/errors', $this->erreur(), $this->bearer($token));
         $this->assertSame(401, $apres['status'], 'une clé révoquée doit être refusée');

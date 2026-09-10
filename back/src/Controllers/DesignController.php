@@ -34,7 +34,7 @@ final class DesignController
      */
     public function index(Request $request): void
     {
-        $userId = $request->userId();
+        $userId = $request->organizationId();
 
         // Décalage borné : au-delà du plafond, la page demandée n'existe pas.
         $offset = $request->queryInt('offset', 0, 0, 100000);
@@ -49,7 +49,7 @@ final class DesignController
         Response::json($result['files'], 200, [
             'offset' => $offset,
             'total' => $result['total'],
-            'stats' => $this->design->statsForUser($userId),
+            'stats' => $this->design->statsForOrganization($userId),
             'kinds' => self::KINDS,
         ]);
     }
@@ -63,7 +63,7 @@ final class DesignController
     public function store(Request $request): void
     {
         Response::created(
-            $this->design->createFile($request->userId(), $this->validatePayload($request)),
+            $this->design->createFile($request->organizationId(), $request->actorId(), $this->validatePayload($request)),
         );
     }
 
@@ -84,7 +84,7 @@ final class DesignController
 
         $updated = $this->design->updateFile(
             (string) $request->param('id'),
-            $request->userId(),
+            $request->organizationId(),
             $this->validatePayload($request, $existing),
         );
 
@@ -100,7 +100,7 @@ final class DesignController
      */
     public function destroy(Request $request): void
     {
-        if (!$this->design->deleteFile($this->validateId($request), $request->userId())) {
+        if (!$this->design->deleteFile($this->validateId($request), $request->organizationId())) {
             throw HttpException::notFound('Fichier introuvable.');
         }
 
@@ -114,11 +114,11 @@ final class DesignController
     {
         $id = $this->validateId($request);
 
-        if (!$this->design->restoreFile($id, $request->userId())) {
+        if (!$this->design->restoreFile($id, $request->organizationId())) {
             throw HttpException::notFound('Fichier introuvable.');
         }
 
-        Response::json($this->design->find($id, $request->userId()));
+        Response::json($this->design->find($id, $request->organizationId()));
     }
 
     /**
@@ -138,7 +138,8 @@ final class DesignController
 
         Response::created($this->design->addVersion(
             (string) $file['id'],
-            $request->userId(),
+            $request->organizationId(),
+            $request->actorId(),
             ['label' => $label, 'notes' => $notes],
         ));
     }
@@ -205,7 +206,7 @@ final class DesignController
      */
     private function findOrFail(Request $request): array
     {
-        $file = $this->design->find($this->validateId($request), $request->userId());
+        $file = $this->design->find($this->validateId($request), $request->organizationId());
 
         if ($file === null) {
             throw HttpException::notFound('Fichier introuvable.');

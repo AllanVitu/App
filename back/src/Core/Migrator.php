@@ -244,6 +244,122 @@ final class Migrator
     }
 
     /**
+     * Remplace commentaires et littéraux par des espaces, en gardant les sauts
+     * de ligne : ne reste que du SQL exécutable, aux mêmes numéros de ligne.
+     *
+     * ┌───────────────────────────────────────────────────────────────────────┐
+     * │  SANS CELA, AUCUNE MIGRATION NE POURRAIT DÉFINIR DE FONCTION          │
+     * │                                                                       │
+     * │  Le corps d'une fonction PL/pgSQL commence par « BEGIN », en début de │
+     * │  ligne. Le garde-fou ci-dessous, appliqué au fichier brut, refusait   │
+     * │  donc toute migration contenant un CREATE FUNCTION — alors même que   │
+     * │  ce BEGIN est du TEXTE entre délimiteurs dollar, pas un ordre.        │
+     * │                                                                       │
+     * │  Un balayage plutôt qu'une succession d'expressions régulières, parce │
+     * │  qu'aucun ordre de passage n'est bon : retirer les commentaires en    │
+     * │  premier coupe une chaîne contenant « -- », retirer les chaînes en    │
+     * │  premier fait démarrer une fausse chaîne sur l'apostrophe de          │
+     * │  « -- l'index ».                                                      │
+     * └───────────────────────────────────────────────────────────────────────┘
+     */
+    private static function codeNu(string $sql): string
+    {
+        $sortie   = '';
+        $longueur = strlen($sql);
+        $i        = 0;
+
+        while ($i < $longueur) {
+            $reste = substr($sql, $i);
+
+            // Délimiteur dollar : $$ ou $balise$. Tout court jusqu'au même.
+            if (preg_match('/^\$([A-Za-z_][A-Za-z0-9_]*)?\$/', $reste, $ouvrant) === 1) {
+                $fin = strpos($sql, $ouvrant[0], $i + strlen($ouvrant[0]));
+                $fin = $fin === false ? $longueur : $fin + strlen($ouvrant[0]);
+
+                $sortie .= self::blanchir(substr($sql, $i, $fin - $i));
+                $i = $fin;
+
+                continue;
+            }
+
+            // Commentaire de ligne : jusqu'au saut, non compris.
+            if (str_starts_with($reste, '--')) {
+                $fin = strpos($sql, "\n", $i);
+                $fin = $fin === false ? $longueur : $fin;
+
+                $sortie .= self::blanchir(substr($sql, $i, $fin - $i));
+                $i = $fin;
+
+                continue;
+            }
+
+            // Commentaire de bloc. PostgreSQL les imbrique ; on suit le compte.
+            if (str_starts_with($reste, '/*')) {
+                $profondeur = 1;
+                $j          = $i + 2;
+
+                while ($j < $longueur && $profondeur > 0) {
+                    if (str_starts_with(substr($sql, $j, 2), '/*')) {
+                        ++$profondeur;
+                        $j += 2;
+                    } elseif (str_starts_with(substr($sql, $j, 2), '*/')) {
+                        --$profondeur;
+                        $j += 2;
+                    } else {
+                        ++$j;
+                    }
+                }
+
+                $sortie .= self::blanchir(substr($sql, $i, $j - $i));
+                $i = $j;
+
+                continue;
+            }
+
+            // Chaîne ou identifiant entre guillemets. Le délimiteur doublé ne
+            // ferme pas : 'l''index' est UNE chaîne, pas deux.
+            if ($sql[$i] === "'" || $sql[$i] === '"') {
+                $quote = $sql[$i];
+                $j     = $i + 1;
+
+                while ($j < $longueur) {
+                    if ($sql[$j] !== $quote) {
+                        ++$j;
+
+                        continue;
+                    }
+
+                    if (($sql[$j + 1] ?? '') === $quote) {
+                        $j += 2;
+
+                        continue;
+                    }
+
+                    ++$j;
+
+                    break;
+                }
+
+                $sortie .= self::blanchir(substr($sql, $i, $j - $i));
+                $i = $j;
+
+                continue;
+            }
+
+            $sortie .= $sql[$i];
+            ++$i;
+        }
+
+        return $sortie;
+    }
+
+    /** Tout devient espace, sauf les sauts de ligne. */
+    private static function blanchir(string $fragment): string
+    {
+        return preg_replace('/[^\n]/', ' ', $fragment) ?? '';
+    }
+
+    /**
      * @param callable(string): void $log
      */
     private function apply(string $version, string $fichier, callable $log): void
@@ -271,7 +387,7 @@ final class Migrator
         // │  PostgreSQL les joue directement. La règle diffère ici, et mieux  │
         // │  vaut la dire au premier essai que la laisser découvrir.          │
         // └───────────────────────────────────────────────────────────────────┘
-        if ($transactionnelle && preg_match('/^\s*(BEGIN|COMMIT|ROLLBACK)\b/mi', $sql) === 1) {
+        if ($transactionnelle && preg_match('/^\s*(BEGIN|COMMIT|ROLLBACK)\b/mi', self::codeNu($sql)) === 1) {
             throw new \RuntimeException(
                 "Migration « {$version} » : retirez les BEGIN / COMMIT. Le migrateur ouvre "
                 . "déjà une transaction et la valide lui-même.\n"

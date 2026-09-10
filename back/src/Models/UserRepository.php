@@ -20,7 +20,7 @@ final class UserRepository
      * Colonnes exposables au client — jamais password_hash.
      */
     private const PUBLIC_COLUMNS =
-        'id, email, full_name, avatar_url, role, is_active, email_verified_at, last_login_at, created_at, terms_accepted_at, terms_accepted_version';
+        'id, email, full_name, avatar_url, role, is_active, email_verified_at, last_login_at, created_at, terms_accepted_at, terms_accepted_version, active_organization_id';
 
     /**
      * @return array<string, mixed>|null
@@ -116,8 +116,9 @@ final class UserRepository
     }
 
     /**
-     * Crée un compte. Le trigger users_provision_defaults se charge des
-     * préférences et de l'attribution des modules.
+     * Crée un compte. Le trigger users_provision_defaults se charge de ses
+     * préférences ; les modules, eux, sont attribués à l'ORGANISATION par
+     * organizations_provision_modules — c'est une décision d'équipe.
      *
      * @return array<string, mixed>
      */
@@ -219,6 +220,12 @@ final class UserRepository
             'terms_accepted_at' => Database::toIso($row['terms_accepted_at']),
             'terms_version'     => $row['terms_accepted_version'] !== null
                 ? (string) $row['terms_accepted_version']
+                : null,
+            // Espace de travail affiché. NULL est une valeur NORMALE et non une
+            // anomalie : elle veut dire « la plus ancienne appartenance », et
+            // c'est OrganizationRepository::activeFor() qui la résout.
+            'active_organization_id' => $row['active_organization_id'] !== null
+                ? (string) $row['active_organization_id']
                 : null,
         ];
     }

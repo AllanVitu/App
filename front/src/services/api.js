@@ -29,6 +29,49 @@ export const accountApi = {
   resetPassword: (payload) => http.post('/auth/password/reset', payload).then(unwrap),
 }
 
+// --- Espaces de travail -----------------------------------------------------
+
+export const organizationsApi = {
+  list: () => http.get('/organizations').then(unwrap),
+  create: (name) => http.post('/organizations', { name }).then(unwrap),
+  rename: (id, name) => http.put(`/organizations/${id}`, { name }).then(unwrap),
+  destroy: (id) => http.delete(`/organizations/${id}`),
+
+  /**
+   * Bascule d'espace. C'est le SEUL appel qui change ce que l'API renvoie
+   * ensuite : le cloisonnement est résolu côté serveur à chaque requête, le
+   * client ne l'envoie jamais.
+   */
+  activate: (id) => http.post(`/organizations/${id}/activate`).then(unwrap),
+
+  /**
+   * Renvoie { members, invitations, role } : la liste des membres, celle des
+   * invitations en attente — vide pour un simple membre, qui n'a pas à les
+   * voir — et son propre rôle, dont dépend l'affichage des commandes.
+   */
+  members: () =>
+    http.get('/organizations/members').then((response) => ({
+      members: response.data.data,
+      invitations: response.data.meta?.invitations ?? [],
+      role: response.data.meta?.role ?? 'member',
+    })),
+
+  updateMember: (id, role) => http.put(`/organizations/members/${id}`, { role }).then(unwrap),
+  removeMember: (id) => http.delete(`/organizations/members/${id}`),
+  leave: () => http.post('/organizations/leave'),
+
+  invite: (email, role) => http.post('/organizations/invitations', { email, role }).then(unwrap),
+  revokeInvitation: (id) => http.delete(`/organizations/invitations/${id}`),
+}
+
+// --- Invitations reçues ------------------------------------------------------
+
+export const invitationsApi = {
+  /** Publique : celui qui ouvre le lien n'a souvent pas encore de compte. */
+  show: (token) => http.get(`/invitations/${token}`).then(unwrap),
+  accept: (token) => http.post(`/invitations/${token}/accept`).then(unwrap),
+}
+
 // --- Tableau de bord --------------------------------------------------------
 
 export const dashboardApi = {

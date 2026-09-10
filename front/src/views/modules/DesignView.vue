@@ -636,8 +636,13 @@ onMounted(load)
                   <span v-if="version.notes" class="mt-0.5 block text-[0.72rem] text-ink-2">
                     {{ version.notes }}
                   </span>
+                  <!-- « Qui a publié cette version » : à plusieurs, un
+                       historique anonyme ne répond qu'à la moitié de ce qu'on
+                       lui demande. La mention disparaît si l'auteur a supprimé
+                       son compte — la version, elle, reste. -->
                   <span class="mt-0.5 block text-[0.68rem] text-ink-3">
-                    {{ formatRelative(version.created_at) }}
+                    {{ formatRelative(version.created_at)
+                    }}<template v-if="version.author_name"> · {{ version.author_name }}</template>
                   </span>
                 </span>
               </li>

@@ -28,9 +28,33 @@ chaque module (tickets ouverts, tables, erreurs non résolues…), et
 avant les intentions.
 
 Les invariants sont tenus par la BASE, pas par l'application : numérotation
-par compte ou par fichier, dates de clôture dérivées du statut, agrégats
+par espace ou par fichier, dates de clôture dérivées du statut, agrégats
 d'occurrences. Une insertion manuelle en psql produit une ligne aussi
 correcte qu'un passage par l'API.
+
+### Ce qui possède les données
+
+Un compte n'est PLUS ce qui cloisonne. Les données appartiennent à une
+**organisation** — un espace de travail — et un compte y appartient par une
+_membership_ qui porte son rôle. Sur les tables métier, les deux sens que
+`user_id` confondait sont désormais séparés :
+
+| Colonne           | Question                       | Effet                                    |
+| ----------------- | ------------------------------ | ---------------------------------------- |
+| `organization_id` | qui a le droit de voir ceci ?  | filtre TOUTE lecture et toute écriture   |
+| `created_by`      | qui a écrit ceci ?             | affiché, n'ouvre et ne ferme aucun accès |
+
+Le renommage de `user_id` était le point : un `WHERE user_id = :user_id` oublié
+dans un dépôt aurait continué de filtrer, sur la mauvaise colonne, et laissé
+fuir les données d'un coéquipier. Il produit maintenant une erreur SQL
+immédiate.
+
+Restent PERSONNELS, et le resteront : `user_settings`, `user_tokens`,
+`refresh_tokens`. Le thème n'appartient pas à l'équipe.
+
+Conséquence à assumer : supprimer un compte ne supprime plus ses tickets. Ils
+appartiennent à l'organisation, et `created_by` passe simplement à `NULL` — le
+départ d'un membre ne doit pas emporter le travail de l'équipe.
 
 Le compteur affiché pour un module vient de SA source de données, assemblé
 par `App\Services\ModuleMetrics` — c'est le seul endroit à modifier quand un
@@ -110,6 +134,12 @@ Toutes les routes sont déclarées dans [`back/routes/api.php`](back/routes/api.
 | POST    | `/api/auth/email/verify`    | Confirmation d'adresse (jeton e-mail)  |
 | POST    | `/api/auth/password/forgot` | Demande de réinitialisation            |
 | POST    | `/api/auth/password/reset`  | Nouveau mot de passe (jeton e-mail)    |
+| GET     | `/api/invitations/{token}`  | Accueil d'un lien d'invitation         |
+
+`GET /api/invitations/{token}` est **publique à dessein** : celui qui ouvre le
+lien n'a le plus souvent pas encore de compte, et doit savoir à quoi il est
+convié avant d'en créer un. Elle ne divulgue que ce que le porteur du lien sait
+déjà — le nom de l'espace et l'adresse invitée.
 
 **Compte** — jeton d'accès requis
 
@@ -123,6 +153,28 @@ Toutes les routes sont déclarées dans [`back/routes/api.php`](back/routes/api.
 | GET/PUT | `/api/settings`          | Préférences (thème, densité, mouvement, fuseau) |
 | GET     | `/api/dashboard`         | Alertes, état des modules, activité             |
 | GET     | `/api/search`            | Recherche dans les cinq modules                 |
+
+**Espaces de travail** — c'est d'ici que vient le cloisonnement de tout le
+reste. `[A]` exige le rôle `admin`, `[O]` le rôle `owner`.
+
+| Méthode    | Route                                       | Rôle                                    |
+| ---------- | ------------------------------------------- | --------------------------------------- |
+| GET/POST   | `/api/organizations`                        | Ses espaces ; en créer un               |
+| PUT        | `/api/organizations/{id}` `[A]`             | Renommer                                |
+| DELETE     | `/api/organizations/{id}` `[O]`             | Supprimer, avec tout son contenu        |
+| POST       | `/api/organizations/{id}/activate`          | **Basculer** — le seul geste qui change |
+| GET        | `/api/organizations/members`                | L'équipe (visible de tous)              |
+| PUT/DELETE | `/api/organizations/members/{id}` `[A]`     | Changer un rôle, exclure                |
+| POST       | `/api/organizations/leave`                  | Partir de soi-même                      |
+| POST       | `/api/organizations/invitations` `[A]`      | Inviter par e-mail                      |
+| DELETE     | `/api/organizations/invitations/{id}` `[A]` | Révoquer une invitation                 |
+| POST       | `/api/invitations/{token}/accept`           | Accepter, et basculer dessus            |
+
+Trois invariants ne sont **pas** dans les middlewares, parce qu'ils dépendent
+de la cible : un administrateur ne touche pas à un propriétaire ; on ne modifie
+pas son propre rôle par ces routes ; l'espace garde toujours un propriétaire et
+le compte toujours un espace. Les deux derniers ne sont vérifiés que dans
+`leave()` et `destroy()` — les seuls chemins qui peuvent les rompre.
 
 **Sessions ouvertes** — sous `/api/auth` alors que l'écran qui les consomme
 est le profil : le cookie de rafraîchissement est déposé avec
@@ -277,7 +329,20 @@ lignes accumulées sur une base de développement avant que ce travail n'existe.
   réinitialisation, 3 renvois de confirmation par quart d'heure.
 - **SQL** : PDO en requêtes réellement préparées (`EMULATE_PREPARES` désactivé),
   `ORDER BY` restreint à une liste blanche, jokers `LIKE` échappés.
-- **Cloisonnement** : chaque requête est filtrée par `user_id`.
+- **Cloisonnement** : chaque requête est filtrée par `organization_id`, jamais
+  par le compte. Cette valeur est résolue par `AuthMiddleware` à chaque requête
+  depuis l'appartenance en base, et **le client ne l'envoie jamais** : il ne
+  peut donc pas la falsifier. Le seul geste qui la déplace est
+  `POST /api/organizations/{id}/activate`, qui vérifie l'appartenance avant
+  d'écrire.
+- **Rôles** : `owner`, `admin`, `member` dans l'organisation — distincts de
+  `users.role`, qui reste l'administration de l'instance. Ils sont appliqués
+  par `RequireAdmin` / `RequireOwner` sur les routes, et relus en base à chaque
+  requête : une rétrogradation prend effet immédiatement, sans attendre
+  l'expiration d'un jeton.
+- **Jetons d'invitation** : mêmes règles que les jetons e-mail — 32 octets
+  aléatoires, stockés hachés, usage unique, 7 jours. Réinviter la même adresse
+  invalide le lien précédent.
 - **En-têtes** : `nosniff`, `X-Frame-Options: DENY`, CSP en déploiement.
 - **Notification hors bande** à chaque changement de mot de passe.
 

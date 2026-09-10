@@ -37,7 +37,7 @@ use PDO;
  * toujours pas à un motif qui, lui, ne l'est pas.
  *
  * LE CLOISONNEMENT EST DANS CHAQUE BRANCHE, pas dans un filtre global posé
- * après coup : une branche qui oublierait `user_id` livrerait les données
+ * après coup : une branche qui oublierait `organization_id` livrerait les données
  * d'autrui, et aucun test de module ne le verrait.
  */
 final class SearchService
@@ -53,7 +53,7 @@ final class SearchService
     /**
      * @return list<array<string, mixed>>
      */
-    public function search(string $userId, string $terme, int $limit = 20): array
+    public function search(string $organizationId, string $terme, int $limit = 20): array
     {
         $terme = trim($terme);
 
@@ -72,7 +72,7 @@ final class SearchService
                          COALESCE(t.project, t.status::text) AS subtitle,
                          t.updated_at      AS happened_at
                     FROM tickets t
-                   WHERE t.user_id = :user_id AND t.deleted_at IS NULL
+                   WHERE t.organization_id = :organization_id AND t.deleted_at IS NULL
                      AND (unaccent(t.title) ILIKE unaccent(:terme)
                           OR unaccent(t.description) ILIKE unaccent(:terme)
                           OR unaccent(t.project) ILIKE unaccent(:terme)
@@ -89,7 +89,7 @@ final class SearchService
                          COALESCE(b.description, 'Schéma de données'),
                          b.updated_at
                     FROM backend_tables b
-                   WHERE b.user_id = :user_id AND b.deleted_at IS NULL
+                   WHERE b.organization_id = :organization_id AND b.deleted_at IS NULL
                      AND (unaccent(b.name) ILIKE unaccent(:terme) OR unaccent(b.description) ILIKE unaccent(:terme))
                    ORDER BY b.updated_at DESC
                    LIMIT :par_module)
@@ -103,7 +103,7 @@ final class SearchService
                          d.status::text,
                          d.created_at
                     FROM deployments d
-                   WHERE d.user_id = :user_id AND d.deleted_at IS NULL
+                   WHERE d.organization_id = :organization_id AND d.deleted_at IS NULL
                      AND (unaccent(d.branch) ILIKE unaccent(:terme)
                           OR unaccent(d.commit_message) ILIKE unaccent(:terme)
                           OR d.commit_sha ILIKE :terme)
@@ -119,7 +119,7 @@ final class SearchService
                          COALESCE(g.culprit, g.level::text),
                          g.last_seen_at
                     FROM error_groups g
-                   WHERE g.user_id = :user_id AND g.deleted_at IS NULL
+                   WHERE g.organization_id = :organization_id AND g.deleted_at IS NULL
                      AND (unaccent(g.title) ILIKE unaccent(:terme) OR unaccent(g.culprit) ILIKE unaccent(:terme))
                    ORDER BY g.last_seen_at DESC
                    LIMIT :par_module)
@@ -133,7 +133,7 @@ final class SearchService
                          COALESCE(f.description, f.kind::text),
                          f.updated_at
                     FROM design_files f
-                   WHERE f.user_id = :user_id AND f.deleted_at IS NULL
+                   WHERE f.organization_id = :organization_id AND f.deleted_at IS NULL
                      AND (unaccent(f.name) ILIKE unaccent(:terme) OR unaccent(f.description) ILIKE unaccent(:terme))
                    ORDER BY f.updated_at DESC
                    LIMIT :par_module)
@@ -146,7 +146,7 @@ final class SearchService
 
         $motif = '%' . $this->escapeLike($terme) . '%';
 
-        $statement->bindValue('user_id', $userId);
+        $statement->bindValue('organization_id', $organizationId);
         $statement->bindValue('terme', $motif);
         // Le numéro de ticket se cherche à l'IDENTIQUE : « 12 » doit trouver
         // le ticket 12, pas les ticket 120 à 129 en plus.

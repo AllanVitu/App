@@ -7,6 +7,7 @@ namespace App\Middleware;
 use App\Core\HttpException;
 use App\Core\Request;
 use App\Models\BackendRepository;
+use App\Models\OrganizationRepository;
 use App\Models\UserRepository;
 use App\Services\Jwt;
 
@@ -32,9 +33,21 @@ use App\Services\Jwt;
  * └─────────────────────────────────────────────────────────────────────┘
  *
  * DEUX APPELANTS, UN SEUL RÉSULTAT. Que l'appel vienne d'une session ou d'une
- * clé, l'attribut « user » est posé de la même façon : les contrôleurs
- * d'ingestion n'ont donc rien à savoir de tout ceci, et continuent d'appeler
- * `$request->userId()`.
+ * clé, l'attribut « organization » est posé de la même façon : les contrôleurs
+ * d'ingestion n'ont donc rien à savoir de tout ceci, et appellent
+ * `$request->organizationId()` comme les autres.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │  CE QUI DIFFÈRE : L'ATTRIBUT « user » PEUT ÊTRE ABSENT                  │
+ * │                                                                         │
+ * │  Une clé de service désigne un ESPACE, pas une personne. Il y a donc un │
+ * │  destinataire mais aucun auteur, et c'est ce que dit `actorId()` en     │
+ * │  renvoyant null — là où `userId()` refuserait la requête.               │
+ * │                                                                         │
+ * │  C'est aussi la bonne réponse métier : une intégration de production    │
+ * │  doit continuer d'émettre le jour où celui qui a créé la clé quitte     │
+ * │  l'équipe.                                                              │
+ * └─────────────────────────────────────────────────────────────────────────┘
  *
  * L'ORDRE DE RECONNAISSANCE EST DÉTERMINÉ PAR LE PRÉFIXE, jamais par un essai
  * suivi d'un repli. Tenter la vérification JWT sur une clé d'API produirait un
@@ -73,17 +86,16 @@ final class IngestMiddleware
             }
         }
 
-        $user = $isApiKey ? $this->fromApiKey($token) : $this->fromSession($token);
-
-        $request->setAttribute('user', $user);
+        $isApiKey ? $this->fromApiKey($request, $token) : $this->fromSession($request, $token);
     }
 
     /**
-     * @return array<string, mixed>
+     * Une clé de service : elle pose l'organisation, et RIEN d'autre. Aucun
+     * attribut « user », donc aucun auteur — ce qui est exact.
      */
-    private function fromApiKey(string $token): array
+    private function fromApiKey(Request $request, string $token): void
     {
-        $key = (new BackendRepository())->findUserByKey($token);
+        $key = (new BackendRepository())->findOrganizationByKey($token);
 
         // Un seul message pour « inconnue », « révoquée » et « publique » :
         // distinguer les trois indiquerait à un attaquant qu'une clé a existé.
@@ -91,38 +103,50 @@ final class IngestMiddleware
             throw HttpException::unauthorized('Clé d\'API inconnue, révoquée, ou sans droit d\'écriture.');
         }
 
-        return $this->activeUser($key['user_id'], 'Le compte lié à cette clé est introuvable.');
+        $organization = (new OrganizationRepository())->findById($key['organization_id']);
+
+        if ($organization === null) {
+            throw HttpException::unauthorized('L\'espace de travail lié à cette clé est introuvable.');
+        }
+
+        // Une clé n'a pas de rôle : elle n'ouvre que l'ingestion, et aucune
+        // route d'ingestion n'en demande. Lui en prêter un ouvrirait, le jour
+        // où une route protégée passerait par ici, des droits que personne
+        // n'a accordés.
+        $request->setAttribute('organization', $organization + ['role' => 'member']);
+        $request->setAttribute('api_key', $key);
     }
 
     /**
-     * @return array<string, mixed>
+     * Une session ouverte : le compte ET son organisation, exactement comme
+     * dans AuthMiddleware. Le compte est rechargé depuis la base — un compte
+     * supprimé ou désactivé perd l'accès immédiatement, sans attendre qu'on
+     * pense à révoquer ses clés une par une.
      */
-    private function fromSession(string $token): array
+    private function fromSession(Request $request, string $token): void
     {
         $claims = Jwt::verify($token);
 
-        return $this->activeUser((string) $claims['sub'], 'Compte introuvable.');
-    }
-
-    /**
-     * Le compte est rechargé depuis la base, comme dans AuthMiddleware : un
-     * compte supprimé ou désactivé perd l'accès immédiatement, sans attendre
-     * qu'on pense à révoquer ses clés une par une.
-     *
-     * @return array<string, mixed>
-     */
-    private function activeUser(string $userId, string $missing): array
-    {
-        $user = (new UserRepository())->findById($userId);
+        $user = (new UserRepository())->findById((string) $claims['sub']);
 
         if ($user === null) {
-            throw HttpException::unauthorized($missing);
+            throw HttpException::unauthorized('Compte introuvable.');
         }
 
         if (!$user['is_active']) {
             throw HttpException::forbidden('Ce compte est désactivé.');
         }
 
-        return $user;
+        $organization = (new OrganizationRepository())->activeFor(
+            $user['id'],
+            $user['active_organization_id'],
+        );
+
+        if ($organization === null) {
+            throw HttpException::forbidden('Ce compte n\'appartient à aucun espace de travail.');
+        }
+
+        $request->setAttribute('user', $user);
+        $request->setAttribute('organization', $organization);
     }
 }

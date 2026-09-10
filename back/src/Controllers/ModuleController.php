@@ -38,9 +38,9 @@ final class ModuleController
      */
     public function index(Request $request): void
     {
-        $userId = $request->userId();
+        $userId = $request->organizationId();
 
-        Response::json($this->metrics->decorate($this->modules->listForUser($userId), $userId));
+        Response::json($this->metrics->decorate($this->modules->listForOrganization($userId), $userId));
     }
 
     /**
@@ -61,7 +61,7 @@ final class ModuleController
     public static function resolveModule(Request $request): array
     {
         $slug = (string) $request->param('slug');
-        $module = (new ModuleRepository())->findBySlugForUser($slug, $request->userId());
+        $module = (new ModuleRepository())->findBySlugForOrganization($slug, $request->organizationId());
 
         if ($module === null) {
             throw HttpException::notFound('Module introuvable ou non accessible.');

@@ -10,9 +10,12 @@ use PDO;
 /**
  * Accès aux enregistrements des modules (table module_items).
  *
- * Chaque requête est filtrée sur user_id : c'est le point de contrôle
- * central du cloisonnement des données entre comptes. Aucune méthode ne
- * permet de lire un élément sans fournir son propriétaire.
+ * Chaque requête est filtrée sur organization_id : c'est le point de contrôle
+ * central du cloisonnement. Aucune méthode ne permet de lire un élément sans
+ * fournir l'espace de travail auquel il appartient.
+ *
+ * « created_by » ne cloisonne RIEN. Il dit qui a écrit la ligne, et deux
+ * coéquipiers voient les mêmes éléments quel que soit celui qui les a créés.
  */
 final class ModuleItemRepository
 {
@@ -20,15 +23,33 @@ final class ModuleItemRepository
     private const SORTABLE = ['created_at', 'updated_at', 'title', 'due_date', 'position'];
 
     /**
+     * Colonnes exposées par l'API.
+     *
+     * Cette liste était recopiée à quatre endroits, ce qui n'a tenu que tant
+     * qu'elle ne bougeait pas : l'auteur devait être ajouté quatre fois, et
+     * oublié une fois aurait suffi à ce qu'un élément le perde selon la route
+     * qui l'a renvoyé.
+     *
+     * L'auteur arrive par SOUS-REQUÊTE SCALAIRE, et non par jointure, parce
+     * que la liste sert aussi bien à des SELECT qu'à des RETURNING — lesquels
+     * n'acceptent aucun JOIN. « created_by » y reste sans qualificatif : la
+     * liste est employée tantôt sur « module_items », tantôt sur l'alias
+     * « i », et la colonne se résout dans les deux cas.
+     */
+    private const COLUMNS = 'id, module_id, title, description, status, data,
+                             position, due_date, created_at, updated_at,
+                             (SELECT u.full_name FROM users u WHERE u.id = created_by) AS author_name';
+
+    /**
      * Liste paginée des éléments d'un module.
      *
      * @param array{status?: string|null, search?: string|null, sort?: string, direction?: string} $filters
      * @return array{items: list<array<string, mixed>>, total: int}
      */
-    public function paginate(string $userId, string $moduleId, array $filters, int $page, int $perPage): array
+    public function paginate(string $organizationId, string $moduleId, array $filters, int $page, int $perPage): array
     {
-        $conditions = ['i.user_id = :user_id', 'i.module_id = :module_id', 'i.deleted_at IS NULL'];
-        $params     = ['user_id' => $userId, 'module_id' => $moduleId];
+        $conditions = ['i.organization_id = :organization_id', 'i.module_id = :module_id', 'i.deleted_at IS NULL'];
+        $params     = ['organization_id' => $organizationId, 'module_id' => $moduleId];
 
         if (!empty($filters['status'])) {
             $conditions[]     = 'i.status = :status::item_status';
@@ -55,8 +76,7 @@ final class ModuleItemRepository
         $direction = strtoupper($filters['direction'] ?? '') === 'ASC' ? 'ASC' : 'DESC';
 
         $statement = Database::connection()->prepare(
-            "SELECT i.id, i.module_id, i.title, i.description, i.status, i.data,
-                    i.position, i.due_date, i.created_at, i.updated_at
+            'SELECT ' . self::COLUMNS . "
                FROM module_items i
               WHERE {$where}
               ORDER BY i.{$sort} {$direction} NULLS LAST, i.id
@@ -82,15 +102,15 @@ final class ModuleItemRepository
     /**
      * @return array<string, mixed>|null
      */
-    public function find(string $id, string $userId): ?array
+    public function find(string $id, string $organizationId): ?array
     {
         $statement = Database::connection()->prepare(
-            'SELECT id, module_id, title, description, status, data, position, due_date, created_at, updated_at
+            'SELECT ' . self::COLUMNS . '
                FROM module_items
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
         $row = $statement->fetch();
 
         return $row === false ? null : $this->hydrate($row);
@@ -100,22 +120,23 @@ final class ModuleItemRepository
      * @param array<string, mixed> $attributes
      * @return array<string, mixed>
      */
-    public function create(string $userId, string $moduleId, array $attributes): array
+    public function create(string $organizationId, ?string $authorId, string $moduleId, array $attributes): array
     {
         $statement = Database::connection()->prepare(
-            'INSERT INTO module_items (module_id, user_id, title, description, status, data, due_date)
-             VALUES (:module_id, :user_id, :title, :description, :status::item_status, :data::jsonb, :due_date)
-             RETURNING id, module_id, title, description, status, data, position, due_date, created_at, updated_at',
+            'INSERT INTO module_items (module_id, organization_id, created_by, title, description, status, data, due_date)
+             VALUES (:module_id, :organization_id, :created_by, :title, :description, :status::item_status, :data::jsonb, :due_date)
+             RETURNING ' . self::COLUMNS,
         );
 
         $statement->execute([
-            'module_id'   => $moduleId,
-            'user_id'     => $userId,
-            'title'       => $attributes['title'],
-            'description' => $attributes['description'],
-            'status'      => $attributes['status'],
-            'data'        => json_encode($attributes['data'], JSON_UNESCAPED_UNICODE),
-            'due_date'    => $attributes['due_date'],
+            'module_id'       => $moduleId,
+            'organization_id' => $organizationId,
+            'created_by'      => $authorId,
+            'title'           => $attributes['title'],
+            'description'     => $attributes['description'],
+            'status'          => $attributes['status'],
+            'data'            => json_encode($attributes['data'], JSON_UNESCAPED_UNICODE),
+            'due_date'        => $attributes['due_date'],
         ]);
 
         /** @var array<string, mixed> $row */
@@ -128,7 +149,7 @@ final class ModuleItemRepository
      * @param array<string, mixed> $attributes
      * @return array<string, mixed>|null
      */
-    public function update(string $id, string $userId, array $attributes): ?array
+    public function update(string $id, string $organizationId, array $attributes): ?array
     {
         $statement = Database::connection()->prepare(
             'UPDATE module_items
@@ -137,18 +158,18 @@ final class ModuleItemRepository
                     status = :status::item_status,
                     data = :data::jsonb,
                     due_date = :due_date
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL
-          RETURNING id, module_id, title, description, status, data, position, due_date, created_at, updated_at',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL
+          RETURNING ' . self::COLUMNS,
         );
 
         $statement->execute([
-            'id'          => $id,
-            'user_id'     => $userId,
-            'title'       => $attributes['title'],
-            'description' => $attributes['description'],
-            'status'      => $attributes['status'],
-            'data'        => json_encode($attributes['data'], JSON_UNESCAPED_UNICODE),
-            'due_date'    => $attributes['due_date'],
+            'id'              => $id,
+            'organization_id' => $organizationId,
+            'title'           => $attributes['title'],
+            'description'     => $attributes['description'],
+            'status'          => $attributes['status'],
+            'data'            => json_encode($attributes['data'], JSON_UNESCAPED_UNICODE),
+            'due_date'        => $attributes['due_date'],
         ]);
 
         $row = $statement->fetch();
@@ -159,15 +180,15 @@ final class ModuleItemRepository
     /**
      * Suppression logique : la ligne reste en base, invisible des listings.
      */
-    public function softDelete(string $id, string $userId): bool
+    public function softDelete(string $id, string $organizationId): bool
     {
         $statement = Database::connection()->prepare(
             'UPDATE module_items
                 SET deleted_at = NOW()
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
 
         return $statement->rowCount() > 0;
     }
@@ -178,15 +199,15 @@ final class ModuleItemRepository
      * Le compteur du module est ajusté par l'appelant, comme il l'est à la
      * suppression : le dépôt ne connaît que sa table.
      */
-    public function restore(string $id, string $userId): bool
+    public function restore(string $id, string $organizationId): bool
     {
         $statement = Database::connection()->prepare(
             'UPDATE module_items
                 SET deleted_at = NULL
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NOT NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
 
         return $statement->rowCount() > 0;
     }
@@ -196,18 +217,18 @@ final class ModuleItemRepository
      *
      * @return list<array<string, mixed>>
      */
-    public function recentForUser(string $userId, int $limit = 5): array
+    public function recentForOrganization(string $organizationId, int $limit = 5): array
     {
         $statement = Database::connection()->prepare(
             'SELECT i.id, i.title, i.status, i.updated_at, m.slug AS module_slug, m.name AS module_name
                FROM module_items i
                JOIN modules m ON m.id = i.module_id
-              WHERE i.user_id = :user_id AND i.deleted_at IS NULL
+              WHERE i.organization_id = :organization_id AND i.deleted_at IS NULL
               ORDER BY i.updated_at DESC
               LIMIT :limit',
         );
 
-        $statement->bindValue('user_id', $userId);
+        $statement->bindValue('organization_id', $organizationId);
         $statement->bindValue('limit', $limit, PDO::PARAM_INT);
         $statement->execute();
 
@@ -252,6 +273,9 @@ final class ModuleItemRepository
             'due_date'    => $row['due_date'],
             'created_at'  => Database::toIso($row['created_at']),
             'updated_at'  => Database::toIso($row['updated_at']),
+            // Null si le compte a été supprimé : l'élément appartient à
+            // l'organisation, il survit à son auteur.
+            'author_name' => $row['author_name'] !== null ? (string) $row['author_name'] : null,
         ];
     }
 }

@@ -10,9 +10,13 @@ use PDO;
 /**
  * Accès aux tickets (table tickets).
  *
- * Comme pour les autres dépôts, CHAQUE requête est filtrée sur user_id :
- * aucune méthode ne permet de lire ou d'écrire un ticket sans fournir son
- * propriétaire. C'est le point de contrôle du cloisonnement entre comptes.
+ * Comme pour les autres dépôts, CHAQUE requête est filtrée sur organization_id :
+ * aucune méthode ne permet de lire ou d'écrire un ticket sans fournir l'espace
+ * de travail auquel il appartient. C'est le point de contrôle du cloisonnement.
+ *
+ * « created_by » ne cloisonne RIEN. Il dit qui a ouvert le ticket, et c'est
+ * tout : deux coéquipiers voient les mêmes tickets, quel que soit celui qui
+ * les a écrits.
  *
  * Le champ « labels » est un text[] PostgreSQL. Il transite en JSON dans les
  * deux sens plutôt qu'en littéral de tableau ({a,b}) : ce littéral exige un
@@ -25,10 +29,22 @@ final class TicketRepository
     /** Tri autorisé — liste blanche, un ORDER BY ne pouvant pas être paramétré. */
     private const SORTABLE = ['created_at', 'updated_at', 'number', 'due_date', 'priority', 'title'];
 
-    /** Colonnes exposées par l'API, réutilisées par toutes les requêtes. */
+    /**
+     * Colonnes exposées par l'API, réutilisées par toutes les requêtes.
+     *
+     * L'AUTEUR ARRIVE PAR SOUS-REQUÊTE SCALAIRE, et non par jointure, parce
+     * que cette liste sert aussi bien à des SELECT qu'à des RETURNING —
+     * lesquels n'acceptent aucun JOIN. Une seule écriture pour les deux, donc
+     * aucune chance qu'elles divergent.
+     *
+     * « created_by » y est volontairement laissé sans qualificatif : la liste
+     * est employée tantôt sur « tickets », tantôt sur l'alias « t », et la
+     * colonne se résout dans les deux cas.
+     */
     private const COLUMNS = 'id, number, title, description, status, priority, project,
                              to_jsonb(labels) AS labels, due_date, completed_at,
-                             created_at, updated_at';
+                             created_at, updated_at, created_by,
+                             (SELECT u.full_name FROM users u WHERE u.id = created_by) AS author_name';
 
     /**
      * Liste filtrée.
@@ -44,13 +60,13 @@ final class TicketRepository
      * @return array{tickets: list<array<string, mixed>>, total: int}
      */
     public function search(
-        string $userId,
+        string $organizationId,
         array $filters,
         int $limit = 500,
         int $offset = 0,
     ): array {
-        $conditions = ['t.user_id = :user_id', 't.deleted_at IS NULL'];
-        $params     = ['user_id' => $userId];
+        $conditions = ['t.organization_id = :organization_id', 't.deleted_at IS NULL'];
+        $params     = ['organization_id' => $organizationId];
 
         if (!empty($filters['status'])) {
             $conditions[]     = 't.status = :status::ticket_status';
@@ -123,15 +139,15 @@ final class TicketRepository
     /**
      * @return array<string, mixed>|null
      */
-    public function find(string $id, string $userId): ?array
+    public function find(string $id, string $organizationId): ?array
     {
         $statement = Database::connection()->prepare(
             'SELECT ' . self::COLUMNS . '
                FROM tickets t
-              WHERE t.id = :id AND t.user_id = :user_id AND t.deleted_at IS NULL',
+              WHERE t.id = :id AND t.organization_id = :organization_id AND t.deleted_at IS NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
         $row = $statement->fetch();
 
         return $row === false ? null : $this->hydrate($row);
@@ -141,15 +157,16 @@ final class TicketRepository
      * @param array<string, mixed> $attributes
      * @return array<string, mixed>
      */
-    public function create(string $userId, array $attributes): array
+    public function create(string $organizationId, ?string $authorId, array $attributes): array
     {
         // « number » et « completed_at » sont absents de l'INSERT : ils sont
         // posés par les triggers (cf. 06_tickets.sql). Les fournir ici
         // dupliquerait la règle et la ferait diverger tôt ou tard.
         $statement = Database::connection()->prepare(
-            'INSERT INTO tickets (user_id, title, description, status, priority, project, labels, due_date)
+            'INSERT INTO tickets (organization_id, created_by, title, description, status, priority, project, labels, due_date)
              VALUES (
-                 :user_id,
+                 :organization_id,
+                 :created_by,
                  :title,
                  :description,
                  :status::ticket_status,
@@ -161,7 +178,7 @@ final class TicketRepository
              RETURNING ' . self::COLUMNS,
         );
 
-        $statement->execute($this->bindings($userId, $attributes));
+        $statement->execute($this->bindings($organizationId, $attributes) + ['created_by' => $authorId]);
 
         /** @var array<string, mixed> $row */
         $row = $statement->fetch();
@@ -173,7 +190,7 @@ final class TicketRepository
      * @param array<string, mixed> $attributes
      * @return array<string, mixed>|null
      */
-    public function update(string $id, string $userId, array $attributes): ?array
+    public function update(string $id, string $organizationId, array $attributes): ?array
     {
         $statement = Database::connection()->prepare(
             'UPDATE tickets
@@ -187,11 +204,11 @@ final class TicketRepository
                                       \'{}\'
                                   ),
                     due_date    = :due_date
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL
           RETURNING ' . self::COLUMNS,
         );
 
-        $statement->execute($this->bindings($userId, $attributes) + ['id' => $id]);
+        $statement->execute($this->bindings($organizationId, $attributes) + ['id' => $id]);
 
         $row = $statement->fetch();
 
@@ -201,15 +218,15 @@ final class TicketRepository
     /**
      * Suppression logique : la ligne reste, le numéro n'est jamais réattribué.
      */
-    public function softDelete(string $id, string $userId): bool
+    public function softDelete(string $id, string $organizationId): bool
     {
         $statement = Database::connection()->prepare(
             'UPDATE tickets
                 SET deleted_at = NOW()
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
 
         return $statement->rowCount() > 0;
     }
@@ -222,15 +239,15 @@ final class TicketRepository
      * — c'est un compteur par compte, jamais un rang. Un ticket restauré
      * retrouve donc exactement le sien.
      */
-    public function restore(string $id, string $userId): bool
+    public function restore(string $id, string $organizationId): bool
     {
         $statement = Database::connection()->prepare(
             'UPDATE tickets
                 SET deleted_at = NULL
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NOT NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
 
         return $statement->rowCount() > 0;
     }
@@ -242,7 +259,7 @@ final class TicketRepository
      * @return array{total: int, open: int, backlog: int, todo: int, in_progress: int,
      *               done: int, canceled: int, urgent: int, overdue: int, closed_this_week: int}
      */
-    public function statsForUser(string $userId): array
+    public function statsForOrganization(string $organizationId): array
     {
         $statement = Database::connection()->prepare(
             "SELECT
@@ -259,10 +276,10 @@ final class TicketRepository
                                     AND status NOT IN ('done', 'canceled'))           AS overdue,
                  COUNT(*) FILTER (WHERE completed_at > NOW() - INTERVAL '7 days')     AS closed_this_week
                FROM tickets
-              WHERE user_id = :user_id AND deleted_at IS NULL",
+              WHERE organization_id = :organization_id AND deleted_at IS NULL",
         );
 
-        $statement->execute(['user_id' => $userId]);
+        $statement->execute(['organization_id' => $organizationId]);
         $row = $statement->fetch() ?: [];
 
         $counts = [];
@@ -289,7 +306,7 @@ final class TicketRepository
      *
      * @return list<array<string, mixed>>
      */
-    public function needsAttention(string $userId, int $limit = 5): array
+    public function needsAttention(string $organizationId, int $limit = 5): array
     {
         $statement = Database::connection()->prepare(
             // « due_date < CURRENT_DATE » vaut NULL, et non FALSE, quand le
@@ -300,7 +317,7 @@ final class TicketRepository
             "SELECT id, number, title, status, priority, due_date,
                     (due_date IS NOT NULL AND due_date < CURRENT_DATE) AS is_overdue
                FROM tickets
-              WHERE user_id = :user_id
+              WHERE organization_id = :organization_id
                 AND deleted_at IS NULL
                 AND status NOT IN ('done', 'canceled')
                 AND ((due_date IS NOT NULL AND due_date < CURRENT_DATE) OR priority = 'urgent')
@@ -312,7 +329,7 @@ final class TicketRepository
               LIMIT :limit",
         );
 
-        $statement->bindValue('user_id', $userId);
+        $statement->bindValue('organization_id', $organizationId);
         $statement->bindValue('limit', $limit, PDO::PARAM_INT);
         $statement->execute();
 
@@ -335,16 +352,16 @@ final class TicketRepository
      *
      * @return list<string>
      */
-    public function projectsForUser(string $userId): array
+    public function projectsForOrganization(string $organizationId): array
     {
         $statement = Database::connection()->prepare(
             'SELECT DISTINCT project
                FROM tickets
-              WHERE user_id = :user_id AND deleted_at IS NULL AND project IS NOT NULL
+              WHERE organization_id = :organization_id AND deleted_at IS NULL AND project IS NOT NULL
               ORDER BY project',
         );
 
-        $statement->execute(['user_id' => $userId]);
+        $statement->execute(['organization_id' => $organizationId]);
 
         return array_map(static fn (array $row): string => (string) $row['project'], $statement->fetchAll());
     }
@@ -357,17 +374,17 @@ final class TicketRepository
      *
      * @return list<array{label: string, count: int}>
      */
-    public function labelsForUser(string $userId): array
+    public function labelsForOrganization(string $organizationId): array
     {
         $statement = Database::connection()->prepare(
             'SELECT label, COUNT(*) AS count
                FROM tickets, unnest(labels) AS label
-              WHERE user_id = :user_id AND deleted_at IS NULL
+              WHERE organization_id = :organization_id AND deleted_at IS NULL
               GROUP BY label
               ORDER BY count DESC, label',
         );
 
-        $statement->execute(['user_id' => $userId]);
+        $statement->execute(['organization_id' => $organizationId]);
 
         return array_map(
             static fn (array $row): array => [
@@ -384,19 +401,19 @@ final class TicketRepository
      * @param  array<string, mixed> $attributes
      * @return array<string, mixed>
      */
-    private function bindings(string $userId, array $attributes): array
+    private function bindings(string $organizationId, array $attributes): array
     {
         return [
-            'user_id'     => $userId,
-            'title'       => $attributes['title'],
-            'description' => $attributes['description'],
-            'status'      => $attributes['status'],
-            'priority'    => $attributes['priority'],
-            'project'     => $attributes['project'],
+            'organization_id' => $organizationId,
+            'title'           => $attributes['title'],
+            'description'     => $attributes['description'],
+            'status'          => $attributes['status'],
+            'priority'        => $attributes['priority'],
+            'project'         => $attributes['project'],
             // JSON_UNESCAPED_UNICODE : sans lui, une étiquette accentuée
             // serait stockée sous sa forme échappée (é).
-            'labels'      => json_encode(array_values($attributes['labels']), JSON_UNESCAPED_UNICODE),
-            'due_date'    => $attributes['due_date'],
+            'labels'          => json_encode(array_values($attributes['labels']), JSON_UNESCAPED_UNICODE),
+            'due_date'        => $attributes['due_date'],
         ];
     }
 
@@ -432,6 +449,12 @@ final class TicketRepository
             'completed_at' => Database::toIso($row['completed_at']),
             'created_at'   => Database::toIso($row['created_at']),
             'updated_at'   => Database::toIso($row['updated_at']),
+            // Les deux valent NULL pour un ticket dont l'auteur a supprimé son
+            // compte. À plusieurs, « ouvert par » cesse d'être une évidence :
+            // c'est la première question qu'on se pose devant un ticket qu'on
+            // n'a pas écrit.
+            'created_by'   => $row['created_by'] !== null ? (string) $row['created_by'] : null,
+            'author_name'  => $row['author_name'] !== null ? (string) $row['author_name'] : null,
         ];
     }
 }

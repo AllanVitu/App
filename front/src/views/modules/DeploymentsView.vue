@@ -440,8 +440,13 @@ onMounted(load)
             {{ opened.branch }}@{{ opened.commit_sha.slice(0, 7) }}
           </span>
 
+          <!-- « Qui a lancé ça ? » — la question qu'on se pose devant un
+               déploiement en échec qu'on n'a pas déclenché soi-même. Absent
+               quand la clé de service en est l'auteur, ou quand le compte a
+               été supprimé : la ligne s'arrête alors à la durée. -->
           <span class="text-[0.72rem] text-ink-3">
-            {{ formatDuration(opened.duration_ms) }} · {{ formatRelative(opened.created_at) }}
+            {{ formatDuration(opened.duration_ms) }} · {{ formatRelative(opened.created_at)
+            }}<template v-if="opened.author_name"> · par {{ opened.author_name }}</template>
           </span>
         </div>
 

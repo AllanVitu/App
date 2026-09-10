@@ -47,12 +47,12 @@ final class AttentionFeed
     /**
      * @return list<array<string, mixed>>
      */
-    public function forUser(string $userId, int $limit = 5): array
+    public function forOrganization(string $organizationId, int $limit = 5): array
     {
         $entries = [
-            ...$this->fromDeployments($userId),
-            ...$this->fromErrors($userId),
-            ...$this->fromTickets($userId),
+            ...$this->fromDeployments($organizationId),
+            ...$this->fromErrors($organizationId),
+            ...$this->fromTickets($organizationId),
         ];
 
         usort($entries, function (array $a, array $b): int {
@@ -69,7 +69,7 @@ final class AttentionFeed
     /**
      * @return list<array<string, mixed>>
      */
-    private function fromTickets(string $userId): array
+    private function fromTickets(string $organizationId): array
     {
         return array_map(
             static fn (array $ticket): array => [
@@ -80,14 +80,14 @@ final class AttentionFeed
                 'reason' => $ticket['reason'],
                 'at'     => $ticket['due_date'],
             ],
-            (new TicketRepository())->needsAttention($userId, 5),
+            (new TicketRepository())->needsAttention($organizationId, 5),
         );
     }
 
     /**
      * @return list<array<string, mixed>>
      */
-    private function fromDeployments(string $userId): array
+    private function fromDeployments(string $organizationId): array
     {
         return array_map(
             static fn (array $deployment): array => [
@@ -100,14 +100,14 @@ final class AttentionFeed
                 'reason' => 'failed',
                 'at'     => $deployment['finished_at'] ?? $deployment['created_at'],
             ],
-            (new DeploymentRepository())->needsAttention($userId, 3),
+            (new DeploymentRepository())->needsAttention($organizationId, 3),
         );
     }
 
     /**
      * @return list<array<string, mixed>>
      */
-    private function fromErrors(string $userId): array
+    private function fromErrors(string $organizationId): array
     {
         return array_map(
             static fn (array $group): array => [
@@ -120,7 +120,7 @@ final class AttentionFeed
                 'reason' => $group['level'] === 'fatal' ? 'fatal' : 'error',
                 'at'     => $group['last_seen_at'],
             ],
-            (new ErrorRepository())->needsAttention($userId, 3),
+            (new ErrorRepository())->needsAttention($organizationId, 3),
         );
     }
 }

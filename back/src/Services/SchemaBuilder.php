@@ -84,15 +84,21 @@ final class SchemaBuilder
     // -----------------------------------------------------------------------
 
     /**
-     * Nom du schéma d'un compte.
+     * Nom du schéma d'une organisation.
      *
-     * L'identifiant du compte est un UUID : ses tirets sont retirés et un
-     * préfixe alphabétique est ajouté, car un identifiant SQL ne peut pas
-     * commencer par un chiffre.
+     * L'identifiant est un UUID : ses tirets sont retirés et un préfixe
+     * alphabétique est ajouté, car un identifiant SQL ne peut pas commencer
+     * par un chiffre.
+     *
+     * LE PRÉFIXE EST PASSÉ DE « u_ » À « o_ » avec le cloisonnement par
+     * organisation. Ce n'est pas cosmétique : ce nom désigne un schéma qui
+     * contient de vraies lignes. La migration renomme donc les schémas
+     * existants dans le même mouvement — sinon l'écran listerait des tables
+     * dont les données seraient devenues introuvables.
      */
-    public function schemaFor(string $userId): string
+    public function schemaFor(string $organizationId): string
     {
-        return 'u_' . str_replace('-', '', $userId);
+        return 'o_' . str_replace('-', '', $organizationId);
     }
 
     /**
@@ -115,9 +121,9 @@ final class SchemaBuilder
     }
 
     /** Nom pleinement qualifié, prêt à être concaténé. */
-    private function qualified(string $userId, string $table): string
+    private function qualified(string $organizationId, string $table): string
     {
-        return $this->quote($this->schemaFor($userId)) . '.' . $this->quote($table);
+        return $this->quote($this->schemaFor($organizationId)) . '.' . $this->quote($table);
     }
 
     private function sqlType(string $type): string
@@ -131,10 +137,10 @@ final class SchemaBuilder
     // -----------------------------------------------------------------------
 
     /** Le schéma du compte, créé au premier besoin. */
-    public function ensureSchema(string $userId): void
+    public function ensureSchema(string $organizationId): void
     {
         Database::connection()->exec(
-            'CREATE SCHEMA IF NOT EXISTS ' . $this->quote($this->schemaFor($userId)),
+            'CREATE SCHEMA IF NOT EXISTS ' . $this->quote($this->schemaFor($organizationId)),
         );
     }
 
@@ -176,14 +182,14 @@ final class SchemaBuilder
      * @param list<array<string, mixed>> $columns
      * @param list<array<string, mixed>> $previous colonnes avant modification
      */
-    public function sync(string $userId, string $table, array $columns, array $previous = []): void
+    public function sync(string $organizationId, string $table, array $columns, array $previous = []): void
     {
-        $this->ensureSchema($userId);
+        $this->ensureSchema($organizationId);
 
         $connection = Database::connection();
-        $qualified  = $this->qualified($userId, $table);
+        $qualified  = $this->qualified($organizationId, $table);
 
-        if (!$this->tableExists($userId, $table)) {
+        if (!$this->tableExists($organizationId, $table)) {
             $definitions = array_map($this->columnDefinition(...), $columns);
 
             $connection->exec("CREATE TABLE {$qualified} (" . implode(', ', $definitions) . ')');
@@ -280,14 +286,14 @@ final class SchemaBuilder
         return null;
     }
 
-    public function rename(string $userId, string $from, string $to): void
+    public function rename(string $organizationId, string $from, string $to): void
     {
-        if ($from === $to || !$this->tableExists($userId, $from)) {
+        if ($from === $to || !$this->tableExists($organizationId, $from)) {
             return;
         }
 
         Database::connection()->exec(
-            'ALTER TABLE ' . $this->qualified($userId, $from) . ' RENAME TO ' . $this->quote($to),
+            'ALTER TABLE ' . $this->qualified($organizationId, $from) . ' RENAME TO ' . $this->quote($to),
         );
     }
 
@@ -300,19 +306,19 @@ final class SchemaBuilder
      * inatteignables — et laisserait croire qu'on peut revenir en arrière.
      * L'interface doit donc le dire avant d'agir.
      */
-    public function drop(string $userId, string $table): void
+    public function drop(string $organizationId, string $table): void
     {
-        Database::connection()->exec('DROP TABLE IF EXISTS ' . $this->qualified($userId, $table));
+        Database::connection()->exec('DROP TABLE IF EXISTS ' . $this->qualified($organizationId, $table));
     }
 
-    public function tableExists(string $userId, string $table): bool
+    public function tableExists(string $organizationId, string $table): bool
     {
         $statement = Database::connection()->prepare(
             'SELECT 1 FROM information_schema.tables
               WHERE table_schema = :schema AND table_name = :name',
         );
 
-        $statement->execute(['schema' => $this->schemaFor($userId), 'name' => $table]);
+        $statement->execute(['schema' => $this->schemaFor($organizationId), 'name' => $table]);
 
         return $statement->fetchColumn() !== false;
     }
@@ -324,11 +330,11 @@ final class SchemaBuilder
     /**
      * @return array{rows: list<array<string, mixed>>, total: int}
      */
-    public function rows(string $userId, string $table, int $limit = self::MAX_ROWS): array
+    public function rows(string $organizationId, string $table, int $limit = self::MAX_ROWS): array
     {
-        $this->assertUsable($userId, $table);
+        $this->assertUsable($organizationId, $table);
 
-        $qualified = $this->qualified($userId, $table);
+        $qualified = $this->qualified($organizationId, $table);
 
         $total = (int) Database::connection()
             ->query("SELECT COUNT(*) FROM {$qualified}")
@@ -351,11 +357,11 @@ final class SchemaBuilder
      * @param array<string, mixed> $values
      * @return array<string, mixed>
      */
-    public function insert(string $userId, string $table, array $values): array
+    public function insert(string $organizationId, string $table, array $values): array
     {
-        $this->assertUsable($userId, $table);
+        $this->assertUsable($organizationId, $table);
 
-        $known = $this->physicalColumns($userId, $table);
+        $known = $this->physicalColumns($organizationId, $table);
         $names = [];
 
         foreach (array_keys($values) as $name) {
@@ -378,7 +384,7 @@ final class SchemaBuilder
 
         $colonnes    = implode(', ', array_map($this->quote(...), $names));
         $parametres  = implode(', ', array_map(static fn (string $n): string => ':' . $n, $names));
-        $qualified   = $this->qualified($userId, $table);
+        $qualified   = $this->qualified($organizationId, $table);
 
         $statement = Database::connection()->prepare(
             "INSERT INTO {$qualified} ({$colonnes}) VALUES ({$parametres}) RETURNING *",
@@ -411,11 +417,11 @@ final class SchemaBuilder
         return $row;
     }
 
-    public function delete(string $userId, string $table, string $id): bool
+    public function delete(string $organizationId, string $table, string $id): bool
     {
-        $this->assertUsable($userId, $table);
+        $this->assertUsable($organizationId, $table);
 
-        if (!in_array('id', $this->physicalColumns($userId, $table), true)) {
+        if (!in_array('id', $this->physicalColumns($organizationId, $table), true)) {
             throw HttpException::validation(
                 ['id' => 'Ajoutez une colonne « id » de type uuid pour rendre les lignes adressables.'],
                 'Cette table n\'a pas de colonne « id » : ses lignes ne sont pas adressables.',
@@ -423,7 +429,7 @@ final class SchemaBuilder
         }
 
         $statement = Database::connection()->prepare(
-            'DELETE FROM ' . $this->qualified($userId, $table) . ' WHERE id = :id',
+            'DELETE FROM ' . $this->qualified($organizationId, $table) . ' WHERE id = :id',
         );
 
         $statement->execute(['id' => $id]);
@@ -434,7 +440,7 @@ final class SchemaBuilder
     /**
      * @return list<string>
      */
-    public function physicalColumns(string $userId, string $table): array
+    public function physicalColumns(string $organizationId, string $table): array
     {
         $statement = Database::connection()->prepare(
             'SELECT column_name FROM information_schema.columns
@@ -442,7 +448,7 @@ final class SchemaBuilder
               ORDER BY ordinal_position',
         );
 
-        $statement->execute(['schema' => $this->schemaFor($userId), 'name' => $table]);
+        $statement->execute(['schema' => $this->schemaFor($organizationId), 'name' => $table]);
 
         return array_map(static fn ($row): string => (string) $row['column_name'], $statement->fetchAll());
     }
@@ -451,9 +457,9 @@ final class SchemaBuilder
      * Refuse tôt et clairement plutôt que de laisser partir une requête sur
      * une table absente : l'erreur PostgreSQL serait exacte mais illisible.
      */
-    private function assertUsable(string $userId, string $table): void
+    private function assertUsable(string $organizationId, string $table): void
     {
-        if (!$this->tableExists($userId, $table)) {
+        if (!$this->tableExists($organizationId, $table)) {
             throw HttpException::notFound(
                 sprintf('La table « %s » n\'existe pas dans votre espace.', $table),
             );

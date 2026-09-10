@@ -10,8 +10,8 @@ use PDO;
 /**
  * Module « Supervision » : erreurs de production, groupées.
  *
- * Comme tous les dépôts, CHAQUE requête est filtrée sur user_id — y compris
- * pour les occurrences, dont la table porte une copie de user_id pour que le
+ * Comme tous les dépôts, CHAQUE requête est filtrée sur organization_id — y compris
+ * pour les occurrences, dont la table porte une copie de organization_id pour que le
  * cloisonnement ne dépende jamais d'une jointure correctement écrite.
  *
  * Le nombre d'occurrences et la date de dernière vue sont entretenus par
@@ -30,13 +30,13 @@ final class ErrorRepository
      * @return array{groups: list<array<string, mixed>>, total: int}
      */
     public function search(
-        string $userId,
+        string $organizationId,
         array $filters,
         int $limit = 200,
         int $offset = 0,
     ): array {
-        $conditions = ['user_id = :user_id', 'deleted_at IS NULL'];
-        $params     = ['user_id' => $userId];
+        $conditions = ['organization_id = :organization_id', 'deleted_at IS NULL'];
+        $params     = ['organization_id' => $organizationId];
 
         if (!empty($filters['status'])) {
             $conditions[]     = 'status = :status::error_status';
@@ -91,15 +91,15 @@ final class ErrorRepository
      *
      * @return array<string, mixed>|null
      */
-    public function find(string $id, string $userId, int $events = 20): ?array
+    public function find(string $id, string $organizationId, int $events = 20): ?array
     {
         $statement = Database::connection()->prepare(
             'SELECT ' . self::COLUMNS . '
                FROM error_groups
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
         $row = $statement->fetch();
 
         if ($row === false) {
@@ -107,7 +107,7 @@ final class ErrorRepository
         }
 
         $group = $this->hydrateGroup($row);
-        $group['events'] = $this->eventsForGroup($id, $userId, $events);
+        $group['events'] = $this->eventsForGroup($id, $organizationId, $events);
 
         return $group;
     }
@@ -115,18 +115,18 @@ final class ErrorRepository
     /**
      * @return list<array<string, mixed>>
      */
-    public function eventsForGroup(string $groupId, string $userId, int $limit = 20): array
+    public function eventsForGroup(string $groupId, string $organizationId, int $limit = 20): array
     {
         $statement = Database::connection()->prepare(
             'SELECT id, message, stack, context, occurred_at
                FROM error_events
-              WHERE group_id = :group_id AND user_id = :user_id
+              WHERE group_id = :group_id AND organization_id = :organization_id
               ORDER BY occurred_at DESC
               LIMIT :limit',
         );
 
         $statement->bindValue('group_id', $groupId);
-        $statement->bindValue('user_id', $userId);
+        $statement->bindValue('organization_id', $organizationId);
         $statement->bindValue('limit', $limit, PDO::PARAM_INT);
         $statement->execute();
 
@@ -152,17 +152,17 @@ final class ErrorRepository
      * @param  array<string, mixed> $attributes
      * @return array<string, mixed>
      */
-    public function record(string $userId, array $attributes): array
+    public function record(string $organizationId, array $attributes): array
     {
-        return Database::transaction(function () use ($userId, $attributes): array {
-            // ON CONFLICT sur (user_id, fingerprint) : c'est l'empreinte qui
+        return Database::transaction(function () use ($organizationId, $attributes): array {
+            // ON CONFLICT sur (organization_id, fingerprint) : c'est l'empreinte qui
             // regroupe. DO UPDATE plutôt que DO NOTHING, car il faut que
             // RETURNING renvoie une ligne dans les deux cas — avec DO NOTHING,
             // un conflit ne renvoie rien et il faudrait une seconde requête.
             $group = Database::connection()->prepare(
-                'INSERT INTO error_groups (user_id, fingerprint, title, culprit, level)
-                 VALUES (:user_id, :fingerprint, :title, :culprit, :level::error_level)
-                 ON CONFLICT (user_id, fingerprint) DO UPDATE
+                'INSERT INTO error_groups (organization_id, fingerprint, title, culprit, level)
+                 VALUES (:organization_id, :fingerprint, :title, :culprit, :level::error_level)
+                 ON CONFLICT (organization_id, fingerprint) DO UPDATE
                         SET title   = EXCLUDED.title,
                             culprit = EXCLUDED.culprit,
                             level   = EXCLUDED.level
@@ -170,33 +170,33 @@ final class ErrorRepository
             );
 
             $group->execute([
-                'user_id'     => $userId,
-                'fingerprint' => $attributes['fingerprint'],
-                'title'       => $attributes['title'],
-                'culprit'     => $attributes['culprit'],
-                'level'       => $attributes['level'],
+                'organization_id' => $organizationId,
+                'fingerprint'     => $attributes['fingerprint'],
+                'title'           => $attributes['title'],
+                'culprit'         => $attributes['culprit'],
+                'level'           => $attributes['level'],
             ]);
 
             $groupId = (string) $group->fetchColumn();
 
             $event = Database::connection()->prepare(
-                'INSERT INTO error_events (group_id, user_id, message, stack, context)
-                 VALUES (:group_id, :user_id, :message, :stack, :context::jsonb)',
+                'INSERT INTO error_events (group_id, organization_id, message, stack, context)
+                 VALUES (:group_id, :organization_id, :message, :stack, :context::jsonb)',
             );
 
             $event->execute([
-                'group_id' => $groupId,
-                'user_id'  => $userId,
-                'message'  => $attributes['message'],
-                'stack'    => $attributes['stack'],
-                'context'  => json_encode($attributes['context'], JSON_UNESCAPED_UNICODE),
+                'group_id'        => $groupId,
+                'organization_id' => $organizationId,
+                'message'         => $attributes['message'],
+                'stack'           => $attributes['stack'],
+                'context'         => json_encode($attributes['context'], JSON_UNESCAPED_UNICODE),
             ]);
 
             // Relu APRÈS l'occurrence : c'est le trigger qui a incrémenté le
             // compteur et remonté last_seen_at, la ligne lue plus tôt serait
             // déjà périmée.
             /** @var array<string, mixed> $created */
-            $created = $this->find($groupId, $userId, 5);
+            $created = $this->find($groupId, $organizationId, 5);
 
             return $created;
         });
@@ -208,31 +208,31 @@ final class ErrorRepository
      *
      * @return array<string, mixed>|null
      */
-    public function updateStatus(string $id, string $userId, string $status): ?array
+    public function updateStatus(string $id, string $organizationId, string $status): ?array
     {
         $statement = Database::connection()->prepare(
             'UPDATE error_groups
                 SET status = :status::error_status
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL
           RETURNING ' . self::COLUMNS,
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId, 'status' => $status]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId, 'status' => $status]);
 
         $row = $statement->fetch();
 
         return $row === false ? null : $this->hydrateGroup($row);
     }
 
-    public function softDelete(string $id, string $userId): bool
+    public function softDelete(string $id, string $organizationId): bool
     {
         $statement = Database::connection()->prepare(
             'UPDATE error_groups
                 SET deleted_at = NOW()
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
 
         return $statement->rowCount() > 0;
     }
@@ -245,15 +245,15 @@ final class ErrorRepository
      * retrouve donc son compte exact, y compris les occurrences arrivées
      * pendant qu'il était masqué.
      */
-    public function restore(string $id, string $userId): bool
+    public function restore(string $id, string $organizationId): bool
     {
         $statement = Database::connection()->prepare(
             'UPDATE error_groups
                 SET deleted_at = NULL
-              WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL',
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NOT NULL',
         );
 
-        $statement->execute(['id' => $id, 'user_id' => $userId]);
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
 
         return $statement->rowCount() > 0;
     }
@@ -267,12 +267,12 @@ final class ErrorRepository
      *
      * @return list<array<string, mixed>>
      */
-    public function needsAttention(string $userId, int $limit = 3): array
+    public function needsAttention(string $organizationId, int $limit = 3): array
     {
         $statement = Database::connection()->prepare(
             'SELECT ' . self::COLUMNS . "
                FROM error_groups
-              WHERE user_id = :user_id
+              WHERE organization_id = :organization_id
                 AND deleted_at IS NULL
                 AND status = 'unresolved'
               -- Le niveau prime sur la fraîcheur : une erreur fatale d'hier
@@ -281,7 +281,7 @@ final class ErrorRepository
               LIMIT :limit",
         );
 
-        $statement->bindValue('user_id', $userId);
+        $statement->bindValue('organization_id', $organizationId);
         $statement->bindValue('limit', $limit, PDO::PARAM_INT);
         $statement->execute();
 
@@ -297,7 +297,7 @@ final class ErrorRepository
      *
      * @return list<array{date: string, count: int}>
      */
-    public function dailyCounts(string $userId, int $days = 14): array
+    public function dailyCounts(string $organizationId, int $days = 14): array
     {
         $statement = Database::connection()->prepare(
             "SELECT d.day::date AS date, COUNT(e.id) AS count
@@ -307,14 +307,14 @@ final class ErrorRepository
                         INTERVAL '1 day'
                     ) AS d(day)
                LEFT JOIN error_events e
-                 ON e.user_id = :user_id
+                 ON e.organization_id = :organization_id
                 AND e.occurred_at >= d.day
                 AND e.occurred_at <  d.day + INTERVAL '1 day'
               GROUP BY d.day
               ORDER BY d.day",
         );
 
-        $statement->bindValue('user_id', $userId);
+        $statement->bindValue('organization_id', $organizationId);
         $statement->bindValue('days', $days, PDO::PARAM_INT);
         $statement->execute();
 
@@ -331,7 +331,7 @@ final class ErrorRepository
      * @return array{groups: int, unresolved: int, resolved: int, ignored: int,
      *               fatal: int, events: int, events_24h: int}
      */
-    public function statsForUser(string $userId): array
+    public function statsForOrganization(string $organizationId): array
     {
         $statement = Database::connection()->prepare(
             "SELECT
@@ -342,17 +342,17 @@ final class ErrorRepository
                  COUNT(*) FILTER (WHERE level = 'fatal' AND status = 'unresolved') AS fatal,
                  COALESCE(SUM(occurrences), 0)                                 AS events
                FROM error_groups
-              WHERE user_id = :user_id AND deleted_at IS NULL",
+              WHERE organization_id = :organization_id AND deleted_at IS NULL",
         );
 
-        $statement->execute(['user_id' => $userId]);
+        $statement->execute(['organization_id' => $organizationId]);
         $row = $statement->fetch() ?: [];
 
         $recent = Database::connection()->prepare(
             "SELECT COUNT(*) FROM error_events
-              WHERE user_id = :user_id AND occurred_at > NOW() - INTERVAL '24 hours'",
+              WHERE organization_id = :organization_id AND occurred_at > NOW() - INTERVAL '24 hours'",
         );
-        $recent->execute(['user_id' => $userId]);
+        $recent->execute(['organization_id' => $organizationId]);
 
         return [
             'groups'     => (int) ($row['groups'] ?? 0),

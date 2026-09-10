@@ -47,7 +47,7 @@ final class DataController
     public function index(Request $request): void
     {
         $table  = $this->tableName($request);
-        $userId = $request->userId();
+        $userId = $request->organizationId();
 
         $result = $this->schema->rows($userId, $table);
 
@@ -76,7 +76,7 @@ final class DataController
         }
 
         Response::created(
-            $this->schema->insert($request->userId(), $this->tableName($request), $valeurs),
+            $this->schema->insert($request->organizationId(), $this->tableName($request), $valeurs),
         );
     }
 
@@ -86,7 +86,7 @@ final class DataController
     public function destroy(Request $request): void
     {
         $supprime = $this->schema->delete(
-            $request->userId(),
+            $request->organizationId(),
             $this->tableName($request),
             (string) $request->param('id'),
         );

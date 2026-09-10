@@ -6,7 +6,7 @@
  * jeton d'accès et dépose le cookie de rafraîchissement dès la réponse 201.
  */
 import { computed, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { animate, appEnter, DURATION, shake, stagger, STAGGER } from '@/animations/motion'
 import AppIcon from '@/components/AppIcon.vue'
@@ -16,13 +16,26 @@ import { useMotion } from '@/composables/useMotion'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 
+const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const ui = useUiStore()
 
+/**
+ * Jeton d'invitation, quand on arrive depuis un lien.
+ *
+ * Il est transmis à l'API AVEC l'inscription : le compte est créé, reçoit son
+ * propre espace, puis entre dans celui qui l'a invité — le tout en une
+ * requête. Le faire en deux appels laisserait, si le second échouait, un
+ * compte tout neuf dans un espace vide, sans rien pour expliquer pourquoi.
+ */
+const invitation = computed(() => String(route.query.invitation ?? ''))
+
 const form = reactive({
   full_name: '',
-  email: '',
+  // Préremplie depuis le lien : l'invitation vise une adresse précise, et
+  // c'est celle-là qui la fera aboutir.
+  email: String(route.query.email ?? ''),
   password: '',
   password_confirmation: '',
   // Le serveur refuse toute inscription sans consentement : la case n'est
@@ -86,8 +99,17 @@ async function submit() {
   globalError.value = ''
 
   try {
-    await auth.register({ ...form })
-    ui.notify('Votre compte a été créé. Bienvenue !')
+    await auth.register({
+      ...form,
+      ...(invitation.value ? { invitation_token: invitation.value } : {}),
+    })
+
+    ui.notify(
+      invitation.value
+        ? `Bienvenue dans ${auth.organization?.name ?? 'votre nouvel espace'} !`
+        : 'Votre compte a été créé. Bienvenue !',
+    )
+
     await router.push({ name: 'dashboard' })
   } catch (error) {
     errors.value = error.errors ?? {}

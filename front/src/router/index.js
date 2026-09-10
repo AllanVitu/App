@@ -65,6 +65,12 @@ const routes = [
         meta: { title: 'Module' },
       },
       {
+        path: 'equipe',
+        name: 'team',
+        component: () => import('@/views/TeamView.vue'),
+        meta: { title: 'Équipe' },
+      },
+      {
         path: 'profil',
         name: 'profile',
         component: () => import('@/views/ProfileView.vue'),
@@ -123,6 +129,15 @@ const routes = [
         name: 'verify-email',
         component: () => import('@/views/auth/VerifyEmailView.vue'),
         meta: { title: "Confirmation de l'adresse", silent: true },
+      },
+      {
+        // Une invitation s'ouvre le plus souvent SANS compte : c'est même le
+        // cas courant. Elle appartient donc à ce groupe, ni « guestOnly » ni
+        // « requiresAuth ».
+        path: 'invitation',
+        name: 'invitation',
+        component: () => import('@/views/auth/InvitationView.vue'),
+        meta: { title: 'Invitation', silent: true },
       },
     ],
   },

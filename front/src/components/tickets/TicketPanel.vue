@@ -283,9 +283,16 @@ defineExpose({ focusTitle })
       </div>
     </div>
 
-    <!-- Horodatages : information de bas de page, jamais éditable. -->
+    <!-- Horodatages et paternité : information de bas de page, jamais éditable.
+         « par qui » n'avait aucun sens tant qu'un compte était seul dans son
+         espace. À plusieurs, c'est la première question devant un ticket qu'on
+         n'a pas écrit — et elle reste sans réponse si l'auteur a supprimé son
+         compte, ce que la phrase dit alors en s'arrêtant à la date. -->
     <footer class="shrink-0 space-y-0.5 border-t border-line px-4 py-3 text-[0.68rem] text-ink-3">
-      <p>créé le {{ new Date(ticket.created_at).toLocaleString('fr-FR') }}</p>
+      <p>
+        créé le {{ new Date(ticket.created_at).toLocaleString('fr-FR')
+        }}<template v-if="ticket.author_name"> par {{ ticket.author_name }}</template>
+      </p>
       <p v-if="ticket.completed_at">
         clos le {{ new Date(ticket.completed_at).toLocaleString('fr-FR') }}
       </p>
