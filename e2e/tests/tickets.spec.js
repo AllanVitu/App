@@ -48,6 +48,81 @@ test.describe('tickets', () => {
     await expect(page.getByText(titre, { exact: true })).toBeHidden()
   })
 
+  test('« m » prend le ticket, puis le rend', async ({ page }) => {
+    const titre = nouveauTitre()
+
+    await page.keyboard.press('c')
+    await page.getByPlaceholder(/Entrée pour créer/i).fill(titre)
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Escape')
+
+    const ligne = page.getByRole('option').filter({ hasText: titre })
+    await expect(ligne).toBeVisible()
+
+    // Un ticket neuf n'est à personne : la pastille « à moi » n'existe pas
+    // encore, ou ne compte pas celui-ci.
+    const pastille = page.getByRole('button', { name: /à moi/i })
+    const avant = (await pastille.count()) ? await pastille.innerText() : 'à moi 0'
+
+    // --- « m » : je le prends ------------------------------------------------
+    await page.keyboard.press('m')
+
+    // Le repère de l'assigné apparaît SUR LA LIGNE : c'est ce qu'on balaye du
+    // regard en descendant une colonne, sans ouvrir quoi que ce soit.
+    await expect(ligne.getByTitle('Utilisateur Démo')).toBeVisible()
+
+    // Et le compteur suit : il vient du serveur, il compte au-delà de ce qui
+    // est affiché.
+    await expect(pastille).not.toHaveText(avant)
+
+    // --- « m » encore : je le rends ------------------------------------------
+    //
+    // LA MÊME TOUCHE DÉFAIT CE QU'ELLE VIENT DE FAIRE. Sans la bascule,
+    // reprendre un ticket pris par erreur demanderait d'ouvrir le panneau et
+    // de chercher « personne » dans une liste — exactement ce que le clavier
+    // évite ici.
+    await page.keyboard.press('m')
+    await expect(ligne.getByTitle('Utilisateur Démo')).toBeHidden()
+
+    await page.keyboard.press('Backspace')
+  })
+
+  test('le filtre « à moi » vit dans l’adresse et survit au rechargement', async ({ page }) => {
+    const titre = nouveauTitre()
+
+    await page.keyboard.press('c')
+    await page.getByPlaceholder(/Entrée pour créer/i).fill(titre)
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Escape')
+
+    // La ligne AVANT la frappe : la création est un aller-retour réseau, et
+    // « m » sans curseur posé ne fait rien du tout — le test aurait échoué
+    // plus bas en laissant croire à un défaut d'assignation.
+    const ligne = page.getByRole('option').filter({ hasText: titre })
+    await expect(ligne).toBeVisible()
+
+    await page.keyboard.press('m')
+    await expect(ligne.getByTitle('Utilisateur Démo')).toBeVisible()
+
+    await page.getByRole('button', { name: /à moi/i }).click()
+    await expect(page).toHaveURL(/assigne=moi/)
+
+    // Rechargé — ou envoyé à quelqu'un — le lien rouvre le même écran filtré,
+    // et « moi » y désigne toujours celui qui lit.
+    await page.reload()
+    await expect(page.getByRole('button', { name: /à moi/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await expect(page.getByRole('option').filter({ hasText: titre })).toBeVisible()
+
+    // Ménage : le filtre est retiré avant de supprimer, sinon la ligne
+    // disparaît de la vue filtrée avant qu'on l'ait sous le curseur.
+    await page.getByRole('button', { name: /à moi/i }).click()
+    await page.getByRole('option').filter({ hasText: titre }).click()
+    await page.keyboard.press('Backspace')
+  })
+
   test('la recherche filtre sans attendre le réseau', async ({ page }) => {
     // « / » amène au champ de recherche depuis n'importe où sur l'écran.
     await page.keyboard.press('/')

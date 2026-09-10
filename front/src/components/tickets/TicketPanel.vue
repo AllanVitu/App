@@ -22,6 +22,8 @@ import { PRIORITIES, STATUSES, formatDue, isOverdue } from '@/utils/tickets'
 const props = defineProps({
   ticket: { type: Object, required: true },
   projects: { type: Array, default: () => [] },
+  /** Membres de l'espace : les seuls à qui un ticket puisse être confié. */
+  members: { type: Array, default: () => [] },
   saving: { type: Boolean, default: false },
 })
 
@@ -232,6 +234,35 @@ defineExpose({ focusTitle })
           @focus="beginEdit('description')"
           @blur="endEdit('description')"
         />
+      </div>
+
+      <!-- Assigné : liste FERMÉE, contrairement au projet juste en dessous.
+           On ne confie pas un ticket à quelqu'un qui n'est pas de l'équipe —
+           le serveur refuse d'ailleurs — et proposer d'en inventer un ferait
+           espérer ce qui sera rejeté.
+
+           « Personne » est en tête et non en fin de liste : c'est la valeur
+           par défaut, et celle qu'on revient chercher pour rendre un ticket
+           à la file. -->
+      <div>
+        <label class="label-caps mb-2 block" :for="`assignee-${ticket.id}`">assigné à</label>
+        <select
+          :id="`assignee-${ticket.id}`"
+          class="input-field"
+          :value="ticket.assigned_to ?? ''"
+          @change="commit('assigned_to', $event.target.value || null)"
+        >
+          <option value="">Personne</option>
+          <option v-for="membre in members" :key="membre.id" :value="membre.id">
+            {{ membre.full_name }}
+          </option>
+        </select>
+
+        <!-- Le raccourci est rappelé ICI, à l'endroit où l'on découvre le
+             champ — une feuille d'aide qu'il faut ouvrir ne s'apprend pas. -->
+        <p class="mt-1.5 text-[0.72rem] text-ink-3">
+          <kbd class="font-mono">m</kbd> pour vous l'attribuer, ou le rendre.
+        </p>
       </div>
 
       <!-- Projet : liste ouverte. <datalist> propose les projets existants

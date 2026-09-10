@@ -13,13 +13,13 @@ Les cinq modules ont chacun leur modèle de données, leurs endpoints et leur
 utile JSONB) demeure comme REPLI : un module ajouté en base sans code dédié
 apparaît dans le menu et dispose aussitôt d'un écran, en attendant le sien.
 
-| Module        | Tables                               | Ce que l'écran fait                                   |
-| ------------- | ------------------------------------ | ----------------------------------------------------- |
-| `backend`     | `backend_tables`, `backend_api_keys` | Schémas de données, colonnes typées, clés d'API       |
-| `deploiement` | `deployments`                        | Déploiements Git, journaux, relance                   |
-| `tickets`     | `tickets`, `ticket_counters`         | Suivi clavier-first, priorités, cycle de vie          |
-| `supervision` | `error_groups`, `error_events`       | Erreurs groupées, piles d'appels, courbe sur 14 jours |
-| `design`      | `design_files`, `design_versions`    | Fichiers et historique de versions                    |
+| Module        | Tables                               | Ce que l'écran fait                                       |
+| ------------- | ------------------------------------ | --------------------------------------------------------- |
+| `backend`     | `backend_tables`, `backend_api_keys` | Schémas de données, colonnes typées, clés d'API           |
+| `deploiement` | `deployments`                        | Déploiements Git, journaux, relance                       |
+| `tickets`     | `tickets`, `ticket_counters`         | Suivi clavier-first, priorités, cycle de vie, assignation |
+| `supervision` | `error_groups`, `error_events`       | Erreurs groupées, piles d'appels, courbe sur 14 jours     |
+| `design`      | `design_files`, `design_versions`    | Fichiers et historique de versions                        |
 
 Deux services font converger le tout sans que le client connaisse le métier
 d'aucun module : `ModuleMetrics` décide de ce que signifie le chiffre de
@@ -51,6 +51,19 @@ immédiate.
 
 Restent PERSONNELS, et le resteront : `user_settings`, `user_tokens`,
 `refresh_tokens`. Le thème n'appartient pas à l'équipe.
+
+Un troisième pointeur vers un compte s'ajoute sur les tickets, et il ne faut
+pas le confondre avec les deux autres :
+
+| Colonne       | Question           | Nature                      |
+| ------------- | ------------------ | --------------------------- |
+| `created_by`  | qui l'a ouvert ?   | passé, immuable             |
+| `assigned_to` | à qui revient-il ? | présent, mouvant, filtrable |
+
+Un ticket ouvert par Alice et confié à Bob est le cas COURANT. Les fondre
+aurait fait disparaître l'un des deux faits à chaque réassignation. Seul le
+module Tickets en dispose : c'est le module-patron, les quatre autres suivront
+après validation.
 
 Conséquence à assumer : supprimer un compte ne supprime plus ses tickets. Ils
 appartiennent à l'organisation, et `created_by` passe simplement à `NULL` — le
@@ -558,8 +571,8 @@ source de vérité ; le miroir est corrigé dès sa réponse.
 ## Adresse, clavier, erreurs
 
 **Chaque écran vit dans son adresse.** Filtres, recherche, onglet, tri et
-numéro de page s'y inscrivent — `?q=`, `?statut=`, `?env=`, `?type=`,
-`?onglet=`, `?tri=`, `?page=` — par
+numéro de page s'y inscrivent — `?q=`, `?statut=`, `?assigne=`, `?env=`,
+`?type=`, `?onglet=`, `?tri=`, `?page=` — par
 [`useQuerySync`](front/src/composables/useQuerySync.js). Un lien décrit donc
 ce qu'on regarde : il se partage, se met en favori, survit à un rechargement.
 
@@ -568,6 +581,11 @@ JAMAIS, pour qu'un écran qu'on n'a pas touché garde une URL nue. Et l'écritur
 se fait en `replace`, jamais en `push` : sans quoi une recherche tapée lettre
 par lettre empilerait autant d'entrées d'historique, et « précédent » les
 effacerait une à une au lieu de revenir à la page d'avant.
+
+`?assigne=moi` porte un mot et non un identifiant, et ce n'est pas de la
+commodité : un lien « mes tickets » envoyé à un collègue lui montre les SIENS.
+Avec l'identifiant en clair, il aurait vu les vôtres en croyant regarder les
+siens — une adresse partageable doit rester vraie chez son destinataire.
 
 **Les données se rafraîchissent en revenant.**
 [`useRevalidate`](front/src/composables/useRevalidate.js) relit au retour sur

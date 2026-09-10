@@ -18,6 +18,7 @@ import { computed } from 'vue'
 
 import TicketPriorityIcon from '@/components/tickets/TicketPriorityIcon.vue'
 import TicketStatusIcon from '@/components/tickets/TicketStatusIcon.vue'
+import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { formatDue, isClosed, isOverdue } from '@/utils/tickets'
 
 const props = defineProps({
@@ -94,5 +95,12 @@ const due = computed(() => formatDue(props.ticket))
     <!-- Réservation de la place même sans échéance : sinon les lignes datées
          et les autres ne se termineraient pas au même endroit. -->
     <span v-else class="w-24 shrink-0" aria-hidden="true" />
+
+    <!-- L'assigné ferme la ligne. Même règle de réservation que l'échéance :
+         la colonne existe toujours, elle est simplement vide quand personne
+         n'a pris le ticket — sinon les lignes se termineraient à des endroits
+         différents et le balayage vertical y perdrait. -->
+    <UserAvatar v-if="ticket.assignee_name" :name="ticket.assignee_name" size="xs" />
+    <span v-else class="size-5 shrink-0" aria-hidden="true" />
   </li>
 </template>

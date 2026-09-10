@@ -21,6 +21,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
+import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { organizationsApi } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -205,18 +206,7 @@ onMounted(async () => {
             :key="membre.id"
             class="flex items-center gap-3 border-b border-line px-5 py-3 last:border-b-0"
           >
-            <span
-              class="flex size-8 shrink-0 items-center justify-center border border-line bg-raised text-[0.68rem] font-semibold"
-            >
-              {{
-                membre.full_name
-                  .split(' ')
-                  .filter(Boolean)
-                  .slice(0, 2)
-                  .map((mot) => mot[0].toUpperCase())
-                  .join('')
-              }}
-            </span>
+            <UserAvatar :name="membre.full_name" />
 
             <div class="min-w-0 flex-1">
               <p class="truncate text-[0.85rem]">

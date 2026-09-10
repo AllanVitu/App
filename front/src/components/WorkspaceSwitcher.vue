@@ -22,6 +22,7 @@ import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
 import AppIcon from '@/components/AppIcon.vue'
+import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 
@@ -42,23 +43,6 @@ const ROLES = {
 }
 
 const roleLabel = computed(() => ROLES[organization.value?.role] ?? '')
-
-/**
- * Deux initiales, comme pour l'avatar du compte : le sélecteur doit se
- * reconnaître d'un coup d'œil même replié.
- */
-const sigle = computed(() => {
-  const nom = organization.value?.name ?? ''
-
-  return (
-    nom
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((mot) => mot[0].toUpperCase())
-      .join('') || '?'
-  )
-})
 
 /**
  * Échap ferme, D'OÙ QUE VIENNE LA FRAPPE.
@@ -139,11 +123,10 @@ async function choisir(id) {
       aria-haspopup="listbox"
       @click="basculer"
     >
-      <span
-        class="flex size-7 shrink-0 items-center justify-center border border-line bg-raised text-[0.66rem] font-bold tracking-tight"
-      >
-        {{ sigle }}
-      </span>
+      <!-- « muted » : ce carré désigne un ESPACE, pas une personne. Même
+           forme, encre plus discrète — sans quoi il se confondrait avec
+           l'avatar du compte, deux lignes plus bas dans la même barre. -->
+      <UserAvatar :name="organization?.name ?? ''" size="sm" muted />
 
       <span class="min-w-0 flex-1">
         <span class="block truncate text-[0.78rem] font-semibold">

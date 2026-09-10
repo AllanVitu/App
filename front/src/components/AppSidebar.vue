@@ -13,6 +13,7 @@ import { storeToRefs } from 'pinia'
 
 import AppIcon from '@/components/AppIcon.vue'
 import WorkspaceSwitcher from '@/components/WorkspaceSwitcher.vue'
+import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { useDrawerGestures } from '@/composables/useDrawerGestures'
 import { useAuthStore } from '@/stores/auth'
 import { useModulesStore } from '@/stores/modules'
@@ -193,11 +194,7 @@ const repere = (actif) => (actif ? 'bg-ink' : 'bg-transparent')
       class="flex shrink-0 items-center gap-2.5 border-t border-line px-3 py-2.5 transition-colors hover:bg-raised"
       @click="ui.toggleSidebar(false)"
     >
-      <span
-        class="flex size-7 shrink-0 items-center justify-center border border-line bg-raised text-[0.68rem] font-semibold"
-      >
-        {{ auth.initials }}
-      </span>
+      <UserAvatar :name="auth.user?.full_name ?? ''" size="sm" />
       <span class="min-w-0 flex-1">
         <span class="block truncate text-[0.76rem]">{{ auth.user?.full_name }}</span>
         <span class="block truncate text-[0.68rem] text-ink-3">{{ auth.user?.email }}</span>

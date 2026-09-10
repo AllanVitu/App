@@ -43,8 +43,9 @@ final class TicketRepository
      */
     private const COLUMNS = 'id, number, title, description, status, priority, project,
                              to_jsonb(labels) AS labels, due_date, completed_at,
-                             created_at, updated_at, created_by,
-                             (SELECT u.full_name FROM users u WHERE u.id = created_by) AS author_name';
+                             created_at, updated_at, created_by, assigned_to,
+                             (SELECT u.full_name FROM users u WHERE u.id = created_by)  AS author_name,
+                             (SELECT u.full_name FROM users u WHERE u.id = assigned_to) AS assignee_name';
 
     /**
      * Liste filtrée.
@@ -56,7 +57,7 @@ final class TicketRepository
      *
      * @param array{status?: string|null, priority?: string|null, project?: string|null,
      *              label?: string|null, search?: string|null, overdue?: bool,
-     *              sort?: string|null, direction?: string|null} $filters
+     *              assignee?: string|null, sort?: string|null, direction?: string|null} $filters
      * @return array{tickets: list<array<string, mixed>>, total: int}
      */
     public function search(
@@ -99,6 +100,24 @@ final class TicketRepository
             // « En retard » n'a de sens que pour un ticket encore ouvert :
             // un ticket terminé après son échéance n'est plus une alerte.
             $conditions[] = "t.due_date < CURRENT_DATE AND t.status NOT IN ('done', 'canceled')";
+        }
+
+        // ┌───────────────────────────────────────────────────────────────────┐
+        // │  « PERSONNE » EST UN FILTRE, PAS UNE ABSENCE DE FILTRE            │
+        // │                                                                   │
+        // │  D'où le test sur « === null » plutôt qu'un « empty() » comme      │
+        // │  au-dessus : la chaîne vide et l'absence de clé disent « tous les │
+        // │  tickets », tandis que la valeur « none » demande explicitement    │
+        // │  ceux que personne n'a pris. Sans cette distinction, la file       │
+        // │  d'attente d'une équipe serait inatteignable.                      │
+        // └───────────────────────────────────────────────────────────────────┘
+        if (($filters['assignee'] ?? null) !== null && $filters['assignee'] !== '') {
+            if ($filters['assignee'] === 'none') {
+                $conditions[] = 't.assigned_to IS NULL';
+            } else {
+                $conditions[]       = 't.assigned_to = :assignee';
+                $params['assignee'] = $filters['assignee'];
+            }
         }
 
         $where = implode(' AND ', $conditions);
@@ -163,10 +182,11 @@ final class TicketRepository
         // posés par les triggers (cf. 06_tickets.sql). Les fournir ici
         // dupliquerait la règle et la ferait diverger tôt ou tard.
         $statement = Database::connection()->prepare(
-            'INSERT INTO tickets (organization_id, created_by, title, description, status, priority, project, labels, due_date)
+            'INSERT INTO tickets (organization_id, created_by, assigned_to, title, description, status, priority, project, labels, due_date)
              VALUES (
                  :organization_id,
                  :created_by,
+                 :assigned_to,
                  :title,
                  :description,
                  :status::ticket_status,
@@ -203,7 +223,8 @@ final class TicketRepository
                                       (SELECT array_agg(value) FROM jsonb_array_elements_text(:labels::jsonb)),
                                       \'{}\'
                                   ),
-                    due_date    = :due_date
+                    due_date    = :due_date,
+                    assigned_to = :assigned_to
               WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL
           RETURNING ' . self::COLUMNS,
         );
@@ -256,10 +277,24 @@ final class TicketRepository
      * Indicateurs du module, en une seule requête — alimente la tuile d'état
      * du tableau de bord.
      *
+     * ┌───────────────────────────────────────────────────────────────────────┐
+     * │  « mine » DÉPEND DE QUI DEMANDE, PAS DE L'ESPACE                      │
+     * │                                                                       │
+     * │  D'où le second paramètre, seul de son espèce dans cette requête. Il  │
+     * │  est ici plutôt que dans un appel séparé parce que le compter à part  │
+     * │  aurait fait un second aller-retour pour un chiffre affiché dans la   │
+     * │  même barre que les autres — et l'écran Tickets tient à ne faire      │
+     * │  qu'un seul appel.                                                    │
+     * │                                                                       │
+     * │  Null pour une clé d'API : elle n'est personne, elle n'a donc pas de  │
+     * │  « mes tickets ». Le compte vaut alors zéro, ce qui est exact.        │
+     * └───────────────────────────────────────────────────────────────────────┘
+     *
      * @return array{total: int, open: int, backlog: int, todo: int, in_progress: int,
-     *               done: int, canceled: int, urgent: int, overdue: int, closed_this_week: int}
+     *               done: int, canceled: int, urgent: int, overdue: int,
+     *               closed_this_week: int, mine: int, unassigned: int}
      */
-    public function statsForOrganization(string $organizationId): array
+    public function statsForOrganization(string $organizationId, ?string $viewerId = null): array
     {
         $statement = Database::connection()->prepare(
             "SELECT
@@ -274,23 +309,31 @@ final class TicketRepository
                                     AND status NOT IN ('done', 'canceled'))           AS urgent,
                  COUNT(*) FILTER (WHERE due_date < CURRENT_DATE
                                     AND status NOT IN ('done', 'canceled'))           AS overdue,
-                 COUNT(*) FILTER (WHERE completed_at > NOW() - INTERVAL '7 days')     AS closed_this_week
+                 COUNT(*) FILTER (WHERE completed_at > NOW() - INTERVAL '7 days')     AS closed_this_week,
+                 -- Les deux chiffres du travail d'équipe : ce qui m'attend, et
+                 -- ce qui n'attend encore personne. Tous deux restreints aux
+                 -- tickets OUVERTS — un ticket clos ne demande rien.
+                 COUNT(*) FILTER (WHERE assigned_to = :viewer::uuid
+                                    AND status NOT IN ('done', 'canceled'))           AS mine,
+                 COUNT(*) FILTER (WHERE assigned_to IS NULL
+                                    AND status NOT IN ('done', 'canceled'))           AS unassigned
                FROM tickets
               WHERE organization_id = :organization_id AND deleted_at IS NULL",
         );
 
-        $statement->execute(['organization_id' => $organizationId]);
+        $statement->execute(['organization_id' => $organizationId, 'viewer' => $viewerId]);
         $row = $statement->fetch() ?: [];
 
         $counts = [];
 
         foreach (['total', 'open', 'backlog', 'todo', 'in_progress', 'done',
-            'canceled', 'urgent', 'overdue', 'closed_this_week'] as $key) {
+            'canceled', 'urgent', 'overdue', 'closed_this_week', 'mine', 'unassigned'] as $key) {
             $counts[$key] = (int) ($row[$key] ?? 0);
         }
 
         /** @var array{total: int, open: int, backlog: int, todo: int, in_progress: int,
-         *             done: int, canceled: int, urgent: int, overdue: int, closed_this_week: int} $counts */
+         *             done: int, canceled: int, urgent: int, overdue: int,
+         *             closed_this_week: int, mine: int, unassigned: int} $counts */
         return $counts;
     }
 
@@ -315,7 +358,11 @@ final class TicketRepository
             // urgent sans échéance passait donc devant un ticket réellement
             // en retard. Le prédicat est nommé une fois et réutilisé.
             "SELECT id, number, title, status, priority, due_date,
-                    (due_date IS NOT NULL AND due_date < CURRENT_DATE) AS is_overdue
+                    (due_date IS NOT NULL AND due_date < CURRENT_DATE) AS is_overdue,
+                    -- À plusieurs, une alerte anonyme ne dit pas s'il faut
+                    -- agir ou relancer quelqu'un. L'ORDRE, lui, ne change pas :
+                    -- ce sont les faits qui hiérarchisent, pas les personnes.
+                    (SELECT u.full_name FROM users u WHERE u.id = assigned_to) AS assignee_name
                FROM tickets
               WHERE organization_id = :organization_id
                 AND deleted_at IS NULL
@@ -342,6 +389,9 @@ final class TicketRepository
                 'priority' => (string) $row['priority'],
                 'due_date' => $row['due_date'],
                 'reason'   => Database::toBool($row['is_overdue']) ? 'overdue' : 'urgent',
+                'assignee_name' => $row['assignee_name'] !== null
+                    ? (string) $row['assignee_name']
+                    : null,
             ],
             $statement->fetchAll(),
         );
@@ -410,6 +460,10 @@ final class TicketRepository
             'status'          => $attributes['status'],
             'priority'        => $attributes['priority'],
             'project'         => $attributes['project'],
+            // NULL est une valeur, pas une omission : « à personne » est l'état
+            // normal d'un ticket qui vient d'être ouvert, et celui qu'on
+            // rétablit en le rendant à la file.
+            'assigned_to'     => $attributes['assigned_to'],
             // JSON_UNESCAPED_UNICODE : sans lui, une étiquette accentuée
             // serait stockée sous sa forme échappée (é).
             'labels'          => json_encode(array_values($attributes['labels']), JSON_UNESCAPED_UNICODE),
@@ -455,6 +509,12 @@ final class TicketRepository
             // n'a pas écrit.
             'created_by'   => $row['created_by'] !== null ? (string) $row['created_by'] : null,
             'author_name'  => $row['author_name'] !== null ? (string) $row['author_name'] : null,
+            // « À qui il revient », distinct de « qui l'a ouvert » : un ticket
+            // écrit par Alice et confié à Bob est le cas courant. NULL veut
+            // dire « à personne », ce qui est un état, pas une donnée
+            // manquante.
+            'assigned_to'   => $row['assigned_to'] !== null ? (string) $row['assigned_to'] : null,
+            'assignee_name' => $row['assignee_name'] !== null ? (string) $row['assignee_name'] : null,
         ];
     }
 }

@@ -153,8 +153,12 @@ test.describe("espace de travail", () => {
     await expect(arrivant.getByRole('button', { name: /utilisateur démo/i })).toBeVisible()
 
     // ── L'hôte le voit arriver
+    //
+    // Ciblé sur la LIGNE de la liste : le nom apparaît deux fois dans le
+    // document, la seconde dans le texte de rechange de l'avatar, réservé aux
+    // lecteurs d'écran.
     await page.reload()
-    await expect(page.getByText(`Équipier ${marque}`)).toBeVisible()
+    await expect(page.locator('li', { hasText: `Équipier ${marque}` })).toBeVisible()
 
     // ── Ménage : le compte se supprime lui-même, comme le ferait n'importe qui
     // depuis son profil. Sans cela, chaque exécution laisserait un membre de

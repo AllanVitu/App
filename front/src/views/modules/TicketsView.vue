@@ -34,17 +34,19 @@ import TruncationNotice from '@/components/ui/TruncationNotice.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { appEnter, prefersReducedMotion } from '@/animations/motion'
 import { createLayout } from '@/animations/layout'
-import { ticketsApi } from '@/services/api'
+import { organizationsApi, ticketsApi } from '@/services/api'
 import { play } from '@/services/sound'
 import { useWriteQueue } from '@/composables/useWriteQueue'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useLoadMore } from '@/composables/useLoadMore'
 import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
+import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { BOARD_ORDER, PRIORITIES, advanceStatus } from '@/utils/tickets'
 
 const ui = useUiStore()
+const auth = useAuthStore()
 const { enqueue } = useWriteQueue()
 
 const tickets = ref([])
@@ -67,9 +69,27 @@ const saving = ref(false)
 const search = ref('')
 const statusFilter = ref(null)
 
+/**
+ * Filtre « à qui ». Trois valeurs, et « moi » n'est pas un identifiant.
+ *
+ *   null       — tous
+ *   'moi'      — les miens
+ *   'personne' — ceux que personne n'a pris
+ *   <id>       — ceux d'un coéquipier
+ *
+ * « moi » plutôt que l'identifiant du compte pour que l'ADRESSE reste
+ * partageable sans mentir : un lien « mes tickets » envoyé à un collègue lui
+ * montre les SIENS. Avec un identifiant en clair, il aurait vu les vôtres en
+ * croyant regarder les siens.
+ */
+const assigneeFilter = ref(null)
+
+/** Les membres de l'espace : à qui l'on peut confier un ticket. */
+const members = ref([])
+
 // L'écran vit dans son adresse : un filtre posé se partage, se met en favori,
 // et le bouton « précédent » le rend au lieu de le perdre.
-useQuerySync({ q: search, statut: statusFilter })
+useQuerySync({ q: search, statut: statusFilter, assigne: assigneeFilter })
 
 const activeId = ref(null)
 const panelOpen = ref(false)
@@ -131,6 +151,26 @@ async function load({ silent = false } = {}) {
 }
 
 /**
+ * L'équipe, à qui l'on peut confier un ticket.
+ *
+ * Appel SÉPARÉ de celui des tickets, et c'est assumé : la liste des membres
+ * change à l'échelle du mois, celle des tickets à la minute. Les fondre dans
+ * la même réponse aurait fait porter à chaque rafraîchissement de compteurs le
+ * poids d'une donnée qui ne bouge pas.
+ *
+ * Un échec est silencieux : sans la liste, le sélecteur du panneau se réduit à
+ * « personne » et le tableau reste parfaitement utilisable. Alerter ici pour
+ * une donnée d'appoint volerait la place d'une vraie erreur.
+ */
+async function loadMembers() {
+  try {
+    members.value = (await organizationsApi.members()).members
+  } catch {
+    members.value = []
+  }
+}
+
+/**
  * Rafraîchissement des COMPTEURS après une écriture — et d'eux seuls.
  *
  * Les lignes ne sont volontairement PAS remplacées ici. Un rechargement
@@ -169,11 +209,48 @@ async function refresh() {
 
 // --- Filtrage et regroupement ------------------------------------------------
 
+/**
+ * Le filtre « à qui », résolu ici plutôt qu'inséré dans la boucle : les trois
+ * valeurs spéciales s'y lisent d'un bloc, au lieu de trois conditions
+ * imbriquées qu'il faudrait rassembler mentalement.
+ *
+ * Il filtre CÔTÉ CLIENT, comme la recherche et le statut : c'est ce qui rend
+ * l'écran instantané au clavier. Le plafond de chargement reste, et reste
+ * annoncé (cf. TruncationNotice) — le filtre équivalent existe aussi côté
+ * serveur pour ceux qui paginent.
+ */
+function matchesAssignee(ticket) {
+  const filtre = assigneeFilter.value
+
+  if (!filtre) return true
+  if (filtre === 'personne') return ticket.assigned_to === null
+  if (filtre === 'moi') return ticket.assigned_to === auth.user?.id
+
+  return ticket.assigned_to === filtre
+}
+
+/**
+ * Le nom du coéquipier filtré, quand le filtre en désigne un.
+ *
+ * Sans lui, une adresse portant « ?assigne=<id> » aurait montré une liste
+ * réduite sans qu'aucune pastille n'indique pourquoi — le pire état d'un
+ * filtre : actif et invisible.
+ */
+const filteredMemberName = computed(() => {
+  const filtre = assigneeFilter.value
+
+  if (!filtre || filtre === 'moi' || filtre === 'personne') return null
+
+  return members.value.find((membre) => membre.id === filtre)?.full_name ?? 'coéquipier'
+})
+
 const filtered = computed(() => {
   const needle = search.value.trim().toLowerCase()
 
   return tickets.value.filter((ticket) => {
     if (statusFilter.value && ticket.status !== statusFilter.value) return false
+
+    if (!matchesAssignee(ticket)) return false
 
     if (!needle) return true
 
@@ -364,6 +441,27 @@ function setPriority(priority) {
   if (activeTicket.value) patch(activeTicket.value, { priority })
 }
 
+/**
+ * « m » : je le prends, ou je le rends.
+ *
+ * Une BASCULE plutôt qu'une assignation sèche, parce que la même touche doit
+ * défaire ce qu'elle vient de faire — sans quoi reprendre un ticket pris par
+ * erreur demanderait d'ouvrir le panneau et de chercher « personne » dans une
+ * liste, ce qui est exactement ce que le clavier évite ici.
+ *
+ * Elle ne prend PAS un ticket à quelqu'un d'autre : dans ce cas elle le
+ * réassigne, ce qui est le geste attendu et reste réversible.
+ */
+function toggleMine() {
+  const ticket = activeTicket.value
+
+  if (!ticket) return
+
+  const moi = auth.user?.id ?? null
+
+  patch(ticket, { assigned_to: ticket.assigned_to === moi ? null : moi })
+}
+
 function shiftStatus(step) {
   if (!activeTicket.value) return
 
@@ -513,6 +611,7 @@ function onKeydown(event) {
   if (key === 'ArrowLeft') return act(event, () => shiftStatus(-1))
   if (key === 'd') return act(event, () => patch(activeTicket.value, { status: 'done' }))
   if (key === 'a') return act(event, () => patch(activeTicket.value, { status: 'canceled' }))
+  if (key === 'm') return act(event, toggleMine)
 
   if (key === 'e') {
     return act(event, async () => {
@@ -546,6 +645,7 @@ useRevalidate(() => load({ silent: true }))
 
 onMounted(() => {
   load()
+  loadMembers()
   window.addEventListener('keydown', onKeydown)
 })
 
@@ -564,6 +664,7 @@ const SHORTCUTS = [
   { keys: ['→', '←'], label: 'avancer / reculer dans le cycle' },
   { keys: ['d'], label: 'marquer terminé' },
   { keys: ['a'], label: 'annuler le ticket' },
+  { keys: ['m'], label: 'me l’attribuer / le rendre' },
   { keys: ['1', '2', '3', '4', '0'], label: 'priorité : urgente → aucune' },
   { keys: ['⌫'], label: 'supprimer' },
   { keys: ['Échap'], label: 'fermer / vider' },
@@ -622,6 +723,46 @@ const SHORTCUTS = [
         >
           <TicketStatusIcon :status="status.value" :size="12" />
           {{ status.short }}
+        </FilterChip>
+
+        <!-- LES DEUX SEULES QUESTIONS QU'ON POSE VRAIMENT À PLUSIEURS :
+             « qu'est-ce qui m'attend » et « qu'est-ce qui n'attend
+             personne ». Les coéquipiers un par un vivent dans le sélecteur du
+             panneau ; les mettre ici en aurait fait une barre qui s'allonge
+             avec l'équipe, jusqu'à repousser les filtres de statut hors de
+             vue.
+
+             Séparées par un filet vertical : ce sont deux axes de filtrage
+             différents, et rien ne le dirait s'ils se suivaient sans rupture.
+             Les compteurs viennent du SERVEUR — ils comptent au-delà du
+             plafond de chargement, contrairement à la liste affichée. -->
+        <span v-if="stats?.mine || stats?.unassigned" class="h-4 w-px bg-line" aria-hidden="true" />
+
+        <FilterChip
+          v-if="stats?.mine"
+          :active="assigneeFilter === 'moi'"
+          @click="assigneeFilter = assigneeFilter === 'moi' ? null : 'moi'"
+        >
+          <AppIcon name="user" :size="12" />
+          à moi
+          <span class="tabular-nums opacity-70">{{ stats.mine }}</span>
+        </FilterChip>
+
+        <FilterChip
+          v-if="stats?.unassigned"
+          :active="assigneeFilter === 'personne'"
+          @click="assigneeFilter = assigneeFilter === 'personne' ? null : 'personne'"
+        >
+          à personne
+          <span class="tabular-nums opacity-70">{{ stats.unassigned }}</span>
+        </FilterChip>
+
+        <!-- Un coéquipier choisi depuis le panneau reste filtrable : la
+             pastille apparaît alors nommée, plutôt que de laisser un filtre
+             actif que rien à l'écran n'expliquerait. -->
+        <FilterChip v-if="filteredMemberName" active @click="assigneeFilter = null">
+          <AppIcon name="user" :size="12" />
+          {{ filteredMemberName }}
         </FilterChip>
 
         <span class="flex-1" />
@@ -744,6 +885,7 @@ const SHORTCUTS = [
         ref="panel"
         :ticket="activeTicket"
         :projects="projects"
+        :members="members"
         :saving="saving"
         class="hidden lg:flex"
         @patch="patch(activeTicket, $event)"

@@ -28,6 +28,7 @@ import { computed } from 'vue'
 
 import TicketPriorityIcon from '@/components/tickets/TicketPriorityIcon.vue'
 import TicketStatusIcon from '@/components/tickets/TicketStatusIcon.vue'
+import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { formatDue, isClosed, isOverdue } from '@/utils/tickets'
 
 const props = defineProps({
@@ -49,13 +50,21 @@ const due = computed(() => formatDue(props.ticket))
            chiffres tabulaires, pour s'aligner d'une carte à l'autre. -->
       <span class="font-mono text-[0.7rem] tabular-nums text-ink-3">{{ ticket.number }}</span>
 
+      <span class="ml-auto" />
+
       <span
         v-if="due"
-        class="ml-auto shrink-0 text-[0.7rem] tabular-nums"
+        class="shrink-0 text-[0.7rem] tabular-nums"
         :class="overdue ? 'font-medium text-brick' : 'text-ink-3'"
       >
         {{ due }}
       </span>
+
+      <!-- L'assigné à l'extrême droite, et SEULEMENT s'il y en a un : une
+           colonne de tirets pour dire « personne » ferait du bruit là où
+           l'absence se lit déjà toute seule. C'est la question qu'on balaye
+           en descendant une colonne — « lesquels sont à moi ». -->
+      <UserAvatar v-if="ticket.assignee_name" :name="ticket.assignee_name" size="xs" />
     </div>
 
     <!-- Deux lignes au plus : au-delà, une carte cesse d'être balayable et

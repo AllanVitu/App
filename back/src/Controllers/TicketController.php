@@ -8,6 +8,7 @@ use App\Core\HttpException;
 use App\Core\Request;
 use App\Core\Response;
 use App\Core\Validator;
+use App\Models\OrganizationRepository;
 use App\Models\TicketRepository;
 
 /**
@@ -39,7 +40,7 @@ final class TicketController
      * GET /api/tickets
      *
      * Filtres : ?status=todo&priority=urgent&project=Sécurité&label=bug
-     *           &search=texte&overdue=1&sort=priority&direction=desc
+     *           &search=texte&overdue=1&assignee=me&sort=priority&direction=desc
      *
      * La réponse embarque les indicateurs, les projets et les étiquettes
      * connus : l'écran se construit en un seul aller-retour, ce qui est la
@@ -61,6 +62,7 @@ final class TicketController
             'label'     => $request->queryParam('label'),
             'search'    => $request->queryParam('search'),
             'overdue'   => $request->queryParam('overdue') === '1',
+            'assignee'  => $this->validateAssigneeFilter($request),
             'sort'      => $request->queryParam('sort', 'created_at'),
             'direction' => $request->queryParam('direction', 'desc'),
         ], 500, $offset);
@@ -68,7 +70,10 @@ final class TicketController
         Response::json($result['tickets'], 200, [
             'offset'    => $offset,
             'total'    => $result['total'],
-            'stats'    => $this->tickets->statsForOrganization($request->organizationId()),
+            'stats'    => $this->tickets->statsForOrganization(
+                $request->organizationId(),
+                $request->actorId(),
+            ),
             'projects' => $this->tickets->projectsForOrganization($request->organizationId()),
             'labels'   => $this->tickets->labelsForOrganization($request->organizationId()),
         ]);
@@ -211,6 +216,10 @@ final class TicketController
             ? $validator->date('due_date')
             : ($existing['due_date'] ?? null);
 
+        $assignee = $request->has('assigned_to')
+            ? $this->validateAssignee($request, $validator)
+            : ($existing['assigned_to'] ?? null);
+
         $validator->check();
 
         return [
@@ -221,7 +230,87 @@ final class TicketController
             'project'     => $project,
             'labels'      => $labels,
             'due_date'    => $dueDate,
+            'assigned_to' => $assignee,
         ];
+    }
+
+    /**
+     * ┌───────────────────────────────────────────────────────────────────────┐
+     * │  LA SEULE RÈGLE DE SÉCURITÉ DE L'ASSIGNATION                          │
+     * │                                                                       │
+     * │  L'assigné doit être MEMBRE de l'espace. Sans ce test, un identifiant │
+     * │  quelconque passerait, et la sous-requête qui résout le nom le        │
+     * │  renverrait : on apprendrait le nom complet d'un compte étranger en   │
+     * │  devinant son identifiant. Une fuite modeste, mais réelle, et         │
+     * │  gratuite à fermer.                                                   │
+     * │                                                                       │
+     * │  Le rôle n'entre PAS en jeu : dans une équipe, n'importe quel membre  │
+     * │  confie un ticket à n'importe quel autre. Une hiérarchie de           │
+     * │  l'assignation n'existe dans aucun outil dont on se sert vraiment.    │
+     * └───────────────────────────────────────────────────────────────────────┘
+     *
+     * « null » explicite rend le ticket à la file, et c'est un geste courant :
+     * il traverse donc la validation sans y être traité comme une omission.
+     */
+    private function validateAssignee(Request $request, Validator $validator): ?string
+    {
+        $assignee = $validator->uuid('assigned_to', required: false);
+
+        if ($assignee === null) {
+            return null;
+        }
+
+        $role = (new OrganizationRepository())->roleOf($request->organizationId(), $assignee);
+
+        if ($role === null) {
+            $validator->addError(
+                'assigned_to',
+                'Cette personne ne fait pas partie de l\'espace de travail.',
+            );
+
+            return null;
+        }
+
+        return $assignee;
+    }
+
+    /**
+     * Le filtre « assigné à », qui accepte trois formes.
+     *
+     *   ?assignee=me    — les miens. Le raccourci est résolu ICI, côté serveur.
+     *   ?assignee=none  — ceux que personne n'a pris.
+     *   ?assignee=<id>  — ceux d'un coéquipier.
+     *
+     * « me » existe pour que l'adresse reste PARTAGEABLE sans être trompeuse :
+     * avec un identifiant en clair, un lien « mes tickets » envoyé à un
+     * collègue lui aurait montré les vôtres, en lui laissant croire qu'il
+     * regardait les siens. Le raccourci, lui, désigne toujours celui qui lit.
+     *
+     * L'identifiant d'un membre n'est pas vérifié ici : un inconnu ne fait
+     * qu'une liste vide, ce qui est la réponse juste. Seule l'ÉCRITURE exige
+     * l'appartenance (cf. validateAssignee).
+     */
+    private function validateAssigneeFilter(Request $request): ?string
+    {
+        $value = $request->queryParam('assignee');
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if ($value === 'me') {
+            // Null pour une clé d'API : elle n'est personne. Le filtre retombe
+            // alors sur « aucun filtre », faute de pouvoir désigner quiconque.
+            return $request->actorId();
+        }
+
+        if ($value !== 'none' && preg_match('/^[0-9a-f-]{36}$/i', $value) !== 1) {
+            throw HttpException::validation([
+                'assignee' => 'Filtre « assigné à » invalide : attendu « me », « none », ou un identifiant.',
+            ]);
+        }
+
+        return $value;
     }
 
     /**
