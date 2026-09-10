@@ -43,13 +43,23 @@ final class Response
 
     /**
      * @param array<string, string> $errors
+     * @param array<string, mixed>  $meta   Contexte exploitable — l'état courant
+     *                                      d'une ressource en conflit, par exemple
      */
-    public static function error(string $message, int $status = 400, array $errors = []): void
-    {
+    public static function error(
+        string $message,
+        int $status = 400,
+        array $errors = [],
+        array $meta = [],
+    ): void {
         $payload = ['message' => $message];
 
         if ($errors !== []) {
             $payload['errors'] = $errors;
+        }
+
+        if ($meta !== []) {
+            $payload['meta'] = $meta;
         }
 
         self::send($payload, $status);

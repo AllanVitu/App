@@ -8,6 +8,7 @@ use App\Core\HttpException;
 use App\Core\Request;
 use App\Core\Response;
 use App\Core\Validator;
+use App\Models\ActivityRepository;
 use App\Models\OrganizationRepository;
 use App\Models\TicketRepository;
 
@@ -29,11 +30,31 @@ final class TicketController
     private const STATUSES   = ['backlog', 'todo', 'in_progress', 'done', 'canceled'];
     private const PRIORITIES = ['none', 'low', 'medium', 'high', 'urgent'];
 
+    /**
+     * Les champs suivis, et leur nom en français.
+     *
+     * Cette liste sert DEUX fois : elle borne ce que le journal consigne, et
+     * elle nomme le champ dans le message de conflit. Une seule liste, donc
+     * pas de champ qu'on arbitrerait sans savoir l'appeler.
+     */
+    private const FIELD_LABELS = [
+        'title'       => 'le titre',
+        'description' => 'la description',
+        'status'      => 'le statut',
+        'priority'    => 'la priorité',
+        'project'     => 'le projet',
+        'labels'      => 'les étiquettes',
+        'due_date'    => 'l\'échéance',
+        'assigned_to' => 'l\'assignation',
+    ];
+
     private TicketRepository $tickets;
+    private ActivityRepository $journal;
 
     public function __construct()
     {
         $this->tickets = new TicketRepository();
+        $this->journal = new ActivityRepository();
     }
 
     /**
@@ -84,9 +105,26 @@ final class TicketController
      */
     public function store(Request $request): void
     {
-        Response::created(
-            $this->tickets->create($request->organizationId(), $request->actorId(), $this->validatePayload($request)),
+        $ticket = $this->tickets->create(
+            $request->organizationId(),
+            $request->actorId(),
+            $this->validatePayload($request),
         );
+
+        $this->journal->record(
+            $request->organizationId(),
+            $request->actorId(),
+            $this->actorName($request),
+            'tickets',
+            'created',
+            (string) $ticket['id'],
+            'TICK-' . $ticket['number'],
+            (string) $ticket['title'],
+            [],
+            (int) $ticket['version'],
+        );
+
+        Response::created($ticket);
     }
 
     /**
@@ -108,18 +146,164 @@ final class TicketController
     public function update(Request $request): void
     {
         $existing = $this->findOrFail($request);
+        $payload  = $this->validatePayload($request, $existing);
+
+        $this->assertNoConflict($request, $existing);
 
         $updated = $this->tickets->update(
             (string) $request->param('id'),
             $request->organizationId(),
-            $this->validatePayload($request, $existing),
+            $payload,
         );
 
         if ($updated === null) {
             throw HttpException::notFound('Ticket introuvable.');
         }
 
+        $this->journal->record(
+            $request->organizationId(),
+            $request->actorId(),
+            $this->actorName($request),
+            'tickets',
+            'updated',
+            (string) $updated['id'],
+            'TICK-' . $updated['number'],
+            (string) $updated['title'],
+            $this->diff($existing, $updated),
+            (int) $updated['version'],
+        );
+
         Response::json($updated);
+    }
+
+    /**
+     * ┌───────────────────────────────────────────────────────────────────────┐
+     * │  LA DERNIÈRE ÉCRITURE GAGNAIT, EN SILENCE                            │
+     * │                                                                       │
+     * │  Alice et Bob ouvrent le même ticket. Alice écrit une description,    │
+     * │  Bob change la priorité. Celui qui enregistre en second écrasait le   │
+     * │  travail de l'autre, sans que personne ne l'apprenne jamais.          │
+     * │                                                                       │
+     * │  DEUX IDÉES, ET LA SECONDE COMPTE PLUS QUE LA PREMIÈRE.               │
+     * │                                                                       │
+     * │  1. Un jeton de version. Le client renvoie celui qu'il détient ; s'il │
+     * │     ne correspond plus, sa base de départ est périmée.                │
+     * │                                                                       │
+     * │  2. UNE VERSION PÉRIMÉE N'EST PAS UN CONFLIT. C'est le point. Neuf    │
+     * │     fois sur dix, l'autre a touché un champ que je ne touche pas, et  │
+     * │     refuser l'écriture ferait perdre un paragraphe pour rien.         │
+     * │     Le journal dit quels champs ont bougé ; seule l'intersection      │
+     * │     avec ceux que j'écris est un vrai désaccord.                      │
+     * │                                                                       │
+     * │  Un client qui n'envoie AUCUNE version n'est pas arbitré : les        │
+     * │  raccourcis clavier écrivent un champ unique et connu, et leur        │
+     * │  demander un aller-retour de lecture d'abord annulerait ce qui fait   │
+     * │  l'intérêt du module.                                                 │
+     * └───────────────────────────────────────────────────────────────────────┘
+     *
+     * @param array<string, mixed> $existing
+     */
+    private function assertNoConflict(Request $request, array $existing): void
+    {
+        $connue = $request->all()['version'] ?? null;
+
+        if (!is_int($connue) && !is_string($connue)) {
+            return;
+        }
+
+        $connue = (int) $connue;
+
+        if ($connue >= (int) $existing['version']) {
+            return;
+        }
+
+        // Ce que d'autres ont touché depuis. Mes propres écritures sont
+        // exclues : deux onglets à moi se marchent dessus, mais me demander
+        // d'arbitrer contre moi-même n'aiderait personne.
+        $bouges = $this->journal->changedSince(
+            (string) $existing['id'],
+            $connue,
+            $request->actorId(),
+        );
+
+        $disputes = array_intersect_key($bouges, array_flip($this->intendedFields($request)));
+
+        if ($disputes === []) {
+            return;
+        }
+
+        $messages = [];
+
+        foreach ($disputes as $champ => $auteur) {
+            $messages[$champ] = sprintf(
+                '%s a modifié « %s » pendant que vous éditiez.',
+                $auteur,
+                self::FIELD_LABELS[$champ] ?? $champ,
+            );
+        }
+
+        throw new HttpException(
+            409,
+            'Ce ticket a changé pendant que vous l\'éditiez.',
+            $messages,
+            null,
+            // L'état courant part AVEC le refus : sans lui, le client ne
+            // pourrait que recharger, donc perdre ce qui était en cours.
+            ['current' => $existing],
+        );
+    }
+
+    /**
+     * Les champs que cette requête entend écrire.
+     *
+     * Lus dans le CORPS et non déduits du résultat : une mise à jour partielle
+     * ne mentionne que ce qu'elle change, et c'est exactement la liste dont
+     * l'arbitrage a besoin.
+     *
+     * @return list<string>
+     */
+    private function intendedFields(Request $request): array
+    {
+        $connus = ['title', 'description', 'status', 'priority', 'project', 'labels', 'due_date', 'assigned_to'];
+
+        return array_values(array_filter($connus, static fn (string $champ): bool => $request->has($champ)));
+    }
+
+    /**
+     * Ce qui a réellement changé — { champ: [avant, après] }.
+     *
+     * Comparé APRÈS écriture plutôt que déduit du corps reçu : renvoyer le
+     * même titre qu'avant n'est pas un changement, et un journal qui le
+     * consignerait ferait du bruit dans le fil de toute l'équipe.
+     *
+     * @param  array<string, mixed> $avant
+     * @param  array<string, mixed> $apres
+     * @return array<string, array{0: mixed, 1: mixed}>
+     */
+    private function diff(array $avant, array $apres): array
+    {
+        $changes = [];
+
+        foreach (array_keys(self::FIELD_LABELS) as $champ) {
+            if (($avant[$champ] ?? null) !== ($apres[$champ] ?? null)) {
+                $changes[$champ] = [$avant[$champ] ?? null, $apres[$champ] ?? null];
+            }
+        }
+
+        return $changes;
+    }
+
+    /**
+     * Le nom de l'auteur, figé dans le journal.
+     *
+     * Null pour une clé de service : elle n'est personne, et « quelqu'un » y
+     * serait plus honnête qu'un nom emprunté.
+     */
+    private function actorName(Request $request): ?string
+    {
+        $user = $request->attribute('user');
+
+        return is_array($user) ? (string) $user['full_name'] : null;
     }
 
     /**
@@ -127,9 +311,24 @@ final class TicketController
      */
     public function destroy(Request $request): void
     {
-        if (!$this->tickets->softDelete($this->validateId($request), $request->organizationId())) {
+        // Relu AVANT la suppression : après, le numéro et le titre ne sont
+        // plus lisibles, et le journal afficherait une ligne muette.
+        $ticket = $this->findOrFail($request);
+
+        if (!$this->tickets->softDelete((string) $ticket['id'], $request->organizationId())) {
             throw HttpException::notFound('Ticket introuvable.');
         }
+
+        $this->journal->record(
+            $request->organizationId(),
+            $request->actorId(),
+            $this->actorName($request),
+            'tickets',
+            'deleted',
+            (string) $ticket['id'],
+            'TICK-' . $ticket['number'],
+            (string) $ticket['title'],
+        );
 
         Response::noContent();
     }
@@ -165,7 +364,23 @@ final class TicketController
             throw HttpException::notFound('Ticket introuvable.');
         }
 
-        Response::json($this->tickets->find($id, $request->organizationId()));
+        /** @var array<string, mixed> $ticket */
+        $ticket = $this->tickets->find($id, $request->organizationId());
+
+        $this->journal->record(
+            $request->organizationId(),
+            $request->actorId(),
+            $this->actorName($request),
+            'tickets',
+            'restored',
+            (string) $ticket['id'],
+            'TICK-' . $ticket['number'],
+            (string) $ticket['title'],
+            [],
+            (int) $ticket['version'],
+        );
+
+        Response::json($ticket);
     }
 
     /**

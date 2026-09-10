@@ -72,6 +72,37 @@ export const invitationsApi = {
   accept: (token) => http.post(`/invitations/${token}/accept`).then(unwrap),
 }
 
+// --- Le flux ----------------------------------------------------------------
+
+export const streamApi = {
+  /**
+   * Renvoie { events, cursor, distanced, presence }.
+   *
+   * « depuis » est OMIS au premier appel, jamais mis à zéro : un espace neuf a
+   * un curseur à 0, et confondre les deux ferait sauter son tout premier
+   * événement.
+   */
+  poll: ({ cursor, screen, subject }, signal) =>
+    http
+      .get('/stream', {
+        params: {
+          ...(cursor === null || cursor === undefined ? {} : { depuis: cursor }),
+          ecran: screen,
+          ...(subject ? { sujet: subject } : {}),
+        },
+        signal,
+      })
+      .then((response) => ({
+        events: response.data.data,
+        cursor: response.data.meta.cursor,
+        distanced: response.data.meta.distanced,
+        presence: response.data.meta.presence ?? [],
+      })),
+
+  /** Départ explicite, à la fermeture de l'onglet. */
+  leave: () => http.delete('/stream'),
+}
+
 // --- Tableau de bord --------------------------------------------------------
 
 export const dashboardApi = {

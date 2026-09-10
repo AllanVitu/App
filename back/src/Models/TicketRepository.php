@@ -43,7 +43,7 @@ final class TicketRepository
      */
     private const COLUMNS = 'id, number, title, description, status, priority, project,
                              to_jsonb(labels) AS labels, due_date, completed_at,
-                             created_at, updated_at, created_by, assigned_to,
+                             created_at, updated_at, created_by, assigned_to, version,
                              (SELECT u.full_name FROM users u WHERE u.id = created_by)  AS author_name,
                              (SELECT u.full_name FROM users u WHERE u.id = assigned_to) AS assignee_name';
 
@@ -515,6 +515,10 @@ final class TicketRepository
             // manquante.
             'assigned_to'   => $row['assigned_to'] !== null ? (string) $row['assigned_to'] : null,
             'assignee_name' => $row['assignee_name'] !== null ? (string) $row['assignee_name'] : null,
+            // Jeton de concurrence, posé par un déclencheur et jamais par le
+            // client. Il ne dit pas QUAND la ligne a changé, mais COMBIEN DE
+            // FOIS — la seule question qu'une écriture concurrente pose.
+            'version'       => (int) $row['version'],
         ];
     }
 }

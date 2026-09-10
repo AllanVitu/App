@@ -31,6 +31,8 @@ abstract class ApiTestCase extends TestCase
         // requête. Sans ce vidage, chaque inscription de test laisserait une
         // tâche derrière elle.
         'jobs',
+        'activity',
+        'presence',
         'user_tokens',
         'refresh_tokens',
         'login_attempts',

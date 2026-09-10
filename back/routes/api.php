@@ -27,6 +27,7 @@ use App\Controllers\ProfileController;
 use App\Controllers\SearchController;
 use App\Controllers\SessionController;
 use App\Controllers\SettingsController;
+use App\Controllers\StreamController;
 use App\Controllers\TicketController;
 use App\Core\Router;
 use App\Middleware\AuthMiddleware;
@@ -112,6 +113,17 @@ $router->post('/api/organizations/{id}/activate', [OrganizationController::class
 // créer un. Elle ne révèle que ce que le porteur du lien sait déjà.
 $router->get('/api/invitations/{token}', [OrganizationController::class, 'showInvitation']);
 $router->post('/api/invitations/{token}/accept', [OrganizationController::class, 'acceptInvitation'], $auth);
+
+// --- Le flux ---------------------------------------------------------------
+//
+// Ce qui a changé depuis un curseur, ET qui est là — en un seul aller-retour,
+// parce qu'on regarde toujours les deux ensemble.
+//
+// SONDAGE COURT, PAS DE SSE, et c'est un choix documenté : sous PHP-FPM un
+// flux ouvert immobilise un processus enfant à vie, et dix coéquipiers
+// suffiraient à bloquer l'API entière (cf. StreamController).
+$router->get('/api/stream', [StreamController::class, 'index'], $auth);
+$router->delete('/api/stream', [StreamController::class, 'leave'], $auth);
 
 // --- Tableau de bord -------------------------------------------------------
 $router->get('/api/dashboard', [DashboardController::class, 'index'], $auth);

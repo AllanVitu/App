@@ -86,3 +86,98 @@ export async function login(page, credentials = DEMO) {
     }
   }
 }
+
+/** Mot de passe des comptes fabriqués par les tests — exigences de l'écran. */
+export const MOTDEPASSE = 'Password123!'
+
+const MAILPIT = process.env.MAILPIT_URL ?? 'http://localhost:8025'
+
+/**
+ * Récupère le lien d'invitation depuis la boîte de réception de développement.
+ *
+ * L'envoi passe par la file de tâches : le worker le remet au serveur SMTP
+ * dans la seconde. On interroge donc en boucle courte plutôt que d'attendre
+ * une durée fixe, qui serait soit trop longue, soit trop juste selon la
+ * charge de la machine.
+ */
+export async function lienDInvitation(request, adresse) {
+  for (let essai = 0; essai < 40; essai += 1) {
+    const boite = await request.get(`${MAILPIT}/api/v1/search?query=to:${adresse}`)
+
+    if (boite.ok()) {
+      const { messages = [] } = await boite.json()
+
+      if (messages.length > 0) {
+        const message = await request.get(`${MAILPIT}/api/v1/message/${messages[0].ID}`)
+        const corps = await message.json()
+
+        const trouve = /https?:\/\/[^\s"'<>]*\/invitation\?token=[a-f0-9]{64}/.exec(
+          `${corps.Text ?? ''} ${corps.HTML ?? ''}`,
+        )
+
+        if (trouve) return trouve[0]
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+
+  throw new Error(`Aucun e-mail d'invitation reçu pour ${adresse}.`)
+}
+
+/**
+ * Un VRAI coéquipier : un second compte, dans le même espace, par le parcours
+ * complet d'invitation.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │  DEUX FENÊTRES D'UN MÊME COMPTE NE SUFFISENT PAS                        │
+ * │                                                                         │
+ * │  La présence ne se montre pas à soi-même, et l'arbitrage de conflit ne  │
+ * │  s'applique pas à ses propres écritures : les deux sont des décisions   │
+ * │  délibérées. Un test qui se contenterait de deux onglets verrait donc   │
+ * │  passer les deux mécanismes sans jamais les déclencher — et passerait   │
+ * │  au vert en ne prouvant rien.                                           │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ *
+ * Rend { contexte, page, nom, effacer } — « effacer » supprime le compte,
+ * faute de quoi chaque exécution laisserait un membre de plus dans l'espace
+ * de démonstration.
+ */
+export async function coequipier(hote, browser, request, { creerContexte }) {
+  const marque = Date.now() + Math.floor(Math.random() * 1000)
+  const adresse = `equipier-${marque}@test.local`
+  const nom = `Équipier ${marque}`
+
+  await hote.goto('/equipe')
+  await hote.getByLabel(/adresse e-mail/i).fill(adresse)
+  await hote.getByRole('button', { name: /^inviter$/i }).click()
+  await expect(hote.locator('li', { hasText: adresse })).toBeVisible()
+
+  const lien = await lienDInvitation(request, adresse)
+
+  const contexte = await creerContexte()
+  const page = await contexte.newPage()
+
+  await page.goto(lien)
+  await page.getByRole('link', { name: /créer un compte/i }).click()
+  await page.getByLabel(/nom complet/i).fill(nom)
+  await page.getByLabel(/mot de passe/i).first().fill(MOTDEPASSE)
+  await page.getByLabel(/confirmation/i).fill(MOTDEPASSE)
+  await page.getByRole('checkbox').check()
+  await page.getByRole('button', { name: /créer mon compte/i }).click()
+  await page.waitForURL('/', { timeout: 20_000 })
+
+  return {
+    contexte,
+    page,
+    nom,
+    async effacer() {
+      await page.goto('/profil')
+      await page.getByRole('button', { name: /supprimer mon compte/i }).click()
+      await page.getByPlaceholder(/votre mot de passe/i).fill(MOTDEPASSE)
+      await page.getByRole('button', { name: /supprimer définitivement/i }).click()
+      await page.waitForURL(/connexion/, { timeout: 20_000 })
+      await contexte.close()
+    },
+  }
+}

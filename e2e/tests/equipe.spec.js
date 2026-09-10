@@ -1,4 +1,4 @@
-import { expect, login, test } from './support.js'
+import { expect, lienDInvitation, login, MOTDEPASSE, test } from './support.js'
 
 /**
  * L'espace de travail, de l'invitation au partage effectif.
@@ -25,44 +25,6 @@ import { expect, login, test } from './support.js'
  *     est partagé par toute la suite, et une exécution interrompue laisse des
  *     traces : on vérifie une présence nommée, jamais un total.
  */
-
-const MAILPIT = process.env.MAILPIT_URL ?? 'http://localhost:8025'
-
-/** Mot de passe des comptes fabriqués ici — mêmes exigences que l'écran. */
-const MOTDEPASSE = 'Password123!'
-
-/**
- * Récupère le lien d'invitation depuis la boîte de réception de développement.
- *
- * L'envoi passe par la file de tâches : le worker le remet au serveur SMTP
- * dans la seconde. On interroge donc en boucle courte plutôt que d'attendre
- * une durée fixe, qui serait soit trop longue, soit trop juste selon la
- * charge de la machine.
- */
-async function lienDInvitation(request, adresse) {
-  for (let essai = 0; essai < 40; essai += 1) {
-    const boite = await request.get(`${MAILPIT}/api/v1/search?query=to:${adresse}`)
-
-    if (boite.ok()) {
-      const { messages = [] } = await boite.json()
-
-      if (messages.length > 0) {
-        const message = await request.get(`${MAILPIT}/api/v1/message/${messages[0].ID}`)
-        const corps = await message.json()
-
-        const trouve = /https?:\/\/[^\s"'<>]*\/invitation\?token=[a-f0-9]{64}/.exec(
-          `${corps.Text ?? ''} ${corps.HTML ?? ''}`,
-        )
-
-        if (trouve) return trouve[0]
-      }
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 250))
-  }
-
-  throw new Error(`Aucun e-mail d'invitation reçu pour ${adresse}.`)
-}
 
 test.describe("espace de travail", () => {
   test("une invitation traverse l'e-mail et ouvre l'espace à qui la reçoit", async ({

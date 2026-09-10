@@ -18,12 +18,14 @@ class HttpException extends RuntimeException
 {
     /**
      * @param array<string, string> $errors Erreurs de validation, champ => message
+     * @param array<string, mixed>  $meta   Contexte que le client doit pouvoir exploiter
      */
     public function __construct(
         private readonly int $status,
         string $message,
         private readonly array $errors = [],
         ?Throwable $previous = null,
+        private readonly array $meta = [],
     ) {
         parent::__construct($message, $status, $previous);
     }
@@ -37,6 +39,25 @@ class HttpException extends RuntimeException
     public function getErrors(): array
     {
         return $this->errors;
+    }
+
+    /**
+     * ┌───────────────────────────────────────────────────────────────────────┐
+     * │  UN REFUS PEUT AVOIR À TRANSPORTER AUTRE CHOSE QU'UN MESSAGE         │
+     * │                                                                       │
+     * │  « errors » dit ce qui ne va pas, champ par champ. Il ne sait pas     │
+     * │  dire « et voici l'état courant ».                                    │
+     * │                                                                       │
+     * │  Un conflit d'écriture en a besoin : sans l'état du serveur, le       │
+     * │  client ne peut que recharger — et perdre ce qui était en cours de    │
+     * │  saisie. Avec lui, il peut proposer un arbitrage.                     │
+     * └───────────────────────────────────────────────────────────────────────┘
+     *
+     * @return array<string, mixed>
+     */
+    public function getMeta(): array
+    {
+        return $this->meta;
     }
 
     // --- Raccourcis de construction ----------------------------------------

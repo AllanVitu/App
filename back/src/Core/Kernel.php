@@ -36,7 +36,7 @@ final class Kernel
             $this->router()->dispatch($request);
         } catch (HttpException $e) {
             // Erreur métier prévue : le message est destiné à l'utilisateur.
-            Response::error($e->getMessage(), $e->getStatus(), $e->getErrors());
+            Response::error($e->getMessage(), $e->getStatus(), $e->getErrors(), $e->getMeta());
         } catch (Throwable $e) {
             // Bug ou panne : journalisé côté serveur, réponse volontairement
             // vague. Le détail (requête SQL, chemin, trace) ne doit jamais

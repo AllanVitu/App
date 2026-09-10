@@ -65,6 +65,27 @@ aurait fait disparaître l'un des deux faits à chaque réassignation. Seul le
 module Tickets en dispose : c'est le module-patron, les quatre autres suivront
 après validation.
 
+### Deux personnes sur le même ticket
+
+La dernière écriture gagnait, en silence : Alice tapait une description, Bob
+changeait la priorité, et le second à enregistrer effaçait le travail du
+premier sans que personne ne l'apprenne.
+
+`tickets.version` est un entier posé par un déclencheur, jamais fourni par le
+client. Le panneau de détail le renvoie avec chaque champ ; les raccourcis
+clavier, non — ils écrivent un champ unique et instantané, et leur imposer un
+aller-retour de lecture annulerait ce qui fait l'intérêt du module.
+
+**Mais une version périmée n'est PAS un conflit**, et c'est tout le sujet.
+Neuf écritures concurrentes sur dix portent sur des champs différents. Le
+journal dit lesquels ont bougé et par qui ; seule l'intersection avec ceux
+qu'on écrit est un vrai désaccord. Le reste passe, et personne ne perd son
+paragraphe.
+
+Quand le désaccord est réel, le 409 transporte l'état courant du serveur dans
+son `meta` : l'écran montre les deux versions côte à côte et laisse choisir,
+au lieu du « rechargez » qui emporte ce qu'on venait d'écrire.
+
 Conséquence à assumer : supprimer un compte ne supprime plus ses tickets. Ils
 appartiennent à l'organisation, et `created_by` passe simplement à `NULL` — le
 départ d'un membre ne doit pas emporter le travail de l'équipe.
@@ -166,6 +187,29 @@ déjà — le nom de l'espace et l'adresse invitée.
 | GET/PUT | `/api/settings`          | Préférences (thème, densité, mouvement, fuseau) |
 | GET     | `/api/dashboard`         | Alertes, état des modules, activité             |
 | GET     | `/api/search`            | Recherche dans les cinq modules                 |
+
+**Le flux** — ce qui a changé, et qui est là.
+
+| Méthode | Route         | Rôle                                                |
+| ------- | ------------- | --------------------------------------------------- |
+| GET     | `/api/stream` | Événements depuis un curseur + présence de l'équipe |
+| DELETE  | `/api/stream` | Départ explicite, à la fermeture de l'onglet        |
+
+Trois décisions valent d'être dites, parce qu'elles ne se devinent pas :
+
+- **Pas de SSE, et c'est un choix.** Sous PHP-FPM, un flux ouvert immobilise un
+  processus enfant à vie : dix coéquipiers suffiraient à bloquer l'API entière,
+  et la panne ressemblerait à une lenteur réseau. Un sondage court coûte
+  quelques millisecondes toutes les trois secondes. La porte reste ouverte —
+  le flux lit le JOURNAL, pas une file en mémoire.
+- **Le journal est la source, pas un doublon.** Le fil d'activité le lit à
+  l'envers, le flux le suit à l'endroit. Diffuser d'un côté et journaliser de
+  l'autre aurait fait deux chemins qui divergent au premier oubli.
+- **Le curseur ne peut pas sauter un événement.** Une séquence attribue son
+  numéro à l'insertion, pas à la validation : deux écritures concurrentes
+  prennent 5 et 6, et si 6 valide en premier, un lecteur naïf ne verra jamais
+  le 5. La colonne `xact_id` ferme ce trou — on ne lit que les transactions
+  plus anciennes que la plus vieille encore en cours.
 
 **Espaces de travail** — c'est d'ici que vient le cloisonnement de tout le
 reste. `[A]` exige le rôle `admin`, `[O]` le rôle `owner`.
@@ -590,9 +634,15 @@ siens — une adresse partageable doit rester vraie chez son destinataire.
 **Les données se rafraîchissent en revenant.**
 [`useRevalidate`](front/src/composables/useRevalidate.js) relit au retour sur
 l'onglet — après une absence d'au moins trente secondes — et au retour du
-réseau. Pas de sondage : interroger le serveur en continu coûterait à tout le
-monde pour servir un utilisateur qui, la plupart du temps, ne regarde pas. Le
-rechargement est silencieux, les lignes restent à l'écran.
+réseau. Le rechargement est silencieux, les lignes restent à l'écran.
+
+**Et elles bougent pendant qu'on regarde.**
+[`useLiveStream`](front/src/composables/useLiveStream.js) suit le journal
+d'activité toutes les trois secondes, et **seulement pendant que l'onglet est
+visible**. Les deux se complètent : le flux suit les changements au fil de
+l'eau, `useRevalidate` relit tout au retour d'une absence, quand rattraper
+une heure d'événements un par un ferait clignoter l'écran plus longtemps
+qu'une relecture franche.
 
 **Le contenu est une destination.** Un lien d'évitement ouvre la tabulation de
 chaque page, et `<main>` porte le nom de l'écran. Changer d'écran y amène le

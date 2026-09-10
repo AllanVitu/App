@@ -20,13 +20,15 @@
  * chargement est plafonné (500 lignes), et des totaux recalculés localement
  * mentiraient dès qu'un compte dépasserait ce plafond.
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 import AppIcon from '@/components/AppIcon.vue'
 import BoardColumns from '@/components/board/BoardColumns.vue'
 import TicketCard from '@/components/tickets/TicketCard.vue'
 import TicketPanel from '@/components/tickets/TicketPanel.vue'
 import TicketStatusIcon from '@/components/tickets/TicketStatusIcon.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import FilterChip from '@/components/ui/FilterChip.vue'
 import SearchField from '@/components/ui/SearchField.vue'
@@ -41,6 +43,7 @@ import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useLoadMore } from '@/composables/useLoadMore'
 import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
+import { useLiveStream } from '@/composables/useLiveStream'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { BOARD_ORDER, PRIORITIES, advanceStatus } from '@/utils/tickets'
@@ -419,10 +422,75 @@ async function patch(ticket, changes) {
     refresh()
   } catch (error) {
     replaceRow(ticket.id, previous)
+
+    // 409 : quelqu'un a touché le MÊME champ. Ce n'est pas une erreur à
+    // annoncer et à oublier — c'est un arbitrage à proposer, avec les deux
+    // versions sous les yeux.
+    if (error.status === 409) {
+      ouvrirConflit(previous, changes, error)
+
+      return
+    }
+
     ui.notify(error.message, 'error')
   } finally {
     saving.value = false
   }
+}
+
+/**
+ * L'arbitrage d'un conflit.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │  « RECHARGEZ » N'EST PAS UNE RÉPONSE                                      │
+ * │                                                                           │
+ * │  C'est ce que fait la plupart des applications devant une écriture         │
+ * │  périmée : elles refusent, et le paragraphe qu'on venait d'écrire          │
+ * │  disparaît avec la page.                                                   │
+ * │                                                                           │
+ * │  Le serveur a dit QUEL champ et par QUI, et il a joint son état courant.   │
+ * │  Il reste donc de quoi montrer les deux versions et laisser choisir — ce   │
+ * │  qui suppose surtout de ne RIEN jeter en attendant la décision.            │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+const conflit = reactive({ open: false, ticket: null, mine: {}, current: null, messages: {} })
+
+function ouvrirConflit(ticket, changes, error) {
+  const { version, ...champs } = changes
+
+  conflit.ticket = ticket
+  conflit.mine = champs
+  conflit.current = error.meta?.current ?? null
+  conflit.messages = error.errors ?? {}
+  conflit.open = true
+
+  // Le panneau reste ouvert derrière : à la fermeture du dialogue, on revient
+  // exactement là où l'on écrivait.
+  void version
+}
+
+/**
+ * « Je garde la mienne » — réécrit par-dessus, en repartant de la version
+ * courante du serveur. C'est un choix explicite, pas un écrasement aveugle :
+ * la valeur de l'autre a été montrée avant.
+ */
+async function garderLaMienne() {
+  const ticket = conflit.ticket
+  const changes = { ...conflit.mine, version: conflit.current?.version }
+
+  conflit.open = false
+
+  await patch(ticket, changes)
+}
+
+/**
+ * « Je prends la sienne » — la ligne adopte l'état du serveur, y compris pour
+ * les champs qui n'étaient pas en cause.
+ */
+function prendreLaSienne() {
+  if (conflit.current) replaceRow(conflit.current.id, conflit.current)
+
+  conflit.open = false
 }
 
 /**
@@ -642,6 +710,109 @@ function act(event, action) {
  * rond qui tourne au retour donnerait l'impression d'avoir tout perdu.
  */
 useRevalidate(() => load({ silent: true }))
+
+/**
+ * Le flux : ce que les autres font, pendant qu'on regarde.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │  IL COMPLÈTE useRevalidate, IL NE LE REMPLACE PAS                         │
+ * │                                                                           │
+ * │  Le flux suit les changements tant que l'onglet est visible. Au retour     │
+ * │  d'une absence, il a été coupé — et rattraper une heure d'événements un    │
+ * │  par un ferait clignoter l'écran plus longtemps qu'une relecture franche.  │
+ * │  C'est exactement ce que fait useRevalidate juste au-dessus.               │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+const { presence } = useLiveStream({
+  screen: 'tickets',
+  // Le ticket ouvert, pour que les autres le voient occupé AVANT d'y écrire.
+  subject: () => (panelOpen.value ? activeId.value : null),
+  onEvents: applyRemote,
+  onDistanced: () => load({ silent: true }),
+})
+
+/**
+ * Qui regarde quel ticket, en ce moment — indexé par ticket.
+ *
+ * Un objet plutôt qu'une recherche dans la liste à chaque carte : le tableau
+ * en affiche des dizaines, et parcourir la présence pour chacune d'elles à
+ * chaque rendu se paierait sur le défilement.
+ *
+ * Déclaré APRÈS le flux dont il dépend. Un « computed » est paresseux, il
+ * aurait donc fonctionné plus haut par simple fermeture — jusqu'au jour où
+ * quelqu'un le lit à la construction, et l'erreur serait alors incompréhensible.
+ */
+const watchers = computed(() => {
+  const parTicket = {}
+
+  for (const present of presence.value) {
+    if (!present.subject_id) continue
+
+    ;(parTicket[present.subject_id] ??= []).push(present.full_name)
+  }
+
+  return parTicket
+})
+
+/**
+ * Applique ce qu'un coéquipier vient de faire.
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │  CE QUI EST DÉLIBÉRÉMENT NON APPLIQUÉ                                     │
+ * │                                                                           │
+ * │  Le ticket OUVERT dans le panneau est laissé tel quel. Voir un champ se   │
+ * │  réécrire sous ses doigts est pire que de l'ignorer : on perd ce qu'on     │
+ * │  tapait, et on ne comprend pas ce qui s'est passé.                        │
+ * │                                                                           │
+ * │  L'arbitrage a lieu À L'ENREGISTREMENT, où le serveur dit quel champ a     │
+ * │  bougé et par qui. Le seul moment où l'on peut proposer un vrai choix.    │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ */
+function applyRemote(events) {
+  let besoinDeRecharger = false
+
+  for (const evenement of events) {
+    if (evenement.module !== 'tickets') continue
+
+    const index = tickets.value.findIndex((row) => row.id === evenement.subject_id)
+
+    // Créé ou restauré ailleurs : la ligne n'est pas là, et le journal ne
+    // porte pas de quoi la fabriquer entière. Une relecture, une seule, à la
+    // fin de la salve.
+    if (index === -1) {
+      besoinDeRecharger = evenement.action !== 'deleted'
+      continue
+    }
+
+    if (evenement.action === 'deleted') {
+      tickets.value.splice(index, 1)
+      continue
+    }
+
+    // Le panneau ouvert est épargné : cf. l'encadré ci-dessus.
+    if (panelOpen.value && activeId.value === evenement.subject_id) continue
+
+    const changes = {}
+
+    for (const [champ, [, apres]] of Object.entries(evenement.changes ?? {})) {
+      changes[champ] = apres
+    }
+
+    if (Object.keys(changes).length) {
+      // « assignee_name » ne figure pas dans le journal, qui ne transporte que
+      // des valeurs brutes. Relire le nom ici demanderait un aller-retour ; la
+      // liste des membres l'a déjà.
+      if ('assigned_to' in changes) {
+        changes.assignee_name =
+          members.value.find((membre) => membre.id === changes.assigned_to)?.full_name ?? null
+      }
+
+      tickets.value[index] = { ...tickets.value[index], ...changes }
+    }
+  }
+
+  if (besoinDeRecharger) load({ silent: true })
+}
 
 onMounted(() => {
   load()
@@ -873,7 +1044,7 @@ const SHORTCUTS = [
             @move="moveTicket"
           >
             <template #card="{ item }">
-              <TicketCard :ticket="item" />
+              <TicketCard :ticket="item" :watchers="watchers[item.id]" />
             </template>
           </BoardColumns>
         </div>
@@ -893,5 +1064,55 @@ const SHORTCUTS = [
         @delete="removeTicket(activeTicket)"
       />
     </div>
+
+    <!-- L'ARBITRAGE D'UN CONFLIT.
+         Les deux versions côte à côte, et rien n'est jeté avant la décision :
+         c'est toute la différence avec un « rechargez » qui emporte le
+         paragraphe qu'on venait d'écrire. -->
+    <BaseModal
+      :open="conflit.open"
+      title="Ce ticket a changé pendant que vous écriviez"
+      size="md"
+      @close="conflit.open = false"
+    >
+      <div class="space-y-4">
+        <p
+          v-for="(message, champ) in conflit.messages"
+          :key="champ"
+          class="text-[0.82rem] text-ink-2"
+        >
+          {{ message }}
+        </p>
+
+        <div v-for="(valeur, champ) in conflit.mine" :key="champ" class="grid gap-3 sm:grid-cols-2">
+          <div>
+            <p class="label-caps mb-1.5">la vôtre</p>
+            <p
+              class="max-h-40 overflow-y-auto whitespace-pre-wrap border border-ink px-3 py-2 text-[0.8rem]"
+            >
+              {{ valeur === null || valeur === '' ? '—' : valeur }}
+            </p>
+          </div>
+
+          <div>
+            <p class="label-caps mb-1.5">la sienne</p>
+            <p
+              class="max-h-40 overflow-y-auto whitespace-pre-wrap border border-line px-3 py-2 text-[0.8rem] text-ink-2"
+            >
+              {{
+                conflit.current?.[champ] === null || conflit.current?.[champ] === ''
+                  ? '—'
+                  : conflit.current?.[champ]
+              }}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <BaseButton variant="secondary" @click="prendreLaSienne">Prendre la sienne</BaseButton>
+        <BaseButton @click="garderLaMienne">Garder la mienne</BaseButton>
+      </template>
+    </BaseModal>
   </div>
 </template>

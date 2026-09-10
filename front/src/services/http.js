@@ -81,6 +81,10 @@ function normalizeError(error) {
     message: data?.message || 'Une erreur est survenue.',
     // Erreurs de validation champ par champ, renvoyées par l'API en 422.
     errors: data?.errors || {},
+    // Contexte exploitable d'un refus. Un 409 de conflit y transporte l'état
+    // courant du serveur : sans lui, l'écran ne pourrait que recharger, donc
+    // perdre ce qui était en cours de saisie.
+    meta: data?.meta || {},
   }
 }
 

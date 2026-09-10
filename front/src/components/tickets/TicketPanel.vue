@@ -92,7 +92,18 @@ function commit(field, value) {
 
   if (sameValue(current, value)) return
 
-  emit('patch', { [field]: value })
+  // ┌───────────────────────────────────────────────────────────────────────┐
+  // │  LE PANNEAU ENVOIE SA VERSION, LES RACCOURCIS NON                     │
+  // │                                                                       │
+  // │  C'est ici qu'on écrit longtemps : une description se tape pendant     │
+  // │  qu'un coéquipier travaille sur le même ticket, et c'est le seul      │
+  // │  endroit où l'on a quelque chose à perdre.                            │
+  // │                                                                       │
+  // │  Un raccourci clavier, lui, écrit un champ unique et instantané. Lui   │
+  // │  imposer un arbitrage ferait payer à « d » le prix d'un conflit qui   │
+  // │  ne le concerne pas.                                                  │
+  // └───────────────────────────────────────────────────────────────────────┘
+  emit('patch', { [field]: value, version: props.ticket.version })
 }
 
 function commitTitle() {
