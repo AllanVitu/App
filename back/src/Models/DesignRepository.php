@@ -22,7 +22,7 @@ final class DesignRepository
     private const SORTABLE = ['updated_at', 'created_at', 'name'];
 
     private const COLUMNS = 'f.id, f.name, f.kind, f.description, f.accent,
-                             f.created_at, f.updated_at';
+                             f.created_at, f.updated_at, f.version';
 
     /**
      * Fichiers, avec le nombre de versions et la date de la dernière.
@@ -358,6 +358,10 @@ final class DesignRepository
             'last_version_at' => Database::toIso($row['last_version_at'] ?? null),
             'created_at'      => Database::toIso($row['created_at']),
             'updated_at'      => Database::toIso($row['updated_at']),
+            // Jeton de concurrence, posé par un déclencheur et jamais par le
+            // client : il ne dit pas QUAND la ligne a changé, mais COMBIEN DE
+            // FOIS — la seule question qu'une écriture concurrente pose.
+            'version'         => (int) $row['version'],
         ];
     }
 }

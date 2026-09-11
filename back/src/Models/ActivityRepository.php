@@ -191,6 +191,112 @@ final class ActivityRepository
     }
 
     /**
+     * L'historique, filtrable et paginé — l'écran dédié.
+     *
+     * ┌───────────────────────────────────────────────────────────────────────┐
+     * │  PAGINATION PAR CLÉ, PAS PAR DÉCALAGE                                 │
+     * │                                                                       │
+     * │  « OFFSET 40 » se décale d'une ligne à chaque événement survenu        │
+     * │  pendant qu'on lit : dans un journal qui ne cesse de grossir par le    │
+     * │  haut, on reverrait la même entrée en page suivante, ou on en          │
+     * │  sauterait une. Ici on demande « ce qui précède le numéro N », qui ne  │
+     * │  bouge pas.                                                           │
+     * │                                                                       │
+     * │  Le flux temps réel lit la même table en sens inverse, avec la même    │
+     * │  borne de visibilité par transaction. Les deux ne peuvent donc pas se  │
+     * │  contredire.                                                          │
+     * └───────────────────────────────────────────────────────────────────────┘
+     *
+     * @param  array{module?: string|null, actor?: string|null} $filters
+     * @return array{events: list<array<string, mixed>>, next: int|null}
+     */
+    public function history(string $organizationId, array $filters, ?int $before, int $limit = 50): array
+    {
+        $conditions = ['organization_id = :org'];
+        $params     = ['org' => $organizationId];
+
+        if (!empty($filters['module'])) {
+            $conditions[]      = 'module = :module';
+            $params['module']  = $filters['module'];
+        }
+
+        if (!empty($filters['actor'])) {
+            $conditions[]     = 'actor_id = :actor';
+            $params['actor']  = $filters['actor'];
+        }
+
+        if ($before !== null && $before > 0) {
+            $conditions[]     = 'id < :before';
+            $params['before'] = $before;
+        }
+
+        $where = implode(' AND ', $conditions);
+
+        // Une ligne de plus que demandé : sa PRÉSENCE dit qu'il y a une suite,
+        // sans avoir à compter la table entière. Elle n'est pas renvoyée.
+        $statement = Database::connection()->prepare(
+            "SELECT id, actor_id, actor_name, module, action,
+                    subject_id, subject_ref, subject_title, changes, happened_at
+               FROM activity
+              WHERE {$where}
+              ORDER BY id DESC
+              LIMIT :limit",
+        );
+
+        foreach ($params as $cle => $valeur) {
+            $statement->bindValue($cle, $valeur, is_int($valeur) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        }
+
+        $statement->bindValue('limit', $limit + 1, PDO::PARAM_INT);
+        $statement->execute();
+
+        $lignes = $statement->fetchAll();
+        $suite  = count($lignes) > $limit;
+
+        if ($suite) {
+            array_pop($lignes);
+        }
+
+        $events = array_map($this->hydrate(...), $lignes);
+
+        return [
+            'events' => $events,
+            // Le curseur de la page suivante, ou null quand il n'y en a pas.
+            // Le client n'a donc rien à calculer, ni à deviner quand s'arrêter.
+            'next' => $suite && $events !== [] ? (int) $events[array_key_last($events)]['id'] : null,
+        ];
+    }
+
+    /**
+     * Les personnes qui apparaissent dans le journal de cet espace.
+     *
+     * Lues dans le JOURNAL et non dans la liste des membres : quelqu'un qui a
+     * quitté l'équipe a laissé des traces qu'on veut pouvoir filtrer, et un
+     * membre arrivé hier n'a encore rien fait à montrer.
+     *
+     * @return list<array{id: string, name: string}>
+     */
+    public function actors(string $organizationId): array
+    {
+        $statement = Database::connection()->prepare(
+            'SELECT DISTINCT actor_id, actor_name
+               FROM activity
+              WHERE organization_id = :org AND actor_id IS NOT NULL
+           ORDER BY actor_name',
+        );
+
+        $statement->execute(['org' => $organizationId]);
+
+        return array_map(
+            static fn (array $row): array => [
+                'id'   => (string) $row['actor_id'],
+                'name' => (string) $row['actor_name'],
+            ],
+            $statement->fetchAll(),
+        );
+    }
+
+    /**
      * Ce que d'AUTRES ont changé sur ce sujet depuis une version donnée.
      *
      * ┌───────────────────────────────────────────────────────────────────────┐

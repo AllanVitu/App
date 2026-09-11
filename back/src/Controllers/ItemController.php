@@ -9,6 +9,7 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Core\Validator;
 use App\Models\ModuleItemRepository;
+use App\Services\Journal;
 
 /**
  * CRUD des enregistrements d'un module.
@@ -22,11 +23,38 @@ final class ItemController
 {
     private const STATUSES = ['draft', 'active', 'archived'];
 
+    /**
+     * Les champs suivis, et leur nom en français.
+     *
+     * Cette liste sert DEUX fois : elle borne ce que le journal consigne, et
+     * elle nomme le champ dans le message de conflit.
+     */
+    private const FIELD_LABELS = [
+        'title'       => 'le titre',
+        'description' => 'la description',
+        'status'      => 'le statut',
+        'data'        => 'les données',
+        'due_date'    => 'l\'échéance',
+    ];
+
     private ModuleItemRepository $items;
 
     public function __construct()
     {
         $this->items = new ModuleItemRepository();
+    }
+
+    /**
+     * Le journal du module concerné.
+     *
+     * Construit à la demande, et non une fois dans le constructeur : ce
+     * contrôleur sert les CINQ modules, et « /api/items/{id} » ne porte aucun
+     * slug. C'est la ligne elle-même qui dit d'où elle vient — d'où le
+     * « module_slug » remonté par le dépôt.
+     */
+    private function journal(string $slug): Journal
+    {
+        return new Journal($slug, self::FIELD_LABELS);
     }
 
     /**
@@ -77,7 +105,23 @@ final class ItemController
         $module     = ModuleController::resolveModule($request);
         $attributes = $this->validatePayload($request);
 
-        Response::created($this->items->create($request->organizationId(), $request->actorId(), $module['id'], $attributes));
+        $item = $this->items->create(
+            $request->organizationId(),
+            $request->actorId(),
+            $module['id'],
+            $attributes,
+        );
+
+        $this->journal((string) $item['module_slug'])->record(
+            $request,
+            'created',
+            (string) $item['id'],
+            null,
+            (string) $item['title'],
+            version: (int) $item['version'],
+        );
+
+        Response::created($item);
     }
 
     /**
@@ -95,12 +139,25 @@ final class ItemController
     {
         $existing   = $this->findOrFail($request);
         $attributes = $this->validatePayload($request, $existing);
+        $journal    = $this->journal((string) $existing['module_slug']);
+
+        $journal->assertNoConflict($request, $existing, 'Cet élément');
 
         $updated = $this->items->update((string) $request->param('id'), $request->organizationId(), $attributes);
 
         if ($updated === null) {
             throw HttpException::notFound('Élément introuvable.');
         }
+
+        $journal->record(
+            $request,
+            'updated',
+            (string) $updated['id'],
+            null,
+            (string) $updated['title'],
+            $journal->diff($existing, $updated),
+            (int) $updated['version'],
+        );
 
         Response::json($updated);
     }
@@ -110,11 +167,21 @@ final class ItemController
      */
     public function destroy(Request $request): void
     {
-        $id = $this->validateId($request);
+        // Relu AVANT la suppression : après, le titre et le module d'origine
+        // ne sont plus lisibles, et le fil afficherait une ligne muette.
+        $item = $this->findOrFail($request);
 
-        if (!$this->items->softDelete($id, $request->organizationId())) {
+        if (!$this->items->softDelete((string) $item['id'], $request->organizationId())) {
             throw HttpException::notFound('Élément introuvable.');
         }
+
+        $this->journal((string) $item['module_slug'])->record(
+            $request,
+            'deleted',
+            (string) $item['id'],
+            null,
+            (string) $item['title'],
+        );
 
         Response::noContent();
     }
@@ -130,7 +197,19 @@ final class ItemController
             throw HttpException::notFound('Élément introuvable.');
         }
 
-        Response::json($this->items->find($id, $request->organizationId()));
+        /** @var array<string, mixed> $item */
+        $item = $this->items->find($id, $request->organizationId());
+
+        $this->journal((string) $item['module_slug'])->record(
+            $request,
+            'restored',
+            (string) $item['id'],
+            null,
+            (string) $item['title'],
+            version: (int) $item['version'],
+        );
+
+        Response::json($item);
     }
 
     /**

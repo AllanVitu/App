@@ -65,16 +65,50 @@ aurait fait disparaître l'un des deux faits à chaque réassignation. Seul le
 module Tickets en dispose : c'est le module-patron, les quatre autres suivront
 après validation.
 
-### Deux personnes sur le même ticket
+### Le journal, source unique
+
+Une table `activity` porte ce qui s'est passé : qui, quoi, sur quoi, et le
+détail `{ champ: [avant, après] }`. **Les cinq modules y écrivent.**
+
+Elle est LA SOURCE, pas un doublon. Le fil du tableau de bord la lit à
+l'envers, l'écran Historique aussi, le flux temps réel la suit à l'endroit.
+Auparavant le fil était assemblé par `UNION ALL` sur les cinq tables métier,
+ce qui ne pouvait montrer que des **créations** — une table de données ne
+garde aucune trace de ce qui l'a modifiée, ni de qui.
+
+Deux choix qui ne se devinent pas :
+
+- **Le nom de l'auteur est recopié** dans chaque entrée, contre toutes les
+  habitudes de normalisation. Un journal qui se réécrit quand un compte est
+  renommé ou supprimé n'est plus un journal : « Bob a supprimé la table
+  clients » doit rester lisible le jour où Bob n'est plus là. Même raison
+  pour le titre du sujet, figé au moment du fait.
+- **Une erreur qui se répète ne consigne que sa première occurrence.** Une
+  panne de production émet des centaines de fois par minute ; tout consigner
+  noierait le fil de toute l'équipe sous un seul incident. Le compteur du
+  groupe, lui, monte — l'information n'est pas perdue, elle est à sa place.
+
+### Deux personnes sur le même objet
 
 La dernière écriture gagnait, en silence : Alice tapait une description, Bob
 changeait la priorité, et le second à enregistrer effaçait le travail du
 premier sans que personne ne l'apprenne.
 
-`tickets.version` est un entier posé par un déclencheur, jamais fourni par le
-client. Le panneau de détail le renvoie avec chaque champ ; les raccourcis
-clavier, non — ils écrivent un champ unique et instantané, et leur imposer un
-aller-retour de lecture annulerait ce qui fait l'intérêt du module.
+Une colonne `version` — un entier posé par un déclencheur, jamais fourni par le
+client — existe sur les **cinq** tables métier. Le panneau de détail la renvoie
+avec chaque champ ; les raccourcis clavier, non : ils écrivent un champ unique
+et instantané, et leur imposer un aller-retour de lecture annulerait ce qui
+fait l'intérêt du module.
+
+> **Le serveur arbitre exactement quand le client annonce une version.**
+> C'est la règle entière, et elle vaut pour les cinq modules.
+
+Un cas prouve que l'arbitrage ne peut PAS reposer sur la seule comparaison de
+versions : celle d'un groupe d'erreurs monte à chaque occurrence reçue, par
+déclencheur. Une application en panne la ferait grimper des dizaines de fois
+par minute, et un arbitrage naïf refuserait de marquer « résolu » précisément
+pendant l'incident. C'est le **journal** qui tranche — quels champs QUELQU'UN
+a changés — et un compteur qui monte tout seul n'y écrit rien.
 
 **Mais une version périmée n'est PAS un conflit**, et c'est tout le sujet.
 Neuf écritures concurrentes sur dix portent sur des champs différents. Le
@@ -190,10 +224,16 @@ déjà — le nom de l'espace et l'adresse invitée.
 
 **Le flux** — ce qui a changé, et qui est là.
 
-| Méthode | Route         | Rôle                                                |
-| ------- | ------------- | --------------------------------------------------- |
-| GET     | `/api/stream` | Événements depuis un curseur + présence de l'équipe |
-| DELETE  | `/api/stream` | Départ explicite, à la fermeture de l'onglet        |
+| Méthode | Route           | Rôle                                                |
+| ------- | --------------- | --------------------------------------------------- |
+| GET     | `/api/stream`   | Événements depuis un curseur + présence de l'équipe |
+| DELETE  | `/api/stream`   | Départ explicite, à la fermeture de l'onglet        |
+| GET     | `/api/activity` | L'historique complet, filtrable et paginé par clé   |
+
+`/api/stream` et `/api/activity` lisent **la même table**, en sens inverse :
+ce que l'un a montré passer, l'autre le retrouve. L'historique est ouvert à
+tous les membres, sans condition de rôle — un journal réservé aux
+administrateurs servirait à surveiller plutôt qu'à se coordonner.
 
 Trois décisions valent d'être dites, parce qu'elles ne se devinent pas :
 

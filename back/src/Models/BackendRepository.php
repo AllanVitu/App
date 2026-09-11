@@ -27,7 +27,7 @@ final class BackendRepository
      * « created_by » y reste sans qualificatif pour valoir dans les deux cas.
      */
     private const TABLE_COLUMNS = 'id, name, description, columns, rls_enabled,
-                                   row_estimate, created_at, updated_at,
+                                   row_estimate, created_at, updated_at, version,
                                    (SELECT u.full_name FROM users u WHERE u.id = created_by) AS author_name';
 
     // ---------------------------------------------------------------------
@@ -389,6 +389,10 @@ final class BackendRepository
             'row_estimate' => (int) $row['row_estimate'],
             'created_at'   => Database::toIso($row['created_at']),
             'updated_at'   => Database::toIso($row['updated_at']),
+            // Jeton de concurrence, posé par un déclencheur et jamais par le
+            // client : il ne dit pas QUAND la ligne a changé, mais COMBIEN DE
+            // FOIS — la seule question qu'une écriture concurrente pose.
+            'version'      => (int) $row['version'],
             // Null si le compte a été supprimé : le schéma appartient à
             // l'organisation, il survit à son auteur.
             'author_name'  => $row['author_name'] !== null ? (string) $row['author_name'] : null,

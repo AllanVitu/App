@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Core\Request;
 use App\Core\Response;
+use App\Models\ActivityRepository;
 use App\Models\ModuleRepository;
 use App\Services\ActivityFeed;
 use App\Services\AttentionFeed;
@@ -57,10 +58,19 @@ final class DashboardController
             // un déploiement par jour et quarante erreurs par jour n'ont pas
             // d'unité commune (cf. ActivityFeed::dailySeries).
             'trends'    => $feed->dailySeries($userId, 14),
-            // Transversale elle aussi : chaque module ayant sa propre table,
-            // lire module_items montrerait des lignes qu'aucun écran
-            // n'affiche plus.
-            'recent'    => $feed->forOrganization($userId, 8),
+            // ┌───────────────────────────────────────────────────────────────┐
+            // │  LE FIL VIENT DU JOURNAL, PLUS D'UNE UNION DE CINQ TABLES     │
+            // │                                                               │
+            // │  Il était assemblé par UNION ALL sur les cinq tables métier,  │
+            // │  ce qui ne pouvait montrer que des CRÉATIONS — une table de   │
+            // │  données ne garde pas la trace de ce qui l'a modifiée.        │
+            // │                                                               │
+            // │  Depuis qu'un journal existe, deux sources décrivaient les    │
+            // │  mêmes faits sans pouvoir s'accorder : celle-ci disait « un   │
+            // │  ticket existe depuis mardi », celle-là « Bob l'a rouvert ce  │
+            // │  matin ». Une seule survit, et c'est celle qui sait dire QUI. │
+            // └───────────────────────────────────────────────────────────────┘
+            'recent'    => (new ActivityRepository())->recent($userId, 12),
         ]);
     }
 }

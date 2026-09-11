@@ -43,7 +43,7 @@ import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useLoadMore } from '@/composables/useLoadMore'
 import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
-import { useLiveStream } from '@/composables/useLiveStream'
+import { useLiveRows } from '@/composables/useLiveRows'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { BOARD_ORDER, PRIORITIES, advanceStatus } from '@/utils/tickets'
@@ -722,97 +722,36 @@ useRevalidate(() => load({ silent: true }))
  * │  par un ferait clignoter l'écran plus longtemps qu'une relecture franche.  │
  * │  C'est exactement ce que fait useRevalidate juste au-dessus.               │
  * └───────────────────────────────────────────────────────────────────────────┘
+ *
+ * La mécanique est commune aux cinq modules (cf. useLiveRows) ; ce qui suit
+ * est ce que ce module a de particulier : le ticket ouvert, et le nom de
+ * l'assigné que le journal ne transporte pas.
  */
-const { presence } = useLiveStream({
+const { watchers } = useLiveRows({
+  module: 'tickets',
   screen: 'tickets',
+  rows: tickets,
   // Le ticket ouvert, pour que les autres le voient occupé AVANT d'y écrire.
   subject: () => (panelOpen.value ? activeId.value : null),
-  onEvents: applyRemote,
-  onDistanced: () => load({ silent: true }),
-})
-
-/**
- * Qui regarde quel ticket, en ce moment — indexé par ticket.
- *
- * Un objet plutôt qu'une recherche dans la liste à chaque carte : le tableau
- * en affiche des dizaines, et parcourir la présence pour chacune d'elles à
- * chaque rendu se paierait sur le défilement.
- *
- * Déclaré APRÈS le flux dont il dépend. Un « computed » est paresseux, il
- * aurait donc fonctionné plus haut par simple fermeture — jusqu'au jour où
- * quelqu'un le lit à la construction, et l'erreur serait alors incompréhensible.
- */
-const watchers = computed(() => {
-  const parTicket = {}
-
-  for (const present of presence.value) {
-    if (!present.subject_id) continue
-
-    ;(parTicket[present.subject_id] ??= []).push(present.full_name)
-  }
-
-  return parTicket
-})
-
-/**
- * Applique ce qu'un coéquipier vient de faire.
- *
- * ┌───────────────────────────────────────────────────────────────────────────┐
- * │  CE QUI EST DÉLIBÉRÉMENT NON APPLIQUÉ                                     │
- * │                                                                           │
- * │  Le ticket OUVERT dans le panneau est laissé tel quel. Voir un champ se   │
- * │  réécrire sous ses doigts est pire que de l'ignorer : on perd ce qu'on     │
- * │  tapait, et on ne comprend pas ce qui s'est passé.                        │
- * │                                                                           │
- * │  L'arbitrage a lieu À L'ENREGISTREMENT, où le serveur dit quel champ a     │
- * │  bougé et par qui. Le seul moment où l'on peut proposer un vrai choix.    │
- * └───────────────────────────────────────────────────────────────────────────┘
- */
-function applyRemote(events) {
-  let besoinDeRecharger = false
-
-  for (const evenement of events) {
-    if (evenement.module !== 'tickets') continue
-
-    const index = tickets.value.findIndex((row) => row.id === evenement.subject_id)
-
-    // Créé ou restauré ailleurs : la ligne n'est pas là, et le journal ne
-    // porte pas de quoi la fabriquer entière. Une relecture, une seule, à la
-    // fin de la salve.
-    if (index === -1) {
-      besoinDeRecharger = evenement.action !== 'deleted'
-      continue
-    }
-
-    if (evenement.action === 'deleted') {
-      tickets.value.splice(index, 1)
-      continue
-    }
-
-    // Le panneau ouvert est épargné : cf. l'encadré ci-dessus.
-    if (panelOpen.value && activeId.value === evenement.subject_id) continue
-
-    const changes = {}
-
-    for (const [champ, [, apres]] of Object.entries(evenement.changes ?? {})) {
-      changes[champ] = apres
-    }
-
-    if (Object.keys(changes).length) {
-      // « assignee_name » ne figure pas dans le journal, qui ne transporte que
-      // des valeurs brutes. Relire le nom ici demanderait un aller-retour ; la
-      // liste des membres l'a déjà.
-      if ('assigned_to' in changes) {
-        changes.assignee_name =
-          members.value.find((membre) => membre.id === changes.assigned_to)?.full_name ?? null
+  // Le panneau ouvert est épargné : voir un champ se réécrire sous ses doigts
+  // est pire que de l'ignorer.
+  protege: () => (panelOpen.value ? activeId.value : null),
+  recharger: () => load({ silent: true }),
+  decorer: (changes) => {
+    // « assignee_name » ne figure pas dans le journal, qui ne transporte que
+    // des valeurs brutes. La liste des membres l'a déjà : la relire coûterait
+    // un aller-retour pour une donnée en mémoire.
+    if ('assigned_to' in changes) {
+      return {
+        ...changes,
+        assignee_name:
+          members.value.find((membre) => membre.id === changes.assigned_to)?.full_name ?? null,
       }
-
-      tickets.value[index] = { ...tickets.value[index], ...changes }
     }
-  }
 
-  if (besoinDeRecharger) load({ silent: true })
-}
+    return changes
+  },
+})
 
 onMounted(() => {
   load()

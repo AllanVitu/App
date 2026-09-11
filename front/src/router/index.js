@@ -71,6 +71,12 @@ const routes = [
         meta: { title: 'Équipe' },
       },
       {
+        path: 'historique',
+        name: 'history',
+        component: () => import('@/views/HistoryView.vue'),
+        meta: { title: 'Historique' },
+      },
+      {
         path: 'profil',
         name: 'profile',
         component: () => import('@/views/ProfileView.vue'),

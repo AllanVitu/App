@@ -9,6 +9,7 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Core\Validator;
 use App\Models\DesignRepository;
+use App\Services\Journal;
 
 /**
  * Module « Design » : fichiers et historique de versions.
@@ -22,11 +23,26 @@ final class DesignController
 {
     private const KINDS = ['maquette', 'prototype', 'systeme'];
 
+    /**
+     * Les champs suivis, et leur nom en français.
+     *
+     * Cette liste sert DEUX fois : elle borne ce que le journal consigne, et
+     * elle nomme le champ dans le message de conflit.
+     */
+    private const FIELD_LABELS = [
+        'name'        => 'le nom',
+        'kind'        => 'le type',
+        'description' => 'la description',
+        'accent'      => 'la couleur',
+    ];
+
     private DesignRepository $design;
+    private Journal $journal;
 
     public function __construct()
     {
-        $this->design = new DesignRepository();
+        $this->design  = new DesignRepository();
+        $this->journal = new Journal('design', self::FIELD_LABELS);
     }
 
     /**
@@ -62,9 +78,22 @@ final class DesignController
      */
     public function store(Request $request): void
     {
-        Response::created(
-            $this->design->createFile($request->organizationId(), $request->actorId(), $this->validatePayload($request)),
+        $file = $this->design->createFile(
+            $request->organizationId(),
+            $request->actorId(),
+            $this->validatePayload($request),
         );
+
+        $this->journal->record(
+            $request,
+            'created',
+            (string) $file['id'],
+            null,
+            (string) $file['name'],
+            version: (int) $file['version'],
+        );
+
+        Response::created($file);
     }
 
     /**
@@ -81,16 +110,29 @@ final class DesignController
     public function update(Request $request): void
     {
         $existing = $this->findOrFail($request);
+        $payload  = $this->validatePayload($request, $existing);
+
+        $this->journal->assertNoConflict($request, $existing, 'Ce fichier');
 
         $updated = $this->design->updateFile(
             (string) $request->param('id'),
             $request->organizationId(),
-            $this->validatePayload($request, $existing),
+            $payload,
         );
 
         if ($updated === null) {
             throw HttpException::notFound('Fichier introuvable.');
         }
+
+        $this->journal->record(
+            $request,
+            'updated',
+            (string) $updated['id'],
+            null,
+            (string) $updated['name'],
+            $this->journal->diff($existing, $updated),
+            (int) $updated['version'],
+        );
 
         Response::json($updated);
     }
@@ -100,9 +142,21 @@ final class DesignController
      */
     public function destroy(Request $request): void
     {
-        if (!$this->design->deleteFile($this->validateId($request), $request->organizationId())) {
+        // Relu AVANT la suppression : après, le nom n'est plus lisible, et le
+        // fil afficherait une ligne muette.
+        $file = $this->findOrFail($request);
+
+        if (!$this->design->deleteFile((string) $file['id'], $request->organizationId())) {
             throw HttpException::notFound('Fichier introuvable.');
         }
+
+        $this->journal->record(
+            $request,
+            'deleted',
+            (string) $file['id'],
+            null,
+            (string) $file['name'],
+        );
 
         Response::noContent();
     }
@@ -118,7 +172,19 @@ final class DesignController
             throw HttpException::notFound('Fichier introuvable.');
         }
 
-        Response::json($this->design->find($id, $request->organizationId()));
+        /** @var array<string, mixed> $file */
+        $file = $this->design->find($id, $request->organizationId());
+
+        $this->journal->record(
+            $request,
+            'restored',
+            (string) $file['id'],
+            null,
+            (string) $file['name'],
+            version: (int) $file['version'],
+        );
+
+        Response::json($file);
     }
 
     /**
@@ -136,12 +202,26 @@ final class DesignController
         $notes = $validator->string('notes', required: false, max: 5000, label: 'notes');
         $validator->check();
 
-        Response::created($this->design->addVersion(
+        $version = $this->design->addVersion(
             (string) $file['id'],
             $request->organizationId(),
             $request->actorId(),
             ['label' => $label, 'notes' => $notes],
-        ));
+        );
+
+        // Consigné sur le FICHIER, pas sur la version : c'est le fichier que
+        // l'écran affiche et que le fil doit pouvoir ouvrir. Une entrée
+        // pointant vers une version mènerait à un identifiant que rien ne sait
+        // résoudre.
+        $this->journal->record(
+            $request,
+            'versioned',
+            (string) $file['id'],
+            'v' . $version['number'],
+            (string) $file['name'],
+        );
+
+        Response::created($version);
     }
 
     /**

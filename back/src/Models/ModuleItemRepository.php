@@ -37,8 +37,9 @@ final class ModuleItemRepository
      * « i », et la colonne se résout dans les deux cas.
      */
     private const COLUMNS = 'id, module_id, title, description, status, data,
-                             position, due_date, created_at, updated_at,
-                             (SELECT u.full_name FROM users u WHERE u.id = created_by) AS author_name';
+                             position, due_date, created_at, updated_at, version,
+                             (SELECT u.full_name FROM users u WHERE u.id = created_by) AS author_name,
+                             (SELECT m.slug FROM modules m WHERE m.id = module_id) AS module_slug';
 
     /**
      * Liste paginée des éléments d'un module.
@@ -276,6 +277,14 @@ final class ModuleItemRepository
             // Null si le compte a été supprimé : l'élément appartient à
             // l'organisation, il survit à son auteur.
             'author_name' => $row['author_name'] !== null ? (string) $row['author_name'] : null,
+            // Jeton de concurrence, posé par un déclencheur et jamais par le
+            // client : il ne dit pas QUAND la ligne a changé, mais COMBIEN DE
+            // FOIS — la seule question qu'une écriture concurrente pose.
+            'version'     => (int) $row['version'],
+            // Le slug du module dont dépend cet élément. Les routes de détail
+            // — « /api/items/{id} » — ne le portent pas, et le journal en a
+            // besoin pour dire DANS QUEL module le fait s'est produit.
+            'module_slug' => (string) $row['module_slug'],
         ];
     }
 }

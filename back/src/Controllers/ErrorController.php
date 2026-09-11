@@ -9,6 +9,7 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Core\Validator;
 use App\Models\ErrorRepository;
+use App\Services\Journal;
 
 /**
  * Module « Supervision » : erreurs de production.
@@ -27,11 +28,23 @@ final class ErrorController
     private const LEVELS   = ['warning', 'error', 'fatal'];
     private const STATUSES = ['unresolved', 'resolved', 'ignored'];
 
+    /**
+     * Les champs suivis — un SEUL, et c'est exact.
+     *
+     * Une erreur est REÇUE, pas saisie : son titre, son origine et son niveau
+     * viennent de l'application supervisée et ne s'éditent pas. Seul le statut
+     * de traitement relève d'une décision humaine, donc d'un journal et d'un
+     * arbitrage.
+     */
+    private const FIELD_LABELS = ['status' => 'le statut'];
+
     private ErrorRepository $errors;
+    private Journal $journal;
 
     public function __construct()
     {
-        $this->errors = new ErrorRepository();
+        $this->errors  = new ErrorRepository();
+        $this->journal = new Journal('supervision', self::FIELD_LABELS);
     }
 
     /**
@@ -95,7 +108,7 @@ final class ErrorController
 
         $validator->check();
 
-        Response::created($this->errors->record($request->organizationId(), [
+        $groupe = $this->errors->record($request->organizationId(), [
             'fingerprint' => $fingerprint,
             'title'       => $title,
             'culprit'     => $culprit,
@@ -103,7 +116,31 @@ final class ErrorController
             'message'     => $message,
             'stack'       => $stack,
             'context'     => $context,
-        ]));
+        ]);
+
+        // ┌───────────────────────────────────────────────────────────────────┐
+        // │  SEULE LA PREMIÈRE OCCURRENCE FAIT UN ÉVÉNEMENT                   │
+        // │                                                                   │
+        // │  Une erreur en production se répète — des centaines de fois par   │
+        // │  minute pour les plus bruyantes. Consigner chaque occurrence      │
+        // │  noierait le fil de toute l'équipe sous une seule panne, et       │
+        // │  rendrait le flux temps réel inutilisable pour tout le reste.     │
+        // │                                                                   │
+        // │  Le compteur d'occurrences, lui, monte : l'information n'est pas  │
+        // │  perdue, elle est simplement à sa place.                          │
+        // └───────────────────────────────────────────────────────────────────┘
+        if ((int) $groupe['occurrences'] === 1) {
+            $this->journal->record(
+                $request,
+                'created',
+                (string) $groupe['id'],
+                null,
+                (string) $groupe['title'],
+                version: (int) $groupe['version'],
+            );
+        }
+
+        Response::created($groupe);
     }
 
     /**
@@ -114,11 +151,13 @@ final class ErrorController
      */
     public function update(Request $request): void
     {
-        $this->findOrFail($request);
+        $existing = $this->findOrFail($request);
 
         $validator = new Validator($request->all());
         $status = $validator->enum('status', self::STATUSES);
         $validator->check();
+
+        $this->journal->assertNoConflict($request, $existing, 'Cette erreur');
 
         $updated = $this->errors->updateStatus(
             (string) $request->param('id'),
@@ -130,6 +169,16 @@ final class ErrorController
             throw HttpException::notFound('Erreur introuvable.');
         }
 
+        $this->journal->record(
+            $request,
+            'updated',
+            (string) $updated['id'],
+            null,
+            (string) $updated['title'],
+            $this->journal->diff($existing, $updated),
+            (int) $updated['version'],
+        );
+
         Response::json($updated);
     }
 
@@ -138,9 +187,20 @@ final class ErrorController
      */
     public function destroy(Request $request): void
     {
-        if (!$this->errors->softDelete($this->validateId($request), $request->organizationId())) {
+        // Relu AVANT la suppression : après, le titre n'est plus lisible.
+        $groupe = $this->findOrFail($request);
+
+        if (!$this->errors->softDelete((string) $groupe['id'], $request->organizationId())) {
             throw HttpException::notFound('Erreur introuvable.');
         }
+
+        $this->journal->record(
+            $request,
+            'deleted',
+            (string) $groupe['id'],
+            null,
+            (string) $groupe['title'],
+        );
 
         Response::noContent();
     }
@@ -156,7 +216,19 @@ final class ErrorController
             throw HttpException::notFound('Erreur introuvable.');
         }
 
-        Response::json($this->errors->find($id, $request->organizationId()));
+        /** @var array<string, mixed> $groupe */
+        $groupe = $this->errors->find($id, $request->organizationId());
+
+        $this->journal->record(
+            $request,
+            'restored',
+            (string) $groupe['id'],
+            null,
+            (string) $groupe['title'],
+            version: (int) $groupe['version'],
+        );
+
+        Response::json($groupe);
     }
 
     /**

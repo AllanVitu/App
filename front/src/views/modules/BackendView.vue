@@ -21,6 +21,7 @@ import ModuleHeader from '@/components/modules/ModuleHeader.vue'
 import TableEndpoints from '@/components/modules/TableEndpoints.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import PresenceMark from '@/components/ui/PresenceMark.vue'
 import SearchField from '@/components/ui/SearchField.vue'
 import { backendApi } from '@/services/api'
 import { play } from '@/services/sound'
@@ -28,6 +29,7 @@ import { useWriteQueue } from '@/composables/useWriteQueue'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
+import { useLiveRows } from '@/composables/useLiveRows'
 import { useUiStore } from '@/stores/ui'
 import { modulePath } from '@/utils/modules'
 import { formatRelative } from '@/utils/format'
@@ -295,6 +297,22 @@ async function copyToken() {
  */
 useRevalidate(() => load({ silent: true }))
 
+/**
+ * Le flux : ce que les autres font, pendant qu'on regarde.
+ *
+ * La mécanique est commune aux cinq modules (cf. useLiveRows) ; ce qui est
+ * propre à celui-ci tient en une ligne — la table dépliée est épargnée, parce
+ * qu'on y édite des colonnes une par une.
+ */
+const { watchers } = useLiveRows({
+  module: 'backend',
+  screen: 'backend',
+  rows: tables,
+  subject: () => openId.value,
+  protege: () => openId.value,
+  recharger: () => load({ silent: true }),
+})
+
 onMounted(load)
 </script>
 
@@ -420,6 +438,10 @@ onMounted(load)
               >
                 {{ table.rls_enabled ? 'RLS actif' : 'sans RLS' }}
               </span>
+
+              <!-- Quelqu'un édite les colonnes de cette table en ce moment :
+                   on l'apprend AVANT de la déplier, pas après avoir écrit. -->
+              <PresenceMark :watchers="watchers[table.id]" class="shrink-0" />
 
               <AppIcon
                 name="chevron-down"

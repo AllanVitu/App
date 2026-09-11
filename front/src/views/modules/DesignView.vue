@@ -38,6 +38,7 @@ import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useLoadMore } from '@/composables/useLoadMore'
 import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
+import { useLiveRows } from '@/composables/useLiveRows'
 import { useUiStore } from '@/stores/ui'
 import { formatRelative } from '@/utils/format'
 
@@ -367,6 +368,22 @@ async function removeFile(file) {
  */
 useRevalidate(() => load({ silent: true }))
 
+/**
+ * Le flux : ce que les autres font, pendant qu'on regarde.
+ *
+ * La mécanique est commune aux cinq modules (cf. useLiveRows) ; ce qui est
+ * propre à celui-ci tient en deux lignes — le sujet ouvert, qui se signale
+ * aux autres et que le flux n'écrase pas.
+ */
+const { watchers } = useLiveRows({
+  module: 'design',
+  screen: 'design',
+  rows: files,
+  subject: () => openId.value,
+  protege: () => openId.value,
+  recharger: () => load({ silent: true }),
+})
+
 onMounted(load)
 </script>
 
@@ -505,7 +522,7 @@ onMounted(load)
           @move="reclassify"
         >
           <template #card="{ item }">
-            <DesignCard :file="item" />
+            <DesignCard :file="item" :watchers="watchers[item.id]" />
           </template>
         </BoardColumns>
       </div>

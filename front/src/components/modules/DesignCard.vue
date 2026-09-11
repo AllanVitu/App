@@ -13,10 +13,13 @@
  * de sa colonne — mais un type de fichier ne se lit pas dans l'urgence, et le
  * nom de la colonne est annoncé juste avant.
  */
+import PresenceMark from '@/components/ui/PresenceMark.vue'
 import { formatRelative } from '@/utils/format'
 
 defineProps({
   file: { type: Object, required: true },
+  /** Qui a ce fichier ouvert en ce moment (cf. ui/PresenceMark). */
+  watchers: { type: Array, default: () => [] },
 })
 </script>
 
@@ -42,6 +45,8 @@ defineProps({
         <span aria-hidden="true">·</span>
         <span>{{ formatRelative(file.updated_at) }}</span>
       </p>
+
+      <PresenceMark :watchers="watchers" />
     </div>
   </div>
 </template>

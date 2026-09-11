@@ -285,3 +285,20 @@ export const settingsApi = {
   show: () => http.get('/settings').then(unwrap),
   update: (payload) => http.put('/settings', payload).then(unwrap),
 }
+
+// --- Historique -------------------------------------------------------------
+
+export const activityApi = {
+  /**
+   * Renvoie { events, next, actors }.
+   *
+   * « next » est le curseur de la page suivante, ou null quand il n'y en a
+   * pas : le client n'a rien à calculer, ni à deviner quand s'arrêter.
+   */
+  list: (params = {}, signal) =>
+    http.get('/activity', { params, signal }).then((response) => ({
+      events: response.data.data,
+      next: response.data.meta?.next ?? null,
+      actors: response.data.meta?.actors ?? [],
+    })),
+}

@@ -9,6 +9,7 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Core\Validator;
 use App\Models\DeploymentRepository;
+use App\Services\Journal;
 
 /**
  * Module « Déploiement ».
@@ -23,11 +24,43 @@ final class DeploymentController
     private const ENVIRONMENTS = ['preview', 'production'];
     private const STATUSES     = ['queued', 'building', 'ready', 'error', 'canceled'];
 
+    /**
+     * Les champs suivis, et leur nom en français.
+     *
+     * Cette liste sert DEUX fois : elle borne ce que le journal consigne, et
+     * elle nomme le champ dans le message de conflit. Une seule liste, donc
+     * pas de champ qu'on arbitrerait sans savoir l'appeler.
+     */
+    private const FIELD_LABELS = [
+        'environment'    => 'l\'environnement',
+        'branch'         => 'la branche',
+        'commit_sha'     => 'l\'empreinte du commit',
+        'commit_message' => 'le message du commit',
+        'status'         => 'le statut',
+        'url'            => 'l\'adresse',
+        'log'            => 'le journal',
+    ];
+
     private DeploymentRepository $deployments;
+    private Journal $journal;
 
     public function __construct()
     {
         $this->deployments = new DeploymentRepository();
+        $this->journal     = new Journal('deploiement', self::FIELD_LABELS);
+    }
+
+    /**
+     * La référence courte d'un déploiement, telle qu'elle apparaît à l'écran.
+     *
+     * « branche@empreinte » plutôt qu'un identifiant : c'est ce qu'on cherche
+     * du regard dans un fil d'activité, et ce qu'on cite à l'oral.
+     *
+     * @param array<string, mixed> $deployment
+     */
+    private static function ref(array $deployment): string
+    {
+        return $deployment['branch'] . '@' . substr((string) $deployment['commit_sha'], 0, 7);
     }
 
     /**
@@ -64,9 +97,22 @@ final class DeploymentController
      */
     public function store(Request $request): void
     {
-        Response::created(
-            $this->deployments->create($request->organizationId(), $request->actorId(), $this->validatePayload($request)),
+        $deployment = $this->deployments->create(
+            $request->organizationId(),
+            $request->actorId(),
+            $this->validatePayload($request),
         );
+
+        $this->journal->record(
+            $request,
+            'created',
+            (string) $deployment['id'],
+            self::ref($deployment),
+            $deployment['commit_message'] !== null ? (string) $deployment['commit_message'] : null,
+            version: (int) $deployment['version'],
+        );
+
+        Response::created($deployment);
     }
 
     /**
@@ -83,16 +129,29 @@ final class DeploymentController
     public function update(Request $request): void
     {
         $existing = $this->findOrFail($request);
+        $payload  = $this->validatePayload($request, $existing);
+
+        $this->journal->assertNoConflict($request, $existing, 'Ce déploiement');
 
         $updated = $this->deployments->update(
             (string) $request->param('id'),
             $request->organizationId(),
-            $this->validatePayload($request, $existing),
+            $payload,
         );
 
         if ($updated === null) {
             throw HttpException::notFound('Déploiement introuvable.');
         }
+
+        $this->journal->record(
+            $request,
+            'updated',
+            (string) $updated['id'],
+            self::ref($updated),
+            $updated['commit_message'] !== null ? (string) $updated['commit_message'] : null,
+            $this->journal->diff($existing, $updated),
+            (int) $updated['version'],
+        );
 
         Response::json($updated);
     }
@@ -102,9 +161,21 @@ final class DeploymentController
      */
     public function destroy(Request $request): void
     {
-        if (!$this->deployments->softDelete($this->validateId($request), $request->organizationId())) {
+        // Relu AVANT la suppression : après, la référence et le message ne
+        // sont plus lisibles, et le fil afficherait une ligne muette.
+        $deployment = $this->findOrFail($request);
+
+        if (!$this->deployments->softDelete((string) $deployment['id'], $request->organizationId())) {
             throw HttpException::notFound('Déploiement introuvable.');
         }
+
+        $this->journal->record(
+            $request,
+            'deleted',
+            (string) $deployment['id'],
+            self::ref($deployment),
+            $deployment['commit_message'] !== null ? (string) $deployment['commit_message'] : null,
+        );
 
         Response::noContent();
     }
@@ -120,7 +191,19 @@ final class DeploymentController
             throw HttpException::notFound('Déploiement introuvable.');
         }
 
-        Response::json($this->deployments->find($id, $request->organizationId()));
+        /** @var array<string, mixed> $deployment */
+        $deployment = $this->deployments->find($id, $request->organizationId());
+
+        $this->journal->record(
+            $request,
+            'restored',
+            (string) $deployment['id'],
+            self::ref($deployment),
+            $deployment['commit_message'] !== null ? (string) $deployment['commit_message'] : null,
+            version: (int) $deployment['version'],
+        );
+
+        Response::json($deployment);
     }
 
     /**

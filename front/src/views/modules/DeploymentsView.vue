@@ -31,6 +31,7 @@ import { useLoadMore } from '@/composables/useLoadMore'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
+import { useLiveRows } from '@/composables/useLiveRows'
 import { useUiStore } from '@/stores/ui'
 import { formatRelative } from '@/utils/format'
 
@@ -259,6 +260,22 @@ async function removeDeployment(row) {
  */
 useRevalidate(() => load({ silent: true }))
 
+/**
+ * Le flux : ce que les autres font, pendant qu'on regarde.
+ *
+ * La mécanique est commune aux cinq modules (cf. useLiveRows) ; ce qui est
+ * propre à celui-ci tient en deux lignes — le sujet ouvert, qui se signale
+ * aux autres et que le flux n'écrase pas.
+ */
+const { watchers } = useLiveRows({
+  module: 'deploiement',
+  screen: 'deploiement',
+  rows: deployments,
+  subject: () => openId.value,
+  protege: () => openId.value,
+  recharger: () => load({ silent: true }),
+})
+
 onMounted(load)
 </script>
 
@@ -411,7 +428,11 @@ onMounted(load)
           @select="openDetail"
         >
           <template #card="{ item }">
-            <DeploymentCard :deployment="item" :duration="formatDuration(item.duration_ms)" />
+            <DeploymentCard
+              :deployment="item"
+              :duration="formatDuration(item.duration_ms)"
+              :watchers="watchers[item.id]"
+            />
           </template>
         </BoardColumns>
       </div>

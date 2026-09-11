@@ -28,6 +28,7 @@ import { computed } from 'vue'
 
 import TicketPriorityIcon from '@/components/tickets/TicketPriorityIcon.vue'
 import TicketStatusIcon from '@/components/tickets/TicketStatusIcon.vue'
+import PresenceMark from '@/components/ui/PresenceMark.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { formatDue, isClosed, isOverdue } from '@/utils/tickets'
 
@@ -75,21 +76,10 @@ const due = computed(() => formatDue(props.ticket))
       <UserAvatar v-if="ticket.assignee_name" :name="ticket.assignee_name" size="xs" />
     </div>
 
-    <!-- QUELQU'UN EST DESSUS, EN CE MOMENT.
-         Placé en tête du corps de la carte, pas dans la ligne de repères du
-         haut : ce n'est pas un attribut du ticket mais un fait passager, et
-         le mélanger aux autres ferait croire à une propriété.
-
-         En ocre — la couleur d'un avertissement, pas d'une erreur : il n'y a
-         rien de cassé, seulement une raison d'attendre ou de prévenir. -->
-    <p
-      v-if="watchers.length"
-      class="flex items-center gap-1 text-[0.66rem] text-ochre"
-      aria-live="polite"
-    >
-      <span class="size-1.5 shrink-0 rounded-pill bg-ochre" aria-hidden="true" />
-      {{ watchers.join(', ') }} {{ watchers.length > 1 ? 'y sont' : 'y est' }}
-    </p>
+    <!-- Placé en tête du corps de la carte, pas dans la ligne de repères du
+         haut : ce n'est pas un attribut du ticket mais un fait passager, et le
+         mélanger aux autres ferait croire à une propriété. -->
+    <PresenceMark :watchers="watchers" />
 
     <!-- Deux lignes au plus : au-delà, une carte cesse d'être balayable et
          les colonnes perdent leur régularité. -->

@@ -26,7 +26,7 @@ final class DeploymentRepository
      * « created_by » y reste sans qualificatif pour valoir dans les deux cas.
      */
     private const COLUMNS = 'id, environment, branch, commit_sha, commit_message, status,
-                             url, log, finished_at, duration_ms, created_at, updated_at, created_by,
+                             url, log, finished_at, duration_ms, created_at, updated_at, version, created_by,
                              (SELECT u.full_name FROM users u WHERE u.id = created_by) AS author_name';
 
     /**
@@ -336,6 +336,10 @@ final class DeploymentRepository
             'duration_ms'    => $row['duration_ms'] !== null ? (int) $row['duration_ms'] : null,
             'created_at'     => Database::toIso($row['created_at']),
             'updated_at'     => Database::toIso($row['updated_at']),
+            // Jeton de concurrence, posé par un déclencheur et jamais par le
+            // client : il ne dit pas QUAND la ligne a changé, mais COMBIEN DE
+            // FOIS — la seule question qu'une écriture concurrente pose.
+            'version'        => (int) $row['version'],
             // « Qui a lancé ça ? » — la question qu'on pose devant un
             // déploiement en échec qu'on n'a pas déclenché soi-même.
             'created_by'     => $row['created_by'] !== null ? (string) $row['created_by'] : null,

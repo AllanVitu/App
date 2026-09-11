@@ -22,7 +22,7 @@ final class ErrorRepository
     private const SORTABLE = ['last_seen_at', 'first_seen_at', 'occurrences', 'title'];
 
     private const COLUMNS = 'id, fingerprint, title, culprit, level, status, occurrences,
-                             first_seen_at, last_seen_at, created_at, updated_at';
+                             first_seen_at, last_seen_at, created_at, updated_at, version';
 
     /**
      * @param array{status?: string|null, level?: string|null, search?: string|null,
@@ -388,6 +388,10 @@ final class ErrorRepository
             'last_seen_at'  => Database::toIso($row['last_seen_at']),
             'created_at'    => Database::toIso($row['created_at']),
             'updated_at'    => Database::toIso($row['updated_at']),
+            // Jeton de concurrence, posé par un déclencheur et jamais par le
+            // client : il ne dit pas QUAND la ligne a changé, mais COMBIEN DE
+            // FOIS — la seule question qu'une écriture concurrente pose.
+            'version'       => (int) $row['version'],
         ];
     }
 }

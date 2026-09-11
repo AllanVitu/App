@@ -13,10 +13,13 @@
  */
 import { computed } from 'vue'
 
+import PresenceMark from '@/components/ui/PresenceMark.vue'
 import { formatRelative } from '@/utils/format'
 
 const props = defineProps({
   group: { type: Object, required: true },
+  /** Qui a cette erreur ouverte en ce moment (cf. ui/PresenceMark). */
+  watchers: { type: Array, default: () => [] },
 })
 
 const LEVELS = {
@@ -53,5 +56,7 @@ const level = computed(() => LEVELS[props.group.level] ?? LEVELS.error)
     </p>
 
     <p class="text-[0.68rem] text-ink-3">{{ formatRelative(group.last_seen_at) }}</p>
+
+    <PresenceMark :watchers="watchers" />
   </div>
 </template>

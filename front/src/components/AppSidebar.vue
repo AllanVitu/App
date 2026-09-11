@@ -161,6 +161,16 @@ const repere = (actif) => (actif ? 'bg-ink' : 'bg-transparent')
           <AppIcon name="users" :size="15" />
           équipe
         </RouterLink>
+
+        <RouterLink
+          :to="{ name: 'history' }"
+          :class="[linkBase, $route.name === 'history' ? linkActive : linkIdle]"
+          @click="ui.toggleSidebar(false)"
+        >
+          <span class="ligne h-5" :class="repere($route.name === 'history')" aria-hidden="true" />
+          <AppIcon name="clock" :size="15" />
+          historique
+        </RouterLink>
       </div>
 
       <div>

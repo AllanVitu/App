@@ -125,6 +125,11 @@ $router->post('/api/invitations/{token}/accept', [OrganizationController::class,
 $router->get('/api/stream', [StreamController::class, 'index'], $auth);
 $router->delete('/api/stream', [StreamController::class, 'leave'], $auth);
 
+// L'historique complet — la même table, lue en sens inverse et paginée par
+// clé. Ouverte à TOUS les membres : un journal réservé aux administrateurs
+// servirait à surveiller plutôt qu'à se coordonner.
+$router->get('/api/activity', [StreamController::class, 'history'], $auth);
+
 // --- Tableau de bord -------------------------------------------------------
 $router->get('/api/dashboard', [DashboardController::class, 'index'], $auth);
 

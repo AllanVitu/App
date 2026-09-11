@@ -97,4 +97,35 @@ final class StreamController
 
         Response::noContent();
     }
+
+    /**
+     * GET /api/activity?module=tickets&acteur=<uuid>&avant=<curseur>
+     *
+     * L'historique complet, pour l'écran dédié. Le flux lit la même table en
+     * sens inverse : ce que l'un a montré passer, l'autre le retrouve.
+     *
+     * Aucune restriction de rôle. Un journal que seuls les administrateurs
+     * pourraient lire servirait à surveiller plutôt qu'à se coordonner — et
+     * n'apprendrait rien à personne sur ce que l'équipe vient de faire.
+     */
+    public function history(Request $request): void
+    {
+        $validator = new Validator($request->query);
+        $module    = $validator->string('module', required: false, max: 32, label: 'module');
+        $actor     = $validator->uuid('acteur', required: false);
+        $validator->check();
+
+        $journal = new ActivityRepository();
+
+        $page = $journal->history(
+            $request->organizationId(),
+            ['module' => $module, 'actor' => $actor],
+            $request->queryInt('avant', 0, 0, PHP_INT_MAX) ?: null,
+        );
+
+        Response::json($page['events'], 200, [
+            'next'   => $page['next'],
+            'actors' => $journal->actors($request->organizationId()),
+        ]);
+    }
 }

@@ -418,6 +418,7 @@ final class CollaborationTest extends ApiTestCase
     // =======================================================================
 
     /**
+     * @param  array<string, mixed> $session
      * @return array<string, mixed>
      */
     private function creer(array $session, string $titre): array
@@ -435,6 +436,7 @@ final class CollaborationTest extends ApiTestCase
     }
 
     /**
+     * @param  array<string, mixed> $session
      * @param  array<string, mixed> $payload
      * @return array<string, mixed>
      */
@@ -454,6 +456,7 @@ final class CollaborationTest extends ApiTestCase
      * et non par la valeur zéro — qui est un curseur parfaitement valide dans
      * un espace neuf.
      *
+     * @param  array<string, mixed>  $session
      * @param  array<string, string> $query
      * @return array{status: int, body: array<string, mixed>}
      */

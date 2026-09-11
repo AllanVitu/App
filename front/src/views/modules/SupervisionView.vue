@@ -33,6 +33,7 @@ import { useWriteQueue } from '@/composables/useWriteQueue'
 import { useLoadMore } from '@/composables/useLoadMore'
 import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
+import { useLiveRows } from '@/composables/useLiveRows'
 import { useUiStore } from '@/stores/ui'
 import { formatRelative } from '@/utils/format'
 
@@ -283,6 +284,22 @@ async function removeGroup(group) {
  */
 useRevalidate(() => load({ silent: true }))
 
+/**
+ * Le flux : ce que les autres font, pendant qu'on regarde.
+ *
+ * La mécanique est commune aux cinq modules (cf. useLiveRows) ; ce qui est
+ * propre à celui-ci tient en deux lignes — le sujet ouvert, qui se signale
+ * aux autres et que le flux n'écrase pas.
+ */
+const { watchers } = useLiveRows({
+  module: 'supervision',
+  screen: 'supervision',
+  rows: groups,
+  subject: () => openId.value,
+  protege: () => openId.value,
+  recharger: () => load({ silent: true }),
+})
+
 onMounted(load)
 </script>
 
@@ -374,7 +391,7 @@ onMounted(load)
           @move="setStatus"
         >
           <template #card="{ item }">
-            <ErrorCard :group="item" />
+            <ErrorCard :group="item" :watchers="watchers[item.id]" />
           </template>
         </BoardColumns>
       </div>

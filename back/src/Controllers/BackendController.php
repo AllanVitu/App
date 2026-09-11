@@ -9,6 +9,7 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Core\Validator;
 use App\Models\BackendRepository;
+use App\Services\Journal;
 use App\Services\SchemaBuilder;
 
 /**
@@ -37,10 +38,29 @@ final class BackendController
      */
     private SchemaBuilder $schema;
 
+    private Journal $journal;
+
+    /**
+     * Les champs suivis, et leur nom en français.
+     *
+     * « columns » en fait partie, et c'est le plus important des quatre :
+     * c'est la description d'un schéma, ce qu'on retouche longuement, et le
+     * seul endroit de ce module où deux personnes ont vraiment de quoi
+     * s'écraser mutuellement.
+     */
+    private const FIELD_LABELS = [
+        'name'         => 'le nom',
+        'description'  => 'la description',
+        'columns'      => 'les colonnes',
+        'rls_enabled'  => 'la sécurité au niveau ligne',
+        'row_estimate' => 'le volume estimé',
+    ];
+
     public function __construct()
     {
         $this->backend = new BackendRepository();
         $this->schema  = new SchemaBuilder();
+        $this->journal = new Journal('backend', self::FIELD_LABELS);
     }
 
     // ---------------------------------------------------------------------
@@ -87,6 +107,17 @@ final class BackendController
             throw $e;
         }
 
+        // Consigné APRÈS la synchronisation physique : une description retirée
+        // parce que le DDL a échoué ne doit laisser aucune trace dans le fil.
+        $this->journal->record(
+            $request,
+            'created',
+            (string) $table['id'],
+            null,
+            (string) $table['name'],
+            version: (int) $table['version'],
+        );
+
         Response::created($table);
     }
 
@@ -104,12 +135,15 @@ final class BackendController
     public function update(Request $request): void
     {
         $existing = $this->findOrFail($request);
+        $payload  = $this->validateTable($request, $existing);
+
+        $this->journal->assertNoConflict($request, $existing, 'Cette table');
 
         $orgId   = $request->organizationId();
         $updated = $this->backend->updateTable(
             (string) $request->param('id'),
             $orgId,
-            $this->validateTable($request, $existing),
+            $payload,
         );
 
         if ($updated === null) {
@@ -120,6 +154,16 @@ final class BackendController
         // COLUMN s'adresse à la table par son nom, donc au nouveau.
         $this->schema->rename($orgId, $existing['name'], $updated['name']);
         $this->schema->sync($orgId, $updated['name'], $updated['columns'], $existing['columns']);
+
+        $this->journal->record(
+            $request,
+            'updated',
+            (string) $updated['id'],
+            null,
+            (string) $updated['name'],
+            $this->journal->diff($existing, $updated),
+            (int) $updated['version'],
+        );
 
         Response::json($updated);
     }
@@ -141,6 +185,14 @@ final class BackendController
         // consommerait de l'espace en laissant croire qu'on peut revenir en
         // arrière. L'interface le dit avant d'agir.
         $this->schema->drop($orgId, $existing['name']);
+
+        $this->journal->record(
+            $request,
+            'deleted',
+            (string) $existing['id'],
+            null,
+            (string) $existing['name'],
+        );
 
         Response::noContent();
     }
@@ -167,6 +219,17 @@ final class BackendController
 
         $created = $this->backend->createKey($request->organizationId(), $request->actorId(), (string) $label, (string) $scope);
 
+        // Une clé émise et une clé révoquée sont des faits de SÉCURITÉ : ce
+        // sont précisément ceux qu'on cherche dans un fil, longtemps après.
+        // Le jeton, lui, n'y figure évidemment pas — seulement son nom.
+        $this->journal->record(
+            $request,
+            'key.created',
+            (string) $created['key']['id'],
+            (string) $created['key']['token_prefix'],
+            (string) $created['key']['label'],
+        );
+
         Response::created([
             'key'   => $created['key'],
             'token' => $created['token'],
@@ -179,11 +242,15 @@ final class BackendController
      */
     public function revokeKey(Request $request): void
     {
-        if (!$this->backend->revokeKey($this->validateId($request), $request->organizationId())) {
+        $id = $this->validateId($request);
+
+        if (!$this->backend->revokeKey($id, $request->organizationId())) {
             // 404 aussi bien pour une clé inexistante que pour une clé déjà
             // révoquée : dans les deux cas, il n'y a rien à révoquer.
             throw HttpException::notFound('Clé introuvable ou déjà révoquée.');
         }
+
+        $this->journal->record($request, 'key.revoked', $id);
 
         Response::noContent();
     }
