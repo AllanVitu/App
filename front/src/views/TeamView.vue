@@ -43,11 +43,28 @@ const ROLES = {
 
 const RANGS = { member: 1, admin: 2, owner: 3 }
 
-const canManage = computed(() => RANGS[role.value] >= RANGS.admin)
+/**
+ * L'espace de l'instance ne se gère pas d'ici.
+ *
+ * On y entre en DEVENANT administrateur de l'instance : l'API y refuse
+ * invitations, exclusions, renommage et départ (cf.
+ * OrganizationController::assertTeamSpace). Montrer ces commandes pour les
+ * voir échouer n'apprendrait rien à personne.
+ */
+const isInstance = computed(() => auth.organization?.kind === 'instance')
+
+const canManage = computed(() => !isInstance.value && RANGS[role.value] >= RANGS.admin)
 const isOwner = computed(() => role.value === 'owner')
 
-/** L'espace n'est quittable que s'il en reste un autre derrière. */
-const canLeave = computed(() => auth.organizations.length > 1)
+/**
+ * L'espace n'est quittable que s'il reste une autre ÉQUIPE derrière.
+ *
+ * L'espace de l'instance ne compte pas : il disparaît avec le rôle
+ * d'administrateur, et le compte se retrouverait alors sans aucun espace.
+ */
+const canLeave = computed(
+  () => auth.organizations.filter((espace) => espace.kind !== 'instance').length > 1,
+)
 
 // --- Invitation --------------------------------------------------------------
 
@@ -182,7 +199,12 @@ onMounted(async () => {
   <div class="mx-auto max-w-4xl space-y-6">
     <header>
       <h2 class="text-lg font-semibold">{{ auth.organization?.name }}</h2>
-      <p class="mt-1 text-sm text-ink-2">
+      <p v-if="isInstance" class="mt-1 text-sm text-ink-2">
+        Les pannes de l’application elle-même — API, navigateur, tâches de fond. On y entre en
+        devenant administrateur de l’instance, et on en sort en cessant de l’être : personne n’y est
+        invité.
+      </p>
+      <p v-else class="mt-1 text-sm text-ink-2">
         Tout ce que contient cet espace — tickets, tables, déploiements, erreurs, maquettes — est
         visible de chacun de ses membres.
       </p>
@@ -321,8 +343,9 @@ onMounted(async () => {
         </div>
       </section>
 
-      <!-- L'espace lui-même -->
-      <section class="card">
+      <!-- L'espace lui-même — sans objet pour l'instance, qui ne se renomme ni
+           ne se quitte. -->
+      <section v-if="!isInstance" class="card">
         <div class="border-b border-line px-5 py-3">
           <h3 class="text-base font-semibold">Cet espace</h3>
         </div>

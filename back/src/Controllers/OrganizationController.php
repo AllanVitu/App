@@ -89,6 +89,7 @@ final class OrganizationController
     public function update(Request $request): void
     {
         $this->assertCurrent($request);
+        $this->assertTeamSpace($request);
 
         $validator = new Validator($request->all());
         $name      = $validator->string('name', min: 2, max: 120, label: 'nom de l\'espace');
@@ -111,8 +112,9 @@ final class OrganizationController
     public function destroy(Request $request): void
     {
         $this->assertCurrent($request);
+        $this->assertTeamSpace($request);
 
-        if (count($this->organizations->forUser($request->userId())) < 2) {
+        if ($this->teamSpaceCount($request->userId()) < 2) {
             throw HttpException::conflict(
                 'Vous ne pouvez pas supprimer votre dernier espace de travail. '
                 . 'Créez-en un autre d\'abord.',
@@ -174,6 +176,8 @@ final class OrganizationController
      */
     public function updateMember(Request $request): void
     {
+        $this->assertTeamSpace($request);
+
         $targetId = $request->param('id') ?? '';
 
         $validator = new Validator($request->all());
@@ -214,6 +218,8 @@ final class OrganizationController
      */
     public function removeMember(Request $request): void
     {
+        $this->assertTeamSpace($request);
+
         $targetId = $request->param('id') ?? '';
         $current  = $this->requireMember($request, $targetId);
 
@@ -244,7 +250,9 @@ final class OrganizationController
      */
     public function leave(Request $request): void
     {
-        if (count($this->organizations->forUser($request->userId())) < 2) {
+        $this->assertTeamSpace($request);
+
+        if ($this->teamSpaceCount($request->userId()) < 2) {
             throw HttpException::conflict(
                 'Vous ne pouvez pas quitter votre dernier espace de travail.',
             );
@@ -273,6 +281,8 @@ final class OrganizationController
      */
     public function invite(Request $request): void
     {
+        $this->assertTeamSpace($request);
+
         $validator = new Validator($request->all());
         $email     = $validator->email();
         $role      = $validator->enum('role', ['admin', 'member'], required: false, default: 'member') ?? 'member';
@@ -317,6 +327,8 @@ final class OrganizationController
      */
     public function revokeInvitation(Request $request): void
     {
+        $this->assertTeamSpace($request);
+
         $id = $request->param('id') ?? '';
 
         if (!$this->organizations->revokeInvitation($request->organizationId(), $id)) {
@@ -370,6 +382,41 @@ final class OrganizationController
     }
 
     // -----------------------------------------------------------------------
+
+    /**
+     * L'espace de l'instance ne se gère pas par les routes d'équipe.
+     *
+     * On y entre en DEVENANT administrateur de l'instance, et on en sort en
+     * cessant de l'être : l'appartenance y est la conséquence d'un rôle, tenue
+     * par un déclencheur. L'inviter, l'exclure, le quitter ou le supprimer
+     * ferait diverger les deux — et une invitation ouvrirait les pannes de
+     * toute l'instance à qui l'on voudrait.
+     */
+    private function assertTeamSpace(Request $request): void
+    {
+        if ($request->organization()['kind'] === 'instance') {
+            throw HttpException::conflict(
+                'L\'espace de l\'instance suit le rôle d\'administrateur de l\'instance : '
+                . 'on n\'y invite, n\'exclut, ne renomme ni ne le quitte par ces commandes.',
+            );
+        }
+    }
+
+    /**
+     * Espaces d'ÉQUIPE du compte.
+     *
+     * L'espace de l'instance ne compte pas comme un refuge : un administrateur
+     * qui supprimerait son dernier espace d'équipe en s'y croyant à l'abri se
+     * retrouverait, au jour de sa rétrogradation, sans aucun espace — donc
+     * sans accès (cf. AuthMiddleware).
+     */
+    private function teamSpaceCount(string $userId): int
+    {
+        return count(array_filter(
+            $this->organizations->forUser($userId),
+            static fn (array $space): bool => $space['kind'] === 'team',
+        ));
+    }
 
     private function canManage(Request $request): bool
     {

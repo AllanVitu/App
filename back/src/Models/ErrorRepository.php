@@ -149,6 +149,11 @@ final class ErrorRepository
      * apparaissent ensemble ou pas du tout. Un groupe créé sans occurrence
      * afficherait « 0 occurrence » dans la liste, ce qui n'a aucun sens.
      *
+     * « reopened » dit si cette occurrence a fait REVENIR le groupe : il était
+     * résolu, ou supprimé. C'est un fait qui mérite le fil, au même titre que
+     * la première occurrence — une panne qu'on croyait réglée et qui frappe
+     * de nouveau est exactement ce que l'équipe doit apprendre.
+     *
      * @param  array<string, mixed> $attributes
      * @return array<string, mixed>
      */
@@ -159,14 +164,40 @@ final class ErrorRepository
             // regroupe. DO UPDATE plutôt que DO NOTHING, car il faut que
             // RETURNING renvoie une ligne dans les deux cas — avec DO NOTHING,
             // un conflit ne renvoie rien et il faudrait une seconde requête.
+            //
+            // ┌───────────────────────────────────────────────────────────────┐
+            // │  UNE ERREUR SUPPRIMÉE QUI REVENAIT RESTAIT INVISIBLE          │
+            // │                                                               │
+            // │  Le conflit réécrivait titre et niveau, jamais « deleted_at », │
+            // │  et la relecture écarte les groupes supprimés. L'occurrence   │
+            // │  était donc comptée dans un groupe qu'aucun écran ne montrait,│
+            // │  et l'ingestion répondait « data: null ». Une panne qui       │
+            // │  revient après qu'on l'a supprimée est pourtant celle qu'il   │
+            // │  faut voir en premier.                                        │
+            // └───────────────────────────────────────────────────────────────┘
+            //
+            // « avant » est lu dans le MÊME instantané que l'insertion : il voit
+            // le groupe tel qu'il était, statut et suppression compris. La
+            // réouverture du statut, elle, reste l'affaire du déclencheur
+            // d'occurrence (cf. bump_error_group).
             $group = Database::connection()->prepare(
-                'INSERT INTO error_groups (organization_id, fingerprint, title, culprit, level)
+                'WITH avant AS (
+                     SELECT status, deleted_at
+                       FROM error_groups
+                      WHERE organization_id = :organization_id AND fingerprint = :fingerprint
+                 )
+                 INSERT INTO error_groups (organization_id, fingerprint, title, culprit, level)
                  VALUES (:organization_id, :fingerprint, :title, :culprit, :level::error_level)
                  ON CONFLICT (organization_id, fingerprint) DO UPDATE
-                        SET title   = EXCLUDED.title,
-                            culprit = EXCLUDED.culprit,
-                            level   = EXCLUDED.level
-                 RETURNING id',
+                        SET title      = EXCLUDED.title,
+                            culprit    = EXCLUDED.culprit,
+                            level      = EXCLUDED.level,
+                            deleted_at = NULL
+                 RETURNING id,
+                           COALESCE(
+                               (SELECT status = \'resolved\' OR deleted_at IS NOT NULL FROM avant),
+                               FALSE
+                           ) AS reopened',
             );
 
             $group->execute([
@@ -177,7 +208,9 @@ final class ErrorRepository
                 'level'           => $attributes['level'],
             ]);
 
-            $groupId = (string) $group->fetchColumn();
+            /** @var array{id: string, reopened: mixed} $inserted */
+            $inserted = $group->fetch();
+            $groupId  = (string) $inserted['id'];
 
             $event = Database::connection()->prepare(
                 'INSERT INTO error_events (group_id, organization_id, message, stack, context)
@@ -198,8 +231,54 @@ final class ErrorRepository
             /** @var array<string, mixed> $created */
             $created = $this->find($groupId, $organizationId, 5);
 
-            return $created;
+            return $created + ['reopened' => Database::toBool($inserted['reopened'])];
         });
+    }
+
+    /**
+     * Occurrences DÉTAILLÉES d'une empreinte sur les dernières secondes.
+     *
+     * Sert à reconnaître une rafale (cf. SelfMonitor) : au-delà d'un seuil,
+     * l'occurrence est comptée sans être stockée.
+     */
+    public function recentEventCount(string $organizationId, string $fingerprint, int $seconds): int
+    {
+        $statement = Database::connection()->prepare(
+            'SELECT count(*)
+               FROM error_events e
+               JOIN error_groups g ON g.id = e.group_id
+              WHERE g.organization_id = :organization_id
+                AND g.fingerprint     = :fingerprint
+                AND e.organization_id = :organization_id
+                AND e.occurred_at     > NOW() - (:seconds || \' seconds\')::interval',
+        );
+
+        $statement->execute([
+            'organization_id' => $organizationId,
+            'fingerprint'     => $fingerprint,
+            'seconds'         => (string) $seconds,
+        ]);
+
+        return (int) $statement->fetchColumn();
+    }
+
+    /**
+     * Compte une occurrence SANS la détailler — le trop-plein d'une rafale.
+     *
+     * Même effet sur le groupe que le déclencheur d'insertion — compteur, date,
+     * réouverture — sans la ligne d'occurrence qui l'aurait déclenché. Aucune
+     * occurrence n'est perdue pour le compteur, seul son détail l'est.
+     */
+    public function countOccurrence(string $organizationId, string $fingerprint): void
+    {
+        Database::connection()->prepare(
+            'UPDATE error_groups
+                SET occurrences  = occurrences + 1,
+                    last_seen_at = NOW(),
+                    status       = CASE WHEN status = \'resolved\' THEN \'unresolved\' ELSE status END,
+                    deleted_at   = NULL
+              WHERE organization_id = :organization_id AND fingerprint = :fingerprint',
+        )->execute(['organization_id' => $organizationId, 'fingerprint' => $fingerprint]);
     }
 
     /**

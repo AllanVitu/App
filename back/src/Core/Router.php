@@ -12,7 +12,7 @@ namespace App\Core;
  */
 final class Router
 {
-    /** @var list<array{method: string, regex: string, handler: array{0: class-string, 1: string}, middleware: list<class-string>}> */
+    /** @var list<array{method: string, path: string, regex: string, handler: array{0: class-string, 1: string}, middleware: list<class-string>}> */
     private array $routes = [];
 
     /** @var list<class-string> Middlewares appliqués à toutes les routes */
@@ -79,6 +79,7 @@ final class Router
     {
         $this->routes[] = [
             'method'     => $method,
+            'path'       => '/' . trim($path, '/'),
             'regex'      => $this->compile($path),
             'handler'    => $handler,
             'middleware' => $middleware,
@@ -130,6 +131,11 @@ final class Router
             );
 
             $request->setRouteParams(array_map('urldecode', $params));
+
+            // Le MOTIF, en plus des paramètres : « /api/tickets/{id} » regroupe
+            // les pannes d'une route là où le chemin en ferait une par ticket
+            // (cf. SelfMonitor).
+            $request->setAttribute('route', $route['path']);
 
             foreach ([...$this->globalMiddleware, ...$route['middleware']] as $middlewareClass) {
                 (new $middlewareClass())->handle($request);

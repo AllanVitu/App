@@ -69,6 +69,21 @@ useQuerySync({ q: search, statut: statusFilter })
 const openId = ref(null)
 const detail = ref(null)
 const detailLoading = ref(false)
+
+/**
+ * Le contexte de la dernière occurrence, réduit à ce qui se lit.
+ *
+ * Pour les pannes de l'instance, c'est lui qui porte la RÉFÉRENCE remise à
+ * l'utilisateur : ce qui relie « j'ai eu une erreur vers 14 h » à cette
+ * ligne-ci. Un contexte ingéré étant un objet libre, seules ses valeurs
+ * simples sont montrées, douze au plus — un objet imbriqué rendu en texte ne
+ * se lit pas, et c'est la pile qui porte le détail.
+ */
+const contexte = computed(() =>
+  Object.entries(detail.value?.events?.[0]?.context ?? {})
+    .filter(([, valeur]) => ['string', 'number', 'boolean'].includes(typeof valeur))
+    .slice(0, 12),
+)
 const board = ref(null)
 // Le mode d’emploi de l’ingestion : ouvert à la demande, pas en permanence.
 const guideOpen = ref(false)
@@ -466,6 +481,18 @@ onMounted(load)
           <pre
             class="max-h-72 overflow-auto whitespace-pre-wrap rounded-field border border-line bg-raised p-3 font-mono text-[0.72rem] leading-relaxed text-ink-2"
             >{{ detail.events[0].stack ?? detail.events[0].message }}</pre>
+
+          <dl
+            v-if="contexte.length"
+            class="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[0.72rem]"
+          >
+            <!-- Un <div> par couple, permis dans un <dl>, et « contents » pour
+                 que la grille voie le terme et sa valeur comme deux cellules. -->
+            <div v-for="[cle, valeur] in contexte" :key="cle" class="contents">
+              <dt class="label-caps">{{ cle }}</dt>
+              <dd class="min-w-0 truncate font-mono text-ink-2">{{ valeur }}</dd>
+            </div>
+          </dl>
 
           <p v-if="detail.events.length > 1" class="mt-2 text-[0.7rem] text-ink-3">
             {{ detail.events.length - 1 }} autre{{

@@ -28,6 +28,7 @@ import FilterChip from '@/components/ui/FilterChip.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { activityApi } from '@/services/api'
 import { useQuerySync } from '@/composables/useQuerySync'
+import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { formatDateTime, formatRelative } from '@/utils/format'
 import { moduleLine, modulePath } from '@/utils/modules'
@@ -68,9 +69,26 @@ const ACTIONS = {
   deleted: 'a supprimé',
   restored: 'a restauré',
   versioned: 'a publié une version de',
+  // Une erreur résolue ou supprimée qui frappe de nouveau. Ce n'est pas une
+  // répétition de plus : c'est la seule qui annonce qu'une correction n'a pas
+  // tenu.
+  reopened: 'a signalé le retour de',
   'key.created': 'a émis la clé',
   'key.revoked': 'a révoqué une clé',
 }
+
+const auth = useAuthStore()
+
+/**
+ * L'auteur d'un fait qui n'en a pas.
+ *
+ * Dans un espace d'équipe, c'est une clé de service — une application
+ * supervisée qui signale. Dans l'espace de l'instance, c'est l'application
+ * elle-même qui range ses pannes : lui prêter une clé serait faux.
+ */
+const sansAuteur = computed(() =>
+  auth.organization?.kind === 'instance' ? 'L’application' : 'Une clé de service',
+)
 
 const filtres = computed(() => ({
   ...(moduleFilter.value ? { module: moduleFilter.value } : {}),
@@ -240,7 +258,7 @@ onMounted(charger)
             <!-- Sans nom : une clé de service, ou une occurrence reçue d'une
                  application supervisée. « Quelqu'un » serait plus honnête
                  qu'un nom emprunté, mais moins juste que l'origine réelle. -->
-            <span class="font-medium">{{ evenement.actor_name ?? 'Une clé de service' }}</span>
+            <span class="font-medium">{{ evenement.actor_name ?? sansAuteur }}</span>
             {{ ACTIONS[evenement.action] ?? evenement.action }}
 
             <component

@@ -31,6 +31,7 @@ abstract class ApiTestCase extends TestCase
         // requête. Sans ce vidage, chaque inscription de test laisserait une
         // tâche derrière elle.
         'jobs',
+        'rate_limits',
         'activity',
         'presence',
         'user_tokens',
@@ -53,6 +54,16 @@ abstract class ApiTestCase extends TestCase
         'organizations',
         'users',
     ];
+
+    /**
+     * Table de routage alternative. Null : celle de l'application.
+     *
+     * Un test qui doit provoquer une panne VRAIE — une exception que rien
+     * n'attrape — ajoute ses propres routes à celles de l'application plutôt
+     * que de simuler le noyau : c'est le vrai chemin de gestion d'erreur qui
+     * doit être traversé.
+     */
+    protected ?string $routesFile = null;
 
     protected function setUp(): void
     {
@@ -91,7 +102,7 @@ abstract class ApiTestCase extends TestCase
         http_response_code(200);
 
         ob_start();
-        (new Kernel())->handle($request);
+        (new Kernel($this->routesFile))->handle($request);
         $output = (string) ob_get_clean();
 
         $decoded = json_decode($output, true);

@@ -14,6 +14,7 @@ declare(strict_types=1);
 use App\Controllers\AccountController;
 use App\Controllers\AuthController;
 use App\Controllers\BackendController;
+use App\Controllers\ClientErrorController;
 use App\Controllers\DashboardController;
 use App\Controllers\DataController;
 use App\Controllers\DeploymentController;
@@ -129,6 +130,12 @@ $router->delete('/api/stream', [StreamController::class, 'leave'], $auth);
 // clé. Ouverte à TOUS les membres : un journal réservé aux administrateurs
 // servirait à surveiller plutôt qu'à se coordonner.
 $router->get('/api/activity', [StreamController::class, 'history'], $auth);
+
+// --- Supervision de l'instance ---------------------------------------------
+// Ce que le navigateur ne disait qu'à sa console. Rangé dans l'espace de
+// l'instance, JAMAIS dans celui de l'appelant : une panne du client est une
+// panne de l'application, pas une donnée de l'équipe qui l'a rencontrée.
+$router->post('/api/client-errors', [ClientErrorController::class, 'store'], $auth);
 
 // --- Tableau de bord -------------------------------------------------------
 $router->get('/api/dashboard', [DashboardController::class, 'index'], $auth);

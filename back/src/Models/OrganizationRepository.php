@@ -58,12 +58,12 @@ final class OrganizationRepository
      * les deux cas on retombe sur la plus ancienne appartenance restante
      * plutôt que de refuser l'accès à un compte parfaitement valide.
      *
-     * @return array{id: string, name: string, slug: string, role: string}|null
+     * @return array{id: string, name: string, slug: string, kind: string, role: string}|null
      */
     public function activeFor(string $userId, ?string $prefere): ?array
     {
         $statement = Database::connection()->prepare(
-            'SELECT o.id, o.name, o.slug, m.role
+            'SELECT o.id, o.name, o.slug, o.kind, m.role
                FROM memberships m
                JOIN organizations o ON o.id = m.organization_id
               WHERE m.user_id = :user_id
@@ -84,12 +84,12 @@ final class OrganizationRepository
      * clé d'API de l'ingestion, qui désigne l'espace sans passer par une
      * personne. Le « role » est laissé à l'appelant, faute de membre.
      *
-     * @return array{id: string, name: string, slug: string}|null
+     * @return array{id: string, name: string, slug: string, kind: string}|null
      */
     public function findById(string $organizationId): ?array
     {
         $statement = Database::connection()->prepare(
-            'SELECT id, name, slug FROM organizations WHERE id = :id',
+            'SELECT id, name, slug, kind FROM organizations WHERE id = :id',
         );
 
         $statement->execute(['id' => $organizationId]);
@@ -99,23 +99,40 @@ final class OrganizationRepository
             'id'   => (string) $row['id'],
             'name' => (string) $row['name'],
             'slug' => (string) $row['slug'],
+            'kind' => (string) $row['kind'],
         ];
+    }
+
+    /**
+     * L'espace de l'instance, créé s'il n'existe pas encore.
+     *
+     * La création vit dans la base (instance_organization()) et non ici : elle
+     * doit aussi y faire entrer les administrateurs en place, et la course
+     * entre deux pannes simultanées s'y tranche par un index unique plutôt
+     * que par un verrou applicatif.
+     */
+    public function instanceId(): string
+    {
+        return (string) Database::connection()->query('SELECT instance_organization()')->fetchColumn();
     }
 
     /**
      * Toutes les organisations du compte — ce que montre le sélecteur d'espace.
      *
-     * @return list<array{id: string, name: string, slug: string, role: string, members: int}>
+     * L'espace de l'instance vient en dernier : on y passe quand quelque chose
+     * a cassé, pas en ouvrant le menu pour aller travailler.
+     *
+     * @return list<array{id: string, name: string, slug: string, kind: string, role: string, members: int}>
      */
     public function forUser(string $userId): array
     {
         $statement = Database::connection()->prepare(
-            'SELECT o.id, o.name, o.slug, m.role,
+            'SELECT o.id, o.name, o.slug, o.kind, m.role,
                     (SELECT COUNT(*) FROM memberships x WHERE x.organization_id = o.id) AS members
                FROM memberships m
                JOIN organizations o ON o.id = m.organization_id
               WHERE m.user_id = :user_id
-           ORDER BY o.name',
+           ORDER BY (o.kind = \'instance\'), o.name',
         );
 
         $statement->execute(['user_id' => $userId]);
@@ -197,7 +214,7 @@ final class OrganizationRepository
      * En transaction, parce qu'une organisation sans membre est irrécupérable :
      * plus personne ne peut y entrer, ni la supprimer.
      *
-     * @return array{id: string, name: string, slug: string, role: string}
+     * @return array{id: string, name: string, slug: string, kind: string, role: string}
      */
     public function create(string $name, string $ownerId): array
     {
@@ -407,7 +424,7 @@ final class OrganizationRepository
     /**
      * Consomme l'invitation et fait entrer le compte.
      *
-     * @return array{id: string, name: string, slug: string, role: string}|null
+     * @return array{id: string, name: string, slug: string, kind: string, role: string}|null
      *         L'organisation rejointe, ou null si le jeton ne vaut plus rien.
      */
     public function acceptInvitation(string $token, string $userId): ?array
@@ -418,7 +435,7 @@ final class OrganizationRepository
             // FOR UPDATE : deux clics sur le même lien ne peuvent pas produire
             // deux acceptations. La seconde trouvera « accepted_at » posé.
             $statement = $pdo->prepare(
-                'SELECT i.id, i.organization_id, i.role, o.name, o.slug
+                'SELECT i.id, i.organization_id, i.role, o.name, o.slug, o.kind
                    FROM invitations i
                    JOIN organizations o ON o.id = i.organization_id
                   WHERE i.token_hash = :hash AND i.accepted_at IS NULL AND i.expires_at > NOW()
@@ -456,6 +473,7 @@ final class OrganizationRepository
                 'id'   => (string) $invitation['organization_id'],
                 'name' => (string) $invitation['name'],
                 'slug' => (string) $invitation['slug'],
+                'kind' => (string) $invitation['kind'],
                 'role' => (string) $invitation['role'],
             ];
         });
@@ -505,7 +523,7 @@ final class OrganizationRepository
 
     /**
      * @param array<string, mixed> $row
-     * @return array{id: string, name: string, slug: string, role: string}
+     * @return array{id: string, name: string, slug: string, kind: string, role: string}
      */
     private function hydrateOrganization(array $row): array
     {
@@ -513,6 +531,9 @@ final class OrganizationRepository
             'id'   => (string) $row['id'],
             'name' => (string) $row['name'],
             'slug' => (string) $row['slug'],
+            // Absente des lignes fraîchement créées par create() : un espace
+            // créé par l'API est toujours un espace d'équipe.
+            'kind' => (string) ($row['kind'] ?? 'team'),
             'role' => (string) $row['role'],
         ];
     }

@@ -339,7 +339,10 @@ final class Request
      * Espace de travail de la requête, posé par AuthMiddleware ou
      * IngestMiddleware. Garanti non nul sur une route protégée.
      *
-     * @return array{id: string, name: string, slug: string, role: string}
+     * « kind » vaut « team » pour un espace de travail, « instance » pour
+     * l'espace où l'application range ses propres pannes.
+     *
+     * @return array{id: string, name: string, slug: string, kind: string, role: string}
      */
     public function organization(): array
     {
@@ -349,7 +352,7 @@ final class Request
             throw HttpException::unauthorized();
         }
 
-        /** @var array{id: string, name: string, slug: string, role: string} $organization */
+        /** @var array{id: string, name: string, slug: string, kind: string, role: string} $organization */
         return $organization;
     }
 

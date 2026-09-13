@@ -109,7 +109,9 @@ while (!$arret) {
 
         $sortie("   terminée");
     } catch (\Throwable $e) {
-        Queue::fail($tache['id'], $tache['attempts'], $tache['max_attempts'], $e->getMessage());
+        // Le type part avec l'échec : c'est lui qui nomme la panne dans la
+        // supervision de l'instance, si cet essai était le dernier.
+        Queue::fail($tache['id'], $tache['attempts'], $tache['max_attempts'], $e->getMessage(), $tache['type']);
 
         $abandonnee = $tache['attempts'] >= $tache['max_attempts'];
         $sortie('   ' . ($abandonnee ? 'ABANDONNÉE' : 'reprogrammée') . ' : ' . $e->getMessage());

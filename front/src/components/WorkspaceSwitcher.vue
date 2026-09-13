@@ -42,7 +42,16 @@ const ROLES = {
   member: 'membre',
 }
 
-const roleLabel = computed(() => ROLES[organization.value?.role] ?? '')
+/**
+ * Sous le nom : le rôle, sauf dans l'espace de l'instance. Là, tout le monde
+ * est propriétaire par construction, et c'est la NATURE de l'espace qu'il
+ * faut lire — on n'y travaille pas, on y regarde ce qui a cassé.
+ */
+const roleLabel = computed(() =>
+  organization.value?.kind === 'instance'
+    ? "pannes de l'instance"
+    : (ROLES[organization.value?.role] ?? ''),
+)
 
 /**
  * Échap ferme, D'OÙ QUE VIENNE LA FRAPPE.
@@ -174,7 +183,10 @@ async function choisir(id) {
           aria-hidden="true"
         />
         <span class="min-w-0 flex-1 truncate">{{ espace.name }}</span>
-        <span class="shrink-0 text-[0.66rem] tabular-nums text-ink-3">
+        <!-- Un effectif ne dit rien de l'espace de l'instance : ses membres
+             sont les administrateurs, pas une équipe. -->
+        <span v-if="espace.kind === 'instance'" class="label-caps shrink-0">instance</span>
+        <span v-else class="shrink-0 text-[0.66rem] tabular-nums text-ink-3">
           {{ espace.members }}
         </span>
       </button>

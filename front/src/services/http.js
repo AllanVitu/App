@@ -76,9 +76,17 @@ function normalizeError(error) {
 
   const { status, data } = error.response
 
+  // Une panne serveur porte une RÉFÉRENCE. La montrer avec le message permet à
+  // l'utilisateur de désigner SA panne au support — et à l'équipe de la
+  // retrouver dans la supervision de l'instance plutôt que de chercher « vers
+  // 14 h, sur les tickets ».
+  const reference = status >= 500 ? data?.meta?.reference : undefined
+
   return {
     status,
-    message: data?.message || 'Une erreur est survenue.',
+    message:
+      (data?.message || 'Une erreur est survenue.') +
+      (reference ? ` Référence : ${reference}.` : ''),
     // Erreurs de validation champ par champ, renvoyées par l'API en 422.
     errors: data?.errors || {},
     // Contexte exploitable d'un refus. Un 409 de conflit y transporte l'état

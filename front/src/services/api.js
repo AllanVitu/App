@@ -109,6 +109,17 @@ export const dashboardApi = {
   overview: () => http.get('/dashboard').then(unwrap),
 }
 
+// --- Supervision de l'instance -----------------------------------------------
+
+export const clientErrorsApi = {
+  /**
+   * Ce que les filets de main.js ont attrapé. La réponse n'apprend rien au
+   * client : l'appelant n'attend que l'envoi, et avale son échec (cf.
+   * services/errorReporter.js).
+   */
+  report: (rapport) => http.post('/client-errors', rapport),
+}
+
 // --- Recherche transverse ----------------------------------------------------
 
 export const searchApi = {

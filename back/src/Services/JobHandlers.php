@@ -33,9 +33,10 @@ final class JobHandlers
     public static function handle(string $type, array $payload): void
     {
         match ($type) {
-            'mail.send'    => self::sendMail($payload),
-            'tokens.purge' => self::purgeTokens($payload),
-            default        => throw new \RuntimeException("Type de tâche inconnu : « {$type} »."),
+            'mail.send'         => self::sendMail($payload),
+            'tokens.purge'      => self::purgeTokens($payload),
+            'rate_limits.purge' => (new RateLimiter())->purge(),
+            default             => throw new \RuntimeException("Type de tâche inconnu : « {$type} »."),
         };
     }
 

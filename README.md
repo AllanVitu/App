@@ -156,11 +156,12 @@ App/
 │   ├── public/index.php        # contrôleur frontal unique
 │   ├── routes/api.php          # table de routage
 │   ├── src/
-│   │   ├── Config/Env.php      # accès typé aux variables d'environnement
+│   │   ├── Config/             # Env (variables typées), Secrets (sous-clés dérivées)
 │   │   ├── Core/               # Router, Request, Response, Database, Validator
 │   │   ├── Middleware/         # Cors, Auth, Ingest (clés d'API)
 │   │   ├── Services/           # Jwt, RefreshToken, UserToken, Throttle, Mailer,
-│   │   │                       #   SchemaBuilder, Search, ModuleMetrics, AttentionFeed
+│   │   │                       #   SchemaBuilder, Search, ModuleMetrics, AttentionFeed,
+│   │   │                       #   Journal, Queue, RateLimiter, Scrubber, SelfMonitor
 │   │   ├── Models/             # 9 dépôts PDO (requêtes préparées)
 │   │   └── Controllers/        # 15 : un par domaine, plus Health et Search
 │   ├── bin/                    # migrate.php (schéma) · worker.php (tâches)
@@ -221,6 +222,7 @@ déjà — le nom de l'espace et l'adresse invitée.
 | GET/PUT | `/api/settings`          | Préférences (thème, densité, mouvement, fuseau) |
 | GET     | `/api/dashboard`         | Alertes, état des modules, activité             |
 | GET     | `/api/search`            | Recherche dans les cinq modules                 |
+| POST    | `/api/client-errors`     | Erreur du navigateur, rangée pour l'instance    |
 
 **Le flux** — ce qui a changé, et qui est là.
 
@@ -404,10 +406,66 @@ même tâche. Le contrat est **« au moins une fois »** — un worker tué entr
 travail et l'acquittement fera reprendre la tâche, et les gestionnaires
 supportent d'être rejoués.
 
-Un travail périodique est livré : la **purge des jetons de rafraîchissement**
-révoqués ou expirés depuis plus de quatorze jours. La rotation en produit un à
-chaque rafraîchissement ; sans purge, la table croît indéfiniment — 2 082
+Deux travaux périodiques tournent. La **purge des jetons de rafraîchissement**
+révoqués ou expirés depuis plus de quatorze jours : la rotation en produit un à
+chaque rafraîchissement, et sans purge la table croît indéfiniment — 2 082
 lignes accumulées sur une base de développement avant que ce travail n'existe.
+Et la **purge des compteurs de limitation de débit**, dont les fenêtres closes
+depuis plus d'un jour ne comptent plus rien.
+
+Une tâche **abandonnée** après son dernier essai reste en table avec son
+erreur, et elle est signalée à la supervision de l'instance : personne ne la
+réessaiera, c'est donc une panne.
+
+## La supervision de l'instance
+
+Le module Supervision rangeait les erreurs des applications de ses
+utilisateurs, pendant que celles de l'application qui l'héberge partaient dans
+`error_log` — la sortie d'un conteneur que personne ne lit. Le navigateur, lui,
+écrivait les siennes dans une console que personne n'ouvre. Trois sources
+arrivent désormais par le même chemin :
+
+| Source     | Porte d'entrée                              | Ce qui est rangé                                   |
+| ---------- | ------------------------------------------- | -------------------------------------------------- |
+| API        | `Kernel`, toute exception non prévue        | classe, fichier, trace sans arguments, route       |
+| Navigateur | `POST /api/client-errors`, depuis `main.js` | message, pile, écran, composant, version du client |
+| Worker     | `Queue::fail`, au dernier essai             | type de tâche, message                             |
+
+Elles aboutissent dans un **espace « Instance »**, que l'écran de supervision
+existant affiche tel quel, avec ses statuts, sa courbe et son flux. On y entre
+**par le rôle d'instance** (`users.role = 'admin'`), jamais par invitation : un
+déclencheur tient l'appartenance à jour, et l'API refuse d'y inviter, d'en
+exclure, de le renommer ou de le quitter. Une invitation permettrait à
+n'importe quel administrateur d'équipe d'ouvrir les pannes de toute l'instance
+à qui il veut. L'espace naît au premier besoin, par la fonction SQL
+`instance_organization()`, et ne compte pas comme un espace de repli : un
+administrateur ne peut pas supprimer sa dernière équipe en s'y croyant à
+l'abri.
+
+Trois décisions valent d'être dites :
+
+- **La réponse 500 porte une référence** (`meta.reference`), que le client
+  ajoute au message affiché. C'est ce qui relie « j'ai eu une erreur vers
+  14 h » à une ligne précise.
+- **Rien de personnel n'est rangé.** Les traces sont reconstruites cadre par
+  cadre, sans un seul argument — celles de PHP recopient le mot de passe passé
+  à `password_verify()` — et tout texte passe par `Scrubber` : adresses,
+  jetons, clés d'API, IP, numéros longs. Une erreur du navigateur n'emporte ni
+  compte, ni IP, ni navigateur.
+- **Une rafale est comptée, pas détaillée.** Au-delà de vingt occurrences par
+  minute pour une même panne, le compteur monte sans nouvelle ligne : c'est
+  pendant un incident que la base a le moins de marge.
+
+Côté navigateur, ce qui ne part PAS compte autant : ni une erreur HTTP déjà
+normalisée (l'API l'a rangée, ou ce n'est pas une panne), ni deux fois la même
+erreur sur le même écran, ni plus de dix signalements par page. Et un envoi
+raté est avalé — sinon le filet des promesses rejetées l'attraperait, le
+signalerait, échouerait encore, et bouclerait.
+
+Un défaut de l'ingestion a été trouvé en chemin : un groupe d'erreurs
+**supprimé** qui revenait restait invisible, et l'API répondait `data: null`.
+Il réapparaît désormais, et son retour — comme celui d'une erreur résolue —
+est consigné dans le fil.
 
 ## Sécurité
 
@@ -423,7 +481,12 @@ lignes accumulées sur une base de développement avant que ce travail n'existe.
   chose pour une adresse connue ou non ; la connexion utilise un hachage
   factice pour aligner les temps de réponse.
 - **Limitation de débit** par e-mail ET par IP : 5 connexions, 3 demandes de
-  réinitialisation, 3 renvois de confirmation par quart d'heure.
+  réinitialisation, 3 renvois de confirmation par quart d'heure. Pour le reste,
+  `RateLimiter` compte des appels par compte, IP ou clé, en fenêtre fixe ; la
+  clé n'est stockée qu'en **empreinte HMAC**, jamais en clair.
+- **Traces d'exception sans arguments** : `zend.exception_ignore_args` est
+  activé en développement comme en production, et la supervision reconstruit
+  ses propres traces sans eux.
 - **SQL** : PDO en requêtes réellement préparées (`EMULATE_PREPARES` désactivé),
   `ORDER BY` restreint à une liste blanche, jokers `LIKE` échappés.
 - **Cloisonnement** : chaque requête est filtrée par `organization_id`, jamais
@@ -510,12 +573,12 @@ docker compose exec php composer migrate  # applique les migrations en attente
 cd e2e && npm test                       # parcours navigateur (Playwright)
 ```
 
-| Suite                 | Portée                                    | Volume    |
-| --------------------- | ----------------------------------------- | --------- |
-| PHPUnit `unit`        | Jetons JWT — sans base                    | 7 tests   |
-| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel     | 150 tests |
-| Vitest                | Formatage, intercepteur HTTP, composables | 131 tests |
-| Playwright            | Parcours complets dans Chromium           | 61 tests  |
+| Suite                 | Portée                                         | Volume    |
+| --------------------- | ---------------------------------------------- | --------- |
+| PHPUnit `unit`        | Jetons JWT, nettoyage des traces — sans base   | 25 tests  |
+| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel          | 229 tests |
+| Vitest                | Formatage, client HTTP, composables, signaleur | 143 tests |
+| Playwright            | Parcours complets dans Chromium                | 73 tests  |
 
 Les composables portent l'essentiel de la logique du client : file
 d'écritures, glisser-déposer, raccourcis, pagination, synchronisation de

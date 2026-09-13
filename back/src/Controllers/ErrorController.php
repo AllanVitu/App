@@ -129,10 +129,14 @@ final class ErrorController
         // │  Le compteur d'occurrences, lui, monte : l'information n'est pas  │
         // │  perdue, elle est simplement à sa place.                          │
         // └───────────────────────────────────────────────────────────────────┘
-        if ((int) $groupe['occurrences'] === 1) {
+        //
+        // Une exception : le RETOUR d'une erreur résolue ou supprimée. Elle
+        // n'est pas une répétition de plus, c'est une nouvelle — celle qu'on
+        // croyait réglée frappe de nouveau.
+        if ($groupe['reopened'] || (int) $groupe['occurrences'] === 1) {
             $this->journal->record(
                 $request,
-                'created',
+                $groupe['reopened'] ? 'reopened' : 'created',
                 (string) $groupe['id'],
                 null,
                 (string) $groupe['title'],

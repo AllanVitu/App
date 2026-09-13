@@ -3,7 +3,10 @@ import { createPinia } from 'pinia'
 
 import App from './App.vue'
 import router from './router'
+import { clientErrorsApi } from './services/api'
+import { createErrorReporter } from './services/errorReporter'
 import { bindInterfaceSounds, play, setSuspended } from './services/sound'
+import { useAuthStore } from './stores/auth'
 import { useUiStore } from './stores/ui'
 
 // Aucune bibliothèque d'animation n'est importée ici — et c'est délibéré.
@@ -72,8 +75,28 @@ router.afterEach((to, from) => {
  */
 let dernierSignalement = 0
 
-function signaler(portee, erreur, message) {
+/**
+ * Et un geste qui manquait aux quatre filets : PRÉVENIR L'ÉQUIPE.
+ *
+ * Le bandeau informe celui qui subit la panne ; le signalement la range dans
+ * la supervision de l'instance. Il part AVANT la temporisation du bandeau :
+ * celle-ci épargne l'écran de l'utilisateur, pas l'information de l'équipe —
+ * c'est le signaleur qui déduplique de son côté.
+ */
+const auth = useAuthStore()
+
+const signalerALEquipe = createErrorReporter({
+  send: (rapport) => clientErrorsApi.report(rapport),
+  isEnabled: () => auth.isAuthenticated,
+  release: import.meta.env.VITE_APP_RELEASE ?? null,
+})
+
+function signaler(portee, erreur, message, { kind, component = null }) {
   console.error(`[app] ${portee}`, erreur)
+
+  const ecran = router.currentRoute.value.name
+
+  signalerALEquipe(kind, erreur, { route: ecran ? String(ecran) : null, component })
 
   const maintenant = Date.now()
 
@@ -86,7 +109,12 @@ function signaler(portee, erreur, message) {
 // 1. Le code d'un composant. Sans ce filet, une exception démonte l'arbre et
 //    laisse une page blanche, sans message ni moyen de revenir.
 app.config.errorHandler = (error, instance, info) => {
-  signaler(info, error, "Une erreur inattendue est survenue. L'action n'a pas abouti.")
+  signaler(info, error, "Une erreur inattendue est survenue. L'action n'a pas abouti.", {
+    kind: 'component',
+    // « __name » est posé par le compilateur sur les composants <script setup>,
+    // qui n'ont pas de « name » déclaré.
+    component: instance?.$options?.name ?? instance?.$options?.__name ?? null,
+  })
 }
 
 // 2. Une promesse rejetée que personne n'attrape : un `await` oublié, une
@@ -96,7 +124,7 @@ window.addEventListener('unhandledrejection', (event) => {
   // récente, et l'appelant qui l'ignore a raison de le faire.
   if (event.reason?.canceled) return
 
-  signaler('promesse non traitée', event.reason, "L'action n'a pas abouti.")
+  signaler('promesse non traitée', event.reason, "L'action n'a pas abouti.", { kind: 'promise' })
 })
 
 // 3. Une exception hors de Vue — dans un écouteur d'événement posé à la main,
@@ -105,7 +133,7 @@ window.addEventListener('unhandledrejection', (event) => {
 window.addEventListener('error', (event) => {
   if (!event.error) return
 
-  signaler('exception', event.error, 'Une erreur inattendue est survenue.')
+  signaler('exception', event.error, 'Une erreur inattendue est survenue.', { kind: 'exception' })
 })
 
 /**
@@ -148,13 +176,15 @@ function marque(cle, valeur) {
 
 router.onError((error) => {
   if (!estMorceauIntrouvable(error)) {
-    signaler('navigation', error, "Cette page n'a pas pu s'ouvrir.")
+    signaler('navigation', error, "Cette page n'a pas pu s'ouvrir.", { kind: 'navigation' })
 
     return
   }
 
   if (marque(CLE_RECHARGEMENT)) {
-    signaler('navigation', error, "Cette page n'a pas pu s'ouvrir. Réessayez plus tard.")
+    signaler('navigation', error, "Cette page n'a pas pu s'ouvrir. Réessayez plus tard.", {
+      kind: 'navigation',
+    })
 
     return
   }

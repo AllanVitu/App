@@ -135,8 +135,13 @@ final class Queue
      * Une tâche abandonnée RESTE en table, avec sa dernière erreur. L'effacer
      * ferait disparaître la panne avec elle.
      */
-    public static function fail(string $id, int $attempts, int $maxAttempts, string $error): void
-    {
+    public static function fail(
+        string $id,
+        int $attempts,
+        int $maxAttempts,
+        string $error,
+        ?string $type = null,
+    ): void {
         // Tronquée : une trace d'exception peut peser des kilo-octets, et
         // c'est la première ligne qui dit ce qui s'est passé.
         $error = mb_substr($error, 0, 2000);
@@ -146,6 +151,12 @@ final class Queue
                 'UPDATE jobs SET failed_at = NOW(), reserved_at = NULL, last_error = :error
                   WHERE id = :id',
             )->execute(['id' => $id, 'error' => $error]);
+
+            // Abandonnée, donc plus personne ne la réessaiera : c'est une
+            // panne, et elle ne se voyait qu'en interrogeant « jobs » à la main.
+            if ($type !== null) {
+                (new SelfMonitor())->captureJobFailure($type, $error);
+            }
 
             return;
         }
