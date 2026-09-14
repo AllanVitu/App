@@ -36,6 +36,8 @@ import { useRevalidate } from '@/composables/useRevalidate'
 import { useLiveRows } from '@/composables/useLiveRows'
 import { useUiStore } from '@/stores/ui'
 import { formatRelative } from '@/utils/format'
+import { modulePath } from '@/utils/modules'
+import { STATUSES as TICKET_STATUSES } from '@/utils/tickets'
 
 const ui = useUiStore()
 const { enqueue } = useWriteQueue()
@@ -199,6 +201,33 @@ function closeDetail() {
   openId.value = null
   detail.value = null
 }
+
+/**
+ * « Qui s'en occupe ? » — le ticket ouvert depuis cette erreur, ou celui qui
+ * existe déjà : le serveur ne crée jamais de doublon (cf. ErrorController::ticket).
+ */
+const linking = ref(false)
+
+async function createTicket(group) {
+  linking.value = true
+
+  try {
+    const { group: lie, ticket } = await errorsApi.createTicket(group.id)
+
+    replaceRow(group.id, lie)
+    if (detail.value?.id === group.id) detail.value = { ...detail.value, ticket: lie.ticket }
+
+    play('success')
+    ui.notify(`Ticket #${ticket.number} ouvert pour cette erreur.`)
+  } catch (error) {
+    ui.notify(error.message, 'error')
+  } finally {
+    linking.value = false
+  }
+}
+
+const ticketStatus = (value) =>
+  TICKET_STATUSES.find((status) => status.value === value) ?? TICKET_STATUSES[1]
 
 /** Place un groupe à jour dans la liste, où qu'il se trouve désormais. */
 function replaceRow(id, row) {
@@ -459,6 +488,29 @@ onMounted(load)
           </FilterChip>
 
           <span class="flex-1" />
+
+          <!-- Le ticket de cette erreur, avec son état — un LIEN, puisqu'on va
+               le voir. Sinon, de quoi l'ouvrir. -->
+          <RouterLink
+            v-if="openGroup.ticket"
+            :to="{ path: modulePath('tickets'), query: { q: `#${openGroup.ticket.number}` } }"
+            class="chip border-line text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
+          >
+            <span class="font-mono">#{{ openGroup.ticket.number }}</span>
+            <span :class="ticketStatus(openGroup.ticket.status).tone">
+              {{ ticketStatus(openGroup.ticket.status).label }}
+            </span>
+          </RouterLink>
+          <button
+            v-else
+            type="button"
+            class="chip border-line text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
+            :disabled="linking"
+            @click="createTicket(openGroup)"
+          >
+            <AppIcon name="plus" :size="13" />
+            créer un ticket
+          </button>
 
           <button
             type="button"

@@ -132,6 +132,16 @@ test.describe("espace de travail", () => {
     await arrivant.waitForURL(/connexion/, { timeout: 20_000 })
 
     await contexte.close()
+
+    // Le ticket de l'hôte suit le même chemin : sans cela, chaque exécution
+    // laisserait une ligne « Vu par l'équipe » de plus dans l'espace de
+    // démonstration.
+    await page.goto('/modules/tickets')
+
+    const ligne = page.getByRole('option').filter({ hasText: ticket })
+    await ligne.click()
+    await page.keyboard.press('Backspace')
+    await expect(ligne).toHaveCount(0)
   })
 
   test("le rôle décide de ce que l'écran propose", async ({ page }) => {

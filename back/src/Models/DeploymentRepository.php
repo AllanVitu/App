@@ -114,6 +114,56 @@ final class DeploymentRepository
     }
 
     /**
+     * Les erreurs APPARUES pendant que ce déploiement était le dernier de son
+     * environnement : de son lancement au lancement suivant du MÊME
+     * environnement. Une préversion déployée entre-temps ne ferme pas la
+     * fenêtre de la production — elle ne remplace pas ce que les
+     * utilisateurs exécutent.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function errorsSince(string $id, string $organizationId, int $limit = 20): array
+    {
+        $statement = Database::connection()->prepare(
+            'WITH courant AS (
+                 SELECT d.created_at, d.environment
+                   FROM deployments d
+                  WHERE d.id = :id AND d.organization_id = :organization_id AND d.deleted_at IS NULL
+             ),
+             suivant AS (
+                 SELECT MIN(n.created_at) AS created_at
+                   FROM deployments n
+                   JOIN courant c ON n.environment = c.environment AND n.created_at > c.created_at
+                  WHERE n.organization_id = :organization_id AND n.deleted_at IS NULL
+             )
+             SELECT g.id, g.title, g.culprit, g.level, g.status, g.occurrences, g.first_seen_at
+               FROM error_groups g
+               JOIN courant c ON g.first_seen_at >= c.created_at
+              CROSS JOIN suivant s
+              WHERE g.organization_id = :organization_id
+                AND g.deleted_at IS NULL
+                AND (s.created_at IS NULL OR g.first_seen_at < s.created_at)
+              ORDER BY g.first_seen_at ASC
+              LIMIT ' . max(1, min(100, $limit)),
+        );
+
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
+
+        return array_map(
+            static fn (array $row): array => [
+                'id'            => (string) $row['id'],
+                'title'         => (string) $row['title'],
+                'culprit'       => $row['culprit'] !== null ? (string) $row['culprit'] : null,
+                'level'         => (string) $row['level'],
+                'status'        => (string) $row['status'],
+                'occurrences'   => (int) $row['occurrences'],
+                'first_seen_at' => Database::toIso($row['first_seen_at']),
+            ],
+            $statement->fetchAll(),
+        );
+    }
+
+    /**
      * @param array<string, mixed> $attributes
      * @return array<string, mixed>
      */

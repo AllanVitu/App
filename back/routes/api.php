@@ -32,6 +32,7 @@ use App\Controllers\SearchController;
 use App\Controllers\SessionController;
 use App\Controllers\SettingsController;
 use App\Controllers\StreamController;
+use App\Controllers\TicketCommentController;
 use App\Controllers\TicketController;
 use App\Core\Router;
 use App\Middleware\AuthMiddleware;
@@ -196,6 +197,12 @@ $router->put('/api/tickets/{id}', [TicketController::class, 'update'], $auth);
 $router->delete('/api/tickets/{id}', [TicketController::class, 'destroy'], $auth);
 $router->post('/api/tickets/{id}/restore', [TicketController::class, 'restore'], $auth);
 
+// La discussion d'un ticket : tout membre commente ; l'auteur, ou un
+// administrateur, retire (cf. TicketCommentController).
+$router->get('/api/tickets/{id}/comments', [TicketCommentController::class, 'index'], $auth);
+$router->post('/api/tickets/{id}/comments', [TicketCommentController::class, 'store'], $auth);
+$router->delete('/api/tickets/{id}/comments/{comment}', [TicketCommentController::class, 'destroy'], $auth);
+
 // --- Backend : schémas de données et clés d'API ----------------------------
 $router->get('/api/backend/tables', [BackendController::class, 'index'], $auth);
 $router->post('/api/backend/tables', [BackendController::class, 'store'], $auth);
@@ -222,6 +229,7 @@ $router->get('/api/deployments/{id}', [DeploymentController::class, 'show'], $au
 $router->put('/api/deployments/{id}', [DeploymentController::class, 'update'], $auth);
 $router->delete('/api/deployments/{id}', [DeploymentController::class, 'destroy'], $auth);
 $router->post('/api/deployments/{id}/restore', [DeploymentController::class, 'restore'], $auth);
+$router->get('/api/deployments/{id}/errors', [DeploymentController::class, 'errors'], $auth);
 
 // --- Supervision -----------------------------------------------------------
 // Pas de PUT complet : une erreur est REÇUE, pas saisie. Seul son statut de
@@ -232,6 +240,7 @@ $router->get('/api/errors/{id}', [ErrorController::class, 'show'], $auth);
 $router->put('/api/errors/{id}', [ErrorController::class, 'update'], $auth);
 $router->delete('/api/errors/{id}', [ErrorController::class, 'destroy'], $auth);
 $router->post('/api/errors/{id}/restore', [ErrorController::class, 'restore'], $auth);
+$router->post('/api/errors/{id}/ticket', [ErrorController::class, 'ticket'], $auth);
 
 // --- Disponibilité ----------------------------------------------------------
 //

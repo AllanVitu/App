@@ -12,6 +12,8 @@ import { parseBlocks } from '@/utils/richText'
 
 const props = defineProps({
   source: { type: String, default: '' },
+  /** Dans un fil de commentaires : plus petit, plus serré. */
+  compact: { type: Boolean, default: false },
 })
 
 const blocks = computed(() => parseBlocks(props.source))
@@ -24,7 +26,10 @@ const TITRES = {
 </script>
 
 <template>
-  <div class="flex flex-col gap-3.5 text-[0.9375rem] leading-relaxed text-ink-2">
+  <div
+    class="flex flex-col leading-relaxed text-ink-2"
+    :class="compact ? 'gap-2 text-[0.8125rem]' : 'gap-3.5 text-[0.9375rem]'"
+  >
     <p v-if="!blocks.length" class="text-ink-3">Cette page est vide.</p>
 
     <div v-for="(block, index) in blocks" :key="index" class="contents">

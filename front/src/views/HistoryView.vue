@@ -82,6 +82,11 @@ const ACTIONS = {
   // journal ne reçoit pas un « toujours en panne » par minute.
   down: 'a constaté la panne de',
   recovered: 'a constaté le retour de',
+  // Sur un ticket : le texte reste dans le fil, le journal dit seulement qui a
+  // parlé.
+  commented: 'a commenté',
+  // Sur une erreur : « Alice a ouvert un ticket pour TypeError… ».
+  linked: 'a ouvert un ticket pour',
 }
 
 const auth = useAuthStore()

@@ -19,7 +19,7 @@ apparaît dans le menu et dispose aussitôt d'un écran, en attendant le sien.
 | ------------- | ------------------------------------ | --------------------------------------------------------- |
 | `backend`     | `backend_tables`, `backend_api_keys` | Schémas de données, colonnes typées, clés d'API           |
 | `deploiement` | `deployments`                        | Déploiements Git, journaux, relance                       |
-| `tickets`     | `tickets`, `ticket_counters`         | Suivi clavier-first, priorités, cycle de vie, assignation |
+| `tickets`     | `tickets`, `ticket_counters`, `ticket_comments` | Suivi clavier-first, priorités, cycle de vie, assignation, discussion |
 | `supervision` | `error_groups`, `error_events`       | Erreurs groupées, piles d'appels, courbe sur 14 jours     |
 | `design`      | `design_files`, `design_versions`    | Maquettes téléversées, versions, aperçu sur la carte      |
 | `disponibilite` | `probes`, `probe_states`, `probe_checks`, `probe_incidents` | Sondes HTTP, pannes, disponibilité sur 30 jours |
@@ -328,6 +328,15 @@ mise à jour partielle, suppression logique.
 | POST           | `/api/probes/{id}/check` | Avance l'échéance du worker ; 202, une fois par 30 s        |
 | GET/POST       | `/api/docs`              | `?q=` cherche dans les titres ET les textes                 |
 | GET/PUT/DELETE | `/api/docs/{id}`         | Fil d'Ariane ; une page ne se range pas sous elle-même     |
+
+**Les modules se parlent**
+
+| Méthode  | Route                                  | Rôle                                                            |
+| -------- | -------------------------------------- | --------------------------------------------------------------- |
+| GET/POST | `/api/tickets/{id}/comments`           | Discussion d'un ticket ; trente commentaires par minute au plus |
+| DELETE   | `/api/tickets/{id}/comments/{comment}` | Par son auteur, ou un administrateur                            |
+| POST     | `/api/errors/{id}/ticket`              | Ouvre le ticket d'une erreur, ou rend celui qui existe          |
+| GET      | `/api/deployments/{id}/errors`         | Erreurs apparues pendant que cette version était la dernière    |
 
 **Annuler une suppression.** Toutes les suppressions sont LOGIQUES : la ligne
 reste en base, marquée. Il ne manquait que le chemin de retour — l'interface

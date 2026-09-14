@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Database;
 use App\Core\HttpException;
 use App\Core\Request;
 use App\Core\Response;
 use App\Core\Validator;
 use App\Models\ErrorRepository;
+use App\Models\TicketRepository;
 use App\Services\Journal;
 
 /**
@@ -27,6 +29,11 @@ final class ErrorController
 {
     private const LEVELS   = ['warning', 'error', 'fatal'];
     private const STATUSES = ['unresolved', 'resolved', 'ignored'];
+
+    /** Une erreur fatale n'attend pas son tour ; un avertissement, si. */
+    private const PRIORITE_PAR_NIVEAU = ['warning' => 'medium', 'error' => 'high', 'fatal' => 'urgent'];
+
+    private const NIVEAUX_EN_TOUTES_LETTRES = ['warning' => 'avertissement', 'error' => 'erreur', 'fatal' => 'fatale'];
 
     /**
      * Les champs suivis — un SEUL, et c'est exact.
@@ -187,6 +194,70 @@ final class ErrorController
     }
 
     /**
+     * POST /api/errors/{id}/ticket
+     *
+     * « Qui s'en occupe ? » — ouvre le ticket de cette erreur, ou rend celui
+     * qui existe déjà : 201 à la création, 200 sinon. Le groupe est verrouillé
+     * le temps de la décision, si bien que deux clics simultanés n'ouvrent
+     * jamais deux tickets.
+     */
+    public function ticket(Request $request): void
+    {
+        $id = $this->validateId($request);
+
+        /** @var array{0: array<string, mixed>, 1: array<string, mixed>, 2: bool} $issue */
+        $issue = Database::transaction(function () use ($request, $id): array {
+            $groupe = $this->errors->lockForLink($id, $request->organizationId());
+
+            if ($groupe === null) {
+                throw HttpException::notFound('Erreur introuvable.');
+            }
+
+            $tickets = new TicketRepository();
+
+            if ($groupe['ticket'] !== null) {
+                $existant = $tickets->find((string) $groupe['ticket']['id'], $request->organizationId());
+
+                if ($existant !== null) {
+                    return [$groupe, $existant, false];
+                }
+            }
+
+            $ticket = $tickets->create($request->organizationId(), $request->actorId(), [
+                'title'       => mb_substr('Erreur : ' . $groupe['title'], 0, 200),
+                'description' => $this->descriptionDuTicket($groupe),
+                'status'      => 'todo',
+                'priority'    => self::PRIORITE_PAR_NIVEAU[(string) $groupe['level']] ?? 'high',
+                'project'     => null,
+                'labels'      => ['erreur'],
+                'due_date'    => null,
+                'assigned_to' => null,
+            ]);
+
+            $lie = $this->errors->linkTicket($id, $request->organizationId(), (string) $ticket['id']);
+
+            return [$lie ?? $groupe, $ticket, true];
+        });
+
+        [$groupe, $ticket, $cree] = $issue;
+
+        if ($cree) {
+            $ref = 'TICK-' . $ticket['number'];
+
+            // Les deux côtés du lien : le ticket naît dans Tickets, l'erreur
+            // dit dans Supervision qui s'en est chargé.
+            (new Journal('tickets', []))->record($request, 'created', (string) $ticket['id'], $ref, (string) $ticket['title'], version: (int) $ticket['version']);
+            $this->journal->record($request, 'linked', (string) $groupe['id'], $ref, (string) $groupe['title'], version: (int) $groupe['version']);
+
+            Response::created(['group' => $groupe, 'ticket' => $ticket]);
+
+            return;
+        }
+
+        Response::json(['group' => $groupe, 'ticket' => $ticket]);
+    }
+
+    /**
      * DELETE /api/errors/{id}
      */
     public function destroy(Request $request): void
@@ -261,6 +332,34 @@ final class ErrorController
         }
 
         return $group;
+    }
+
+    /**
+     * Ce qu'il faut savoir pour commencer, sans rouvrir Supervision. Du texte :
+     * la description d'un ticket n'est jamais interprétée comme du HTML.
+     *
+     * @param array<string, mixed> $groupe
+     */
+    private function descriptionDuTicket(array $groupe): string
+    {
+        $occurrences = (int) $groupe['occurrences'];
+        $premiere    = strtotime((string) $groupe['first_seen_at']);
+
+        $lignes = ['Ouvert depuis Supervision.', '', '- Erreur : ' . $groupe['title']];
+
+        if ($groupe['culprit'] !== null) {
+            $lignes[] = '- Origine : ' . $groupe['culprit'];
+        }
+
+        $lignes[] = '- Gravité : ' . (self::NIVEAUX_EN_TOUTES_LETTRES[(string) $groupe['level']] ?? (string) $groupe['level']);
+        $lignes[] = sprintf(
+            '- %d occurrence%s, la première le %s (UTC)',
+            $occurrences,
+            $occurrences > 1 ? 's' : '',
+            gmdate('d/m/Y à H:i', $premiere === false ? time() : $premiere),
+        );
+
+        return mb_substr(implode("\n", $lignes), 0, 5000);
     }
 
     private function validateId(Request $request): string

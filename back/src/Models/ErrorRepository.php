@@ -21,8 +21,14 @@ final class ErrorRepository
 {
     private const SORTABLE = ['last_seen_at', 'first_seen_at', 'occurrences', 'title'];
 
+    // Le ticket lié, s'il vit encore. « ticket_id » reste sans qualificatif
+    // dans la sous-requête : « tickets » n'a pas de colonne de ce nom, il se
+    // résout donc sur le groupe, avec ou sans alias de table.
     private const COLUMNS = 'id, fingerprint, title, culprit, level, status, occurrences,
-                             first_seen_at, last_seen_at, created_at, updated_at, version';
+                             first_seen_at, last_seen_at, created_at, updated_at, version,
+                             (SELECT jsonb_build_object(\'id\', t.id, \'number\', t.number, \'status\', t.status)
+                                FROM tickets t
+                               WHERE t.id = ticket_id AND t.deleted_at IS NULL) AS ticket';
 
     /**
      * @param array{status?: string|null, level?: string|null, search?: string|null,
@@ -303,6 +309,47 @@ final class ErrorRepository
         return $row === false ? null : $this->hydrateGroup($row);
     }
 
+    /**
+     * Le groupe, verrouillé jusqu'à la fin de la transaction : deux clics
+     * simultanés sur « créer un ticket » s'attendent au lieu d'en ouvrir deux.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function lockForLink(string $id, string $organizationId): ?array
+    {
+        $statement = Database::connection()->prepare(
+            'SELECT ' . self::COLUMNS . '
+               FROM error_groups
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL
+                FOR UPDATE',
+        );
+
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
+
+        $row = $statement->fetch();
+
+        return $row === false ? null : $this->hydrateGroup($row);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function linkTicket(string $id, string $organizationId, string $ticketId): ?array
+    {
+        $statement = Database::connection()->prepare(
+            'UPDATE error_groups
+                SET ticket_id = :ticket_id
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL
+          RETURNING ' . self::COLUMNS,
+        );
+
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId, 'ticket_id' => $ticketId]);
+
+        $row = $statement->fetch();
+
+        return $row === false ? null : $this->hydrateGroup($row);
+    }
+
     public function softDelete(string $id, string $organizationId): bool
     {
         $statement = Database::connection()->prepare(
@@ -471,6 +518,29 @@ final class ErrorRepository
             // client : il ne dit pas QUAND la ligne a changé, mais COMBIEN DE
             // FOIS — la seule question qu'une écriture concurrente pose.
             'version'       => (int) $row['version'],
+            // Un ticket à la corbeille ne s'occupe plus de rien : il n'est pas
+            // montré, et un nouveau clic en ouvre un autre.
+            'ticket'        => $this->ticketLie($row['ticket'] ?? null),
+        ];
+    }
+
+    /**
+     * Le ticket lié, lu depuis l'objet JSON de la sous-requête.
+     *
+     * @return array{id: string, number: int, status: string}|null
+     */
+    private function ticketLie(mixed $valeur): ?array
+    {
+        $ticket = is_string($valeur) ? json_decode($valeur, true) : null;
+
+        if (!is_array($ticket)) {
+            return null;
+        }
+
+        return [
+            'id'     => (string) $ticket['id'],
+            'number' => (int) $ticket['number'],
+            'status' => (string) $ticket['status'],
         ];
     }
 }

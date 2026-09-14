@@ -14,6 +14,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 
 import AppIcon from '@/components/AppIcon.vue'
+import TicketComments from '@/components/tickets/TicketComments.vue'
 import TicketPriorityIcon from '@/components/tickets/TicketPriorityIcon.vue'
 import TicketStatusIcon from '@/components/tickets/TicketStatusIcon.vue'
 import FilterChip from '@/components/ui/FilterChip.vue'
@@ -323,6 +324,9 @@ defineExpose({ focusTitle })
           {{ due }}
         </p>
       </div>
+
+      <!-- La discussion en dernier : on règle le ticket, puis on en parle. -->
+      <TicketComments :ticket-id="ticket.id" />
     </div>
 
     <!-- Horodatages et paternité : information de bas de page, jamais éditable.

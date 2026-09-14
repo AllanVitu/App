@@ -246,6 +246,16 @@ export const deploymentsApi = {
   update: (id, payload) => http.put(`/deployments/${id}`, payload).then(unwrap),
   remove: (id) => http.delete(`/deployments/${id}`),
   restore: (id) => http.post(`/deployments/${id}/restore`).then(unwrap),
+  /** Les erreurs apparues pendant que cette version était la dernière de son environnement. */
+  errors: (id) => http.get(`/deployments/${id}/errors`).then(unwrap),
+}
+
+// --- Discussion d'un ticket -------------------------------------------------
+
+export const ticketCommentsApi = {
+  list: (ticketId) => http.get(`/tickets/${ticketId}/comments`).then(unwrap),
+  create: (ticketId, payload) => http.post(`/tickets/${ticketId}/comments`, payload).then(unwrap),
+  remove: (ticketId, id) => http.delete(`/tickets/${ticketId}/comments/${id}`),
 }
 
 // --- Disponibilité ----------------------------------------------------------
@@ -291,6 +301,8 @@ export const errorsApi = {
   setStatus: (id, status) => http.put(`/errors/${id}`, { status }).then(unwrap),
   remove: (id) => http.delete(`/errors/${id}`),
   restore: (id) => http.post(`/errors/${id}/restore`).then(unwrap),
+  /** Ouvre le ticket de cette erreur, ou rend celui qui existe : { group, ticket }. */
+  createTicket: (id) => http.post(`/errors/${id}/ticket`).then(unwrap),
 }
 
 // --- Design -----------------------------------------------------------------

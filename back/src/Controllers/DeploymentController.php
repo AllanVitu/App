@@ -124,6 +124,18 @@ final class DeploymentController
     }
 
     /**
+     * GET /api/deployments/{id}/errors
+     *
+     * « Qu'est-ce que ce déploiement a cassé ? » (cf. DeploymentRepository::errorsSince).
+     */
+    public function errors(Request $request): void
+    {
+        $deployment = $this->findOrFail($request);
+
+        Response::json($this->deployments->errorsSince((string) $deployment['id'], $request->organizationId()));
+    }
+
+    /**
      * PUT /api/deployments/{id}
      */
     public function update(Request $request): void

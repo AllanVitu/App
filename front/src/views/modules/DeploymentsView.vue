@@ -12,7 +12,7 @@
  * attendre le réseau. Les compteurs, eux, viennent du serveur, qui voit
  * au-delà du plafond de chargement.
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 import AppIcon from '@/components/AppIcon.vue'
 import BoardColumns from '@/components/board/BoardColumns.vue'
@@ -34,6 +34,7 @@ import { useRevalidate } from '@/composables/useRevalidate'
 import { useLiveRows } from '@/composables/useLiveRows'
 import { useUiStore } from '@/stores/ui'
 import { formatRelative } from '@/utils/format'
+import { modulePath } from '@/utils/modules'
 
 const ui = useUiStore()
 
@@ -179,6 +180,36 @@ function openDetail(row) {
   openId.value = row.id
   play('open')
 }
+
+/**
+ * « Qu'est-ce que ce déploiement a cassé ? » — les erreurs apparues pendant
+ * que cette version était la dernière de la production. Chargées à
+ * l'ouverture, et pour la production seulement : c'est elle que les
+ * utilisateurs exécutent.
+ */
+const erreursApparues = ref(null)
+let demandeErreurs = 0
+
+watch(
+  () => (opened.value?.environment === 'production' ? opened.value.id : null),
+  async (id) => {
+    const numero = ++demandeErreurs
+
+    erreursApparues.value = null
+    if (!id) return
+
+    try {
+      const liste = await deploymentsApi.errors(id)
+
+      if (numero === demandeErreurs) erreursApparues.value = liste
+    } catch {
+      // Le détail reste utile sans cette liste : pas d'alerte pour une
+      // information que personne n'a demandée.
+      if (numero === demandeErreurs) erreursApparues.value = []
+    }
+  },
+  { immediate: true },
+)
 
 /**
  * Relance : le statut repart à « en file », et la base efface d'elle-même la
@@ -508,6 +539,32 @@ onMounted(load)
           class="max-h-72 overflow-auto whitespace-pre-wrap rounded-field border border-line bg-raised p-3 font-mono text-[0.72rem] leading-relaxed text-ink-2"
           >{{ opened.log }}</pre>
         <p v-else class="text-[0.76rem] text-ink-3">Aucun journal pour ce déploiement.</p>
+
+        <section v-if="opened.environment === 'production'" aria-labelledby="erreurs-apparues">
+          <p id="erreurs-apparues" class="label-caps mb-2">erreurs apparues avec cette version</p>
+
+          <div v-if="erreursApparues === null" class="py-2">
+            <BaseSpinner class="size-4 text-ink-3" />
+          </div>
+
+          <p v-else-if="!erreursApparues.length" class="text-[0.76rem] text-ink-3">
+            Aucune erreur nouvelle pendant que cette version était en production.
+          </p>
+
+          <ul v-else class="divide-y divide-line rounded-field border border-line">
+            <li v-for="erreur in erreursApparues" :key="erreur.id">
+              <RouterLink
+                :to="{ path: modulePath('supervision'), query: { q: erreur.title } }"
+                class="flex items-center gap-3 px-3 py-2 text-[0.8125rem] transition-colors hover:bg-raised"
+              >
+                <span class="min-w-0 flex-1 truncate">{{ erreur.title }}</span>
+                <span class="shrink-0 text-[0.7rem] text-ink-3">
+                  ×{{ erreur.occurrences }} · {{ formatRelative(erreur.first_seen_at) }}
+                </span>
+              </RouterLink>
+            </li>
+          </ul>
+        </section>
       </div>
     </BaseModal>
   </div>
