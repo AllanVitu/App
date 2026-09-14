@@ -15,7 +15,6 @@ import { useRoute } from 'vue-router'
 import AppSidebar from '@/components/AppSidebar.vue'
 import CommandPalette from '@/components/CommandPalette.vue'
 import ShortcutSheet from '@/components/ShortcutSheet.vue'
-import AppStatusBar from '@/components/AppStatusBar.vue'
 import AppTopbar from '@/components/AppTopbar.vue'
 import EmailVerificationBanner from '@/components/EmailVerificationBanner.vue'
 import SoundGate from '@/components/SoundGate.vue'
@@ -48,6 +47,10 @@ const title = computed(() => {
  * atteindre ce qu'il vient d'ouvrir.
  */
 const main = ref(null)
+
+// La barre du haut ouvre la palette sans simuler de raccourci clavier : un
+// clic est un clic, et la palette expose de quoi s'ouvrir (cf. show).
+const palette = ref(null)
 
 function focusMain() {
   main.value?.focus()
@@ -119,7 +122,7 @@ onMounted(async () => {
       <AppSidebar />
 
       <div class="flex min-w-0 flex-1 flex-col">
-        <AppTopbar :title="title" />
+        <AppTopbar :title="title" @search="palette?.show()" />
 
         <!-- Le défilement vit DANS le panneau, pas sur la page : le cadre
              reste fixe, comme une fenêtre d'application.
@@ -148,8 +151,6 @@ onMounted(async () => {
       </div>
     </div>
 
-    <AppStatusBar />
-
     <!-- Feuille des raccourcis, ouverte par « ? ». Le module Tickets se
          pilotait entièrement au clavier depuis le début — et il fallait le
          savoir. C'est le seul endroit où l'application le dit. -->
@@ -169,7 +170,7 @@ onMounted(async () => {
     <!-- Palette de recherche, montée UNE FOIS pour toute l'application :
          elle écoute Ctrl/⌘ + K sur le document, donc depuis n'importe quel
          écran, et cherche dans les cinq modules à la fois. -->
-    <CommandPalette />
+    <CommandPalette ref="palette" />
 
     <!-- Le choix sonore n'est proposé qu'une fois entré : les écrans
          d'identification restent muets. -->

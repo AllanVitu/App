@@ -99,7 +99,7 @@ function choose(withSound) {
     <div data-gate class="pastille-son size-20 rounded-full" aria-hidden="true" />
 
     <div data-gate class="text-center">
-      <h1 id="gate-title" class="text-lg font-semibold tracking-tight">saas os</h1>
+      <h1 id="gate-title" class="text-lg font-semibold tracking-tight">Relais</h1>
       <p class="mt-1 text-[0.85rem] text-ink-2">tableau de bord &amp; modules métier</p>
     </div>
 

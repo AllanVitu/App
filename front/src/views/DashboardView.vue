@@ -2,21 +2,23 @@
 /**
  * Tableau de bord.
  *
- * Il répond à cinq questions, dans l'ordre où on se les pose :
+ * Il répond à quatre questions, dans l'ordre où on se les pose en arrivant :
  *
- *   1. Où en est-on, en quatre chiffres ?   -> les tuiles de tête
- *   2. Qu'est-ce qui demande une action ?   -> demande attention
- *   3. Quelle tendance sur deux semaines ?  -> les deux courbes
- *   4. Où en est chaque module ?            -> la grille
- *   5. Que s'est-il passé récemment ?       -> activité récente
+ *   1. Où en est-on ?                       -> la phrase d'accueil, les chiffres
+ *   2. Que s'est-il passé en production ?   -> la ligne de production
+ *   3. Qu'est-ce qui m'attend ?             -> demande attention, ma journée
+ *   4. Où en est chaque module ?            -> vos lignes
  *
- * Ce n'est PAS un annuaire des modules — cette fonction appartient au menu
- * latéral, présent sur toutes les pages. La répéter ici ferait deux menus
- * concurrents et laisserait l'écran d'accueil sans contenu propre. La grille
- * ne navigue qu'accessoirement : ce qu'elle montre, c'est un état.
+ * Ce n'est PAS un annuaire des modules — le menu latéral l'est déjà. « Vos
+ * lignes » montre un ÉTAT, et ne navigue qu'accessoirement.
  *
- * Un seul appel (`GET /api/dashboard`) fournit le tout : l'écran s'affiche
- * en un aller-retour réseau.
+ * Les deux courbes quotidiennes et l'activité récente sont parties. Les
+ * courbes sont remplacées par la ligne de production, qui pose déploiements
+ * et erreurs sur le même axe au lieu de deux cadres à comparer ; l'activité a
+ * son écran, l'Historique, où elle se filtre au lieu de défiler.
+ *
+ * Un seul appel (`GET /api/dashboard`) fournit le tout : l'écran s'affiche en
+ * un aller-retour réseau.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
@@ -29,15 +31,22 @@ import {
   stagger,
 } from '@/animations/motion'
 import AppIcon from '@/components/AppIcon.vue'
-import ModuleGrid from '@/components/dashboard/ModuleGrid.vue'
-import StatTile from '@/components/dashboard/StatTile.vue'
-import TrendChart from '@/components/dashboard/TrendChart.vue'
+import ProductionLine from '@/components/dashboard/ProductionLine.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
-import EmptyState from '@/components/ui/EmptyState.vue'
 import { useRevalidate } from '@/composables/useRevalidate'
 import { dashboardApi } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import {
+  PRIORITIES,
+  attentionParts,
+  attentionSentence,
+  dayLabel,
+  delta,
+  dueLabel,
+  moduleStatus,
+  reasonOf,
+} from '@/utils/dashboard'
 import { formatRelative } from '@/utils/format'
 import { moduleLine, modulePath } from '@/utils/modules'
 
@@ -47,53 +56,84 @@ const ui = useUiStore()
 const overview = ref(null)
 const loading = ref(true)
 
+/** Relu à chaque chargement : un onglet laissé ouvert la nuit change de jour. */
+const now = ref(new Date())
+
 const firstName = computed(() => auth.user?.full_name?.split(' ')[0] ?? '')
+const greeting = computed(() => (firstName.value ? `Bonjour ${firstName.value}.` : 'Bonjour.'))
+const today = computed(() => dayLabel(now.value))
 
 const attention = computed(() => overview.value?.attention ?? [])
-const summary = computed(() => overview.value?.summary ?? null)
+const sentence = computed(() => attentionSentence(attention.value))
 
-/** Séries quotidiennes, séparées : deux mesures, deux cadres, deux échelles. */
-const deployments = computed(() =>
-  (overview.value?.trends ?? []).map((day) => ({ date: day.date, value: day.deployments })),
+const alerts = computed(() =>
+  attention.value.map((item) => ({
+    ...item,
+    parts: attentionParts(item, formatRelative),
+    tone: reasonOf(item),
+  })),
 )
 
-const errors = computed(() =>
-  (overview.value?.trends ?? []).map((day) => ({ date: day.date, value: day.errors })),
+const myDay = computed(() => overview.value?.my_day ?? { total: 0, tickets: [] })
+
+const tasks = computed(() =>
+  myDay.value.tickets.map((ticket) => ({
+    ...ticket,
+    priorityInfo: PRIORITIES[ticket.priority] ?? null,
+    due: dueLabel(ticket.due_date, now.value),
+  })),
+)
+
+const lines = computed(() =>
+  (overview.value?.modules ?? []).map((module) => ({ ...module, status: moduleStatus(module) })),
 )
 
 /**
- * Formulation du motif.
+ * Les quatre chiffres.
  *
- * L'ordre d'affichage est décidé par le SERVEUR (cf. AttentionFeed) : les
- * faits — une production cassée, une exception fatale, une échéance
- * dépassée — passent avant l'intention qu'est une priorité déclarée. Ce
- * composant ne fait que nommer ce qu'il reçoit.
- *
- * La pastille porte sa classe EN TOUTES LETTRES : Tailwind compile en
- * scannant les noms de classe littéralement présents dans les sources ; une
- * classe fabriquée à l'exécution (« text- » remplacé par « bg- ») ne serait
- * pas générée et la pastille resterait invisible.
+ * « Tickets ouverts » ne porte aucune comparaison : c'est un ÉTAT, pas un
+ * flux. « 34, +3 » laisserait croire qu'il s'en est créé trois, alors que le
+ * nombre peut monter parce qu'on en a fermé moins. Il dit plutôt la part qui
+ * revient à la personne qui regarde.
  */
-const REASONS = {
-  failed: { label: 'déploiement en échec', tone: 'text-brick', dot: 'bg-brick' },
-  fatal: { label: 'erreur fatale', tone: 'text-brick', dot: 'bg-brick' },
-  overdue: { label: 'en retard', tone: 'text-brick', dot: 'bg-brick' },
-  error: { label: 'erreur non résolue', tone: 'text-ochre', dot: 'bg-ochre' },
-  urgent: { label: 'urgent', tone: 'text-ochre', dot: 'bg-ochre' },
-}
+const kpis = computed(() => {
+  const summary = overview.value?.summary
 
-const reasonOf = (item) => REASONS[item.reason] ?? REASONS.urgent
+  if (!summary) return []
 
-/** Nom lisible d'un module, pour situer une ligne du fil. */
-const MODULE_NAMES = {
-  backend: 'backend',
-  deploiement: 'déploiement',
-  tickets: 'tickets',
-  supervision: 'supervision',
-  design: 'design',
-}
+  const assignes = myDay.value.total
 
-const moduleName = (slug) => MODULE_NAMES[slug] ?? slug
+  return [
+    {
+      label: 'Tickets ouverts',
+      value: summary.open_tickets.value,
+      note: assignes ? { text: `dont ${assignes} pour vous`, tone: 'text-ink-3' } : null,
+    },
+    {
+      label: 'Mises en production · 7 j',
+      value: summary.deployments.value,
+      note: delta(summary.deployments.value, summary.deployments.previous),
+    },
+    {
+      // Taux de RÉUSSITE et non d'échec : la valeur monte quand la situation
+      // s'améliore. La variation est en POINTS — « +5 % » d'un taux serait
+      // ambigu.
+      label: 'Réussite · 7 j',
+      value: summary.success_rate.value === null ? '—' : `${summary.success_rate.value} %`,
+      note: delta(summary.success_rate.value, summary.success_rate.previous, {
+        goodWhen: 'up',
+        unit: ' pts',
+      }),
+    },
+    {
+      label: 'Erreurs · 7 j',
+      value: summary.errors.value,
+      note: delta(summary.errors.value, summary.errors.previous, { goodWhen: 'down' }),
+    },
+  ]
+})
+
+const nombre = (value) => (typeof value === 'number' ? value.toLocaleString('fr-FR') : value)
 
 /**
  * L'entrée n'est jouée qu'UNE FOIS par session.
@@ -101,10 +141,6 @@ const moduleName = (slug) => MODULE_NAMES[slug] ?? slug
  * Le tableau de bord est remonté à chaque retour dessus — c'est-à-dire
  * souvent. Rejouée à chaque fois, la cascade cesse d'aider le regard à entrer
  * dans la page et devient un péage : on attend qu'elle finisse pour lire.
- *
- * Le témoin vit au niveau du MODULE, pas du composant : il survit donc au
- * démontage, mais pas au rechargement de la page — ce qui correspond bien à
- * « la première fois de cette visite ».
  */
 let introPlayed = false
 
@@ -112,16 +148,11 @@ const root = ref(null)
 let scope = null
 
 /**
- * Entrée, jouée APRÈS l'arrivée des données.
+ * Entrée, jouée APRÈS l'arrivée des données : au montage, l'écran ne contient
+ * qu'un indicateur de chargement, et les blocs à animer n'existent pas encore.
  *
- * C'est pour cela qu'elle n'est pas confiée à `useMotion`, qui déclenche au
- * montage : à ce moment-là l'écran ne contient qu'un indicateur de
- * chargement, et les blocs à animer n'existent pas encore. Animer un
- * squelette vide puis y remplacer le contenu produirait deux mouvements
- * successifs, illisibles.
- *
- * UNE animation, sur les cinq blocs de premier niveau — pas sur chacune de
- * leurs lignes. Trente éléments qui entrent en cascade, c'est une page qu'on
+ * UNE animation, sur les blocs de premier niveau — pas sur chacune de leurs
+ * lignes. Trente éléments qui entrent en cascade, c'est une page qu'on
  * regarde se construire au lieu de la lire.
  */
 function playIntro() {
@@ -130,8 +161,7 @@ function playIntro() {
   introPlayed = true
 
   // Rien à poser en mouvement réduit : sans animation, les blocs sont déjà
-  // opaques et à leur place. C'est ici l'animation qui les rend invisibles,
-  // pas une feuille de style.
+  // opaques et à leur place.
   if (prefersReducedMotion()) return
 
   scope = createScope({ root: root.value }).add(() => {
@@ -145,15 +175,12 @@ function playIntro() {
   })
 }
 
-/**
- * Un seul appel fournit tout l'écran : les chiffres, les alertes, les
- * courbes, la grille et l'activité. Le relire, c'est tout rafraîchir.
- */
 async function load({ silent = false } = {}) {
   if (!silent) loading.value = true
 
   try {
     overview.value = await dashboardApi.overview()
+    now.value = new Date()
   } catch (error) {
     ui.notify(error.message, 'error')
   } finally {
@@ -162,9 +189,8 @@ async function load({ silent = false } = {}) {
 }
 
 /**
- * L'écran d'accueil est celui qu'on laisse ouvert. C'est aussi celui qui
- * annonce ce qui « demande attention » — un tableau d'alertes vieux d'une
- * heure ne dit pas ce qui demande attention, il dit ce qui le demandait.
+ * L'écran d'accueil est celui qu'on laisse ouvert. Un tableau d'alertes vieux
+ * d'une heure ne dit pas ce qui demande attention, il dit ce qui le demandait.
  */
 useRevalidate(() => load({ silent: true }))
 
@@ -186,14 +212,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="root" class="space-y-6">
-    <!-- Accueil. Le chevron d'invite et le curseur clignotant qui l'ornaient
-         ont été retirés : ils imitaient un terminal, alors que rien ici ne se
-         tape au clavier. Un curseur qui clignote sans qu'on puisse écrire est
-         une promesse que l'interface ne tient pas. -->
+  <div ref="root" class="flex flex-col gap-5">
     <div class="min-w-0">
-      <p class="label-caps">session ouverte</p>
-      <h2 class="mt-1 text-xl font-bold">bonjour {{ firstName }}</h2>
+      <p class="label-caps">{{ today }}</p>
+      <h1
+        class="mt-1.5 text-[1.875rem] font-bold leading-[1.1] tracking-[-0.015em] [font-stretch:85%]"
+      >
+        {{ greeting }}
+      </h1>
+      <p v-if="overview" class="mt-1.5 text-[0.9375rem] text-ink-2">{{ sentence }}</p>
     </div>
 
     <div v-if="loading" class="flex justify-center py-20">
@@ -202,146 +229,176 @@ onBeforeUnmount(() => {
 
     <template v-else-if="overview">
       <!-- ========================= LES QUATRE CHIFFRES ========================= -->
-      <section v-if="summary" data-anim="block" class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile
-          label="déploiements"
-          :value="summary.deployments.value"
-          :previous="summary.deployments.previous"
-        />
-        <!-- Taux de RÉUSSITE et non d'échec : la valeur monte quand la
-             situation s'améliore. La variation est en POINTS, pas en pourcent
-             — « +5 % » d'un taux serait ambigu. -->
-        <StatTile
-          label="réussite"
-          suffix="%"
-          delta-suffix=" pts"
-          good-when="up"
-          :value="summary.success_rate.value"
-          :previous="summary.success_rate.previous"
-        />
-        <StatTile
-          label="erreurs"
-          good-when="down"
-          :value="summary.errors.value"
-          :previous="summary.errors.previous"
-        />
-        <!-- Un ÉTAT : aucune comparaison, cf. StatTile. -->
-        <StatTile label="tickets ouverts" :value="summary.open_tickets.value" />
-      </section>
-
-      <!-- ========================== DEMANDE ATTENTION ========================== -->
-      <section data-anim="block">
-        <h3 class="mb-3 text-[0.95rem] font-semibold">demande attention</h3>
-
-        <!-- L'absence d'alerte est une information, pas un vide : la dire
-             explicitement évite de laisser croire au chargement en cours. -->
+      <!-- Filets d'un pixel par l'écart de la grille sur un fond de filet :
+           ils tombent juste en deux colonnes comme en quatre, là où des
+           bordures par cellule se doubleraient au passage à la ligne. -->
+      <section
+        data-anim="block"
+        class="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-line bg-line lg:grid-cols-4"
+        aria-label="Chiffres clés"
+      >
         <div
-          v-if="attention.length === 0"
-          class="card flex items-center gap-3 px-4 py-3 text-[0.82rem] text-ink-2"
+          v-for="kpi in kpis"
+          :key="kpi.label"
+          class="flex flex-col gap-1 bg-panel px-4.5 py-3.5"
         >
-          <AppIcon name="check" :size="16" class="shrink-0 text-moss" />
-          Rien ne demande d'action : aucun déploiement en échec, aucune erreur non résolue, aucune
-          échéance dépassée.
+          <span class="label-caps">{{ kpi.label }}</span>
+          <span
+            class="font-mono text-[1.75rem] font-medium leading-[1.15] tracking-[-0.02em] tabular-nums"
+          >
+            {{ nombre(kpi.value) }}
+          </span>
+          <span v-if="kpi.note" class="text-[0.78rem]" :class="kpi.note.tone">{{
+            kpi.note.text
+          }}</span>
         </div>
-
-        <ul v-else class="card divide-y divide-line overflow-hidden">
-          <li v-for="item in attention" :key="item.id">
-            <RouterLink
-              :to="modulePath(item.module)"
-              class="flex items-center gap-3 py-2 pl-2 pr-4 transition-colors hover:bg-raised"
-            >
-              <!-- ┌───────────────────────────────────────────────────────┐
-                   │  LES DEUX VOCABULAIRES, CÔTE À CÔTE, SANS SE MÊLER    │
-                   │                                                       │
-                   │  C'est la seule liste de l'application où l'identité  │
-                   │  du module et la gravité de l'alerte se lisent d'un   │
-                   │  même coup d'œil. La règle de forme fait tout le      │
-                   │  travail : la BARRE, en aplat, dit sur quelle ligne   │
-                   │  ça se passe ; le POINT, à côté, dit à quel point     │
-                   │  c'est grave. Deux formes, deux questions.            │
-                   └───────────────────────────────────────────────────────┘ -->
-              <span class="ligne h-6" :class="moduleLine(item.module)" aria-hidden="true" />
-
-              <span
-                class="size-2 shrink-0 rounded-pill"
-                :class="reasonOf(item).dot"
-                aria-hidden="true"
-              />
-
-              <span class="hidden w-24 shrink-0 text-[0.72rem] text-ink-3 sm:block">
-                {{ moduleName(item.module) }}
-              </span>
-
-              <!-- La référence dit QUOI sans ouvrir : une branche Git, un
-                   numéro de ticket, un nombre d'occurrences. -->
-              <span
-                class="hidden w-32 shrink-0 truncate font-mono text-[0.72rem] tabular-nums text-ink-3 md:block"
-              >
-                {{ item.ref }}
-              </span>
-
-              <span class="min-w-0 flex-1 truncate text-[0.84rem]">{{ item.title }}</span>
-
-              <span class="shrink-0 text-[0.72rem]" :class="reasonOf(item).tone">
-                {{ reasonOf(item).label }}
-              </span>
-            </RouterLink>
-          </li>
-        </ul>
       </section>
 
-      <!-- ============================= TENDANCES ============================== -->
-      <!-- DEUX cadres, jamais deux axes dans un seul : cf. TrendChart. -->
-      <section data-anim="block" class="grid gap-3 md:grid-cols-2">
-        <TrendChart
-          title="déploiements"
-          unit="déploiements"
-          color="chart-1"
-          :points="deployments"
-        />
-        <TrendChart title="erreurs" unit="occurrences" color="chart-2" :points="errors" />
-      </section>
-
-      <!-- ========================= ÉTAT DES MODULES =========================== -->
-      <div data-anim="block">
-        <ModuleGrid :modules="overview.modules" />
+      <!-- ======================== LA LIGNE DE PRODUCTION ======================= -->
+      <div v-if="overview.line" data-anim="block">
+        <ProductionLine :line="overview.line" />
       </div>
 
-      <!-- ========================== ACTIVITÉ RÉCENTE ========================== -->
-      <section data-anim="block">
-        <h3 class="mb-3 text-[0.95rem] font-semibold">activité récente</h3>
+      <div data-anim="block" class="grid gap-5 xl:grid-cols-[1.15fr_1fr_1fr]">
+        <!-- ========================= DEMANDE ATTENTION ======================== -->
+        <section
+          class="card flex min-w-0 flex-col overflow-hidden"
+          aria-labelledby="attention-titre"
+        >
+          <header class="flex items-center justify-between border-b border-line px-4.5 py-3">
+            <h2 id="attention-titre" class="label-caps">Demande attention</h2>
+            <span class="font-mono text-xs text-ink-3 tabular-nums">{{ alerts.length }}</span>
+          </header>
 
-        <div class="card overflow-hidden">
-          <EmptyState
-            v-if="!overview.recent.length"
-            title="Aucune activité"
-            description="Les éléments que vous créerez apparaîtront ici."
-          />
+          <!-- L'absence d'alerte est une information, pas un vide : la dire
+               explicitement évite de laisser croire au chargement en cours. -->
+          <p
+            v-if="!alerts.length"
+            class="flex items-start gap-3 px-4.5 py-4 text-[0.84rem] text-ink-2"
+          >
+            <AppIcon name="check" :size="16" class="mt-0.5 shrink-0 text-moss" />
+            Rien ne demande d'action : aucun déploiement en échec, aucune erreur non résolue, aucune
+            échéance dépassée.
+          </p>
 
           <ul v-else class="divide-y divide-line">
-            <li v-for="item in overview.recent" :key="`${item.module}-${item.id}`">
+            <li v-for="item in alerts" :key="`${item.module}-${item.id}`">
               <RouterLink
                 :to="modulePath(item.module)"
-                class="flex items-center gap-3 px-4 py-2 transition-colors hover:bg-raised"
+                class="flex gap-3.5 px-4.5 py-3 transition-colors hover:bg-raised"
               >
-                <span class="hidden w-24 shrink-0 text-[0.72rem] text-ink-3 sm:block">
-                  {{ moduleName(item.module) }}
+                <!-- La BARRE, en aplat, dit sur quelle ligne ça se passe ; le
+                     POINT, à droite, dit à quel point c'est grave. Deux formes,
+                     deux questions — cf. utils/modules. -->
+                <span
+                  class="ligne self-stretch"
+                  :class="moduleLine(item.module)"
+                  aria-hidden="true"
+                />
+
+                <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span class="truncate text-[0.9rem] font-semibold">{{
+                    item.parts.headline
+                  }}</span>
+                  <span class="truncate font-mono text-xs text-ink-3">{{ item.parts.meta }}</span>
+                  <span v-if="item.parts.detail" class="truncate text-[0.8125rem] text-ink-2">
+                    {{ item.parts.detail }}
+                  </span>
                 </span>
 
-                <span class="w-24 shrink-0 truncate font-mono text-[0.72rem] text-ink-3">
-                  {{ item.ref }}
-                </span>
-
-                <span class="min-w-0 flex-1 truncate text-[0.84rem]">{{ item.title }}</span>
-
-                <span class="shrink-0 text-[0.72rem] text-ink-3">
-                  {{ formatRelative(item.happened_at) }}
+                <span
+                  class="flex h-5 shrink-0 items-center gap-1.5 text-xs"
+                  :class="item.tone.tone"
+                >
+                  <span class="size-1.75 rounded-pill" :class="item.tone.dot" aria-hidden="true" />
+                  {{ item.tone.label }}
                 </span>
               </RouterLink>
             </li>
           </ul>
-        </div>
-      </section>
+
+          <RouterLink
+            :to="{ name: 'history' }"
+            class="mt-auto flex items-center gap-2 border-t border-line px-4.5 py-3 text-[0.8125rem] text-ink-2 transition-colors hover:text-ink"
+          >
+            Tout voir dans l'historique
+            <AppIcon name="arrow-right" :size="14" />
+          </RouterLink>
+        </section>
+
+        <!-- ============================ MA JOURNÉE ============================ -->
+        <section class="card flex min-w-0 flex-col overflow-hidden" aria-labelledby="journee-titre">
+          <header class="flex items-center justify-between border-b border-line px-4.5 py-3">
+            <h2 id="journee-titre" class="label-caps">Ma journée</h2>
+            <span class="font-mono text-xs text-ink-3 tabular-nums">
+              {{ myDay.total }} {{ myDay.total > 1 ? 'assignés' : 'assigné' }}
+            </span>
+          </header>
+
+          <p v-if="!tasks.length" class="px-4.5 py-4 text-[0.84rem] text-ink-2">
+            Aucun ticket ne vous est assigné. Ceux qui attendent preneur sont dans Tickets.
+          </p>
+
+          <ul v-else class="divide-y divide-line">
+            <li v-for="ticket in tasks" :key="ticket.id">
+              <RouterLink
+                :to="modulePath('tickets')"
+                class="flex flex-col gap-1 px-4.5 py-3 transition-colors hover:bg-raised"
+              >
+                <span class="truncate text-[0.875rem]">{{ ticket.title }}</span>
+                <span class="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-ink-3">
+                  <span class="font-mono">#{{ ticket.number }}</span>
+                  <span
+                    v-if="ticket.priorityInfo"
+                    class="flex items-center gap-1.5"
+                    :class="ticket.priorityInfo.tone"
+                  >
+                    <span class="size-1.5 rounded-pill bg-current" aria-hidden="true" />
+                    {{ ticket.priorityInfo.label }}
+                  </span>
+                  <span v-if="ticket.due" :class="ticket.due.late ? 'text-brick' : ''">
+                    {{ ticket.due.text }}
+                  </span>
+                  <span v-if="ticket.project" class="truncate">{{ ticket.project }}</span>
+                </span>
+              </RouterLink>
+            </li>
+          </ul>
+
+          <RouterLink
+            :to="modulePath('tickets')"
+            class="mt-auto flex items-center gap-2 border-t border-line px-4.5 py-3 text-[0.8125rem] text-ink-2 transition-colors hover:text-ink"
+          >
+            Ouvrir les tickets
+            <AppIcon name="arrow-right" :size="14" />
+          </RouterLink>
+        </section>
+
+        <!-- ============================ VOS LIGNES ============================ -->
+        <section class="card flex min-w-0 flex-col overflow-hidden" aria-labelledby="lignes-titre">
+          <header class="flex items-center justify-between border-b border-line px-4.5 py-3">
+            <h2 id="lignes-titre" class="label-caps">Vos lignes</h2>
+            <span class="font-mono text-xs text-ink-3 tabular-nums">{{ lines.length }}</span>
+          </header>
+
+          <ul class="grid grid-cols-2 gap-2.5 p-3.5">
+            <li v-for="module in lines" :key="module.id">
+              <RouterLink
+                :to="modulePath(module.slug)"
+                class="flex h-full flex-col overflow-hidden rounded-card border border-line bg-paper transition-colors hover:border-line-2"
+              >
+                <span class="h-1 shrink-0" :class="moduleLine(module.slug)" aria-hidden="true" />
+                <span class="flex min-w-0 flex-col px-3 py-2.5">
+                  <span class="truncate text-[0.84rem] font-semibold">{{ module.name }}</span>
+                  <span class="truncate font-mono text-[0.72rem]" :class="module.status.tone">
+                    {{ module.status.text }}
+                  </span>
+                </span>
+              </RouterLink>
+            </li>
+          </ul>
+        </section>
+      </div>
     </template>
   </div>
 </template>

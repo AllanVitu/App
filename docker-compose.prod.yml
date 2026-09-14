@@ -86,7 +86,7 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:?MAIL_FROM_ADDRESS est obligatoire}
-      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-SaaS App}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Relais}
       STORAGE_PATH: /var/www/storage
       # Adresses (ou blocs CIDR, séparés par des virgules) des intermédiaires
       # AUTORISÉS à dire d'où vient une requête par « X-Forwarded-For » : la

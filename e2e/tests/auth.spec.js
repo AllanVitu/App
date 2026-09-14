@@ -28,13 +28,13 @@ test.describe('authentification', () => {
   test('la connexion mène au tableau de bord', async ({ page }) => {
     await login(page)
 
-    // Les trois questions auxquelles l'accueil répond. Il n'est plus un
-    // annuaire des modules — cette fonction appartient au menu latéral —
-    // mais un état : ce qui demande une action, où en est chaque module,
-    // et ce qui s'est passé récemment.
-    await expect(page.getByRole('heading', { name: 'demande attention' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'état des modules' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'activité récente' })).toBeVisible()
+    // L'accueil n'est pas un annuaire des modules — le menu latéral l'est —
+    // mais un état : la production, ce qui demande une action, ce qui revient
+    // à la personne connectée, et où en est chaque ligne.
+    await expect(page.getByRole('heading', { name: 'Ligne de production' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Demande attention' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Ma journée' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Vos lignes' })).toBeVisible()
 
     // Le compteur du module « tickets » lit SA table, et non la table
     // générique. On le compare au chiffre qu'affiche le module lui-même
@@ -68,8 +68,9 @@ test.describe('authentification', () => {
 
     // Un « — » signalerait que le format d'horodatage de l'API n'est plus
     // parsable par le navigateur : le défaut s'était déjà produit.
-    const activite = page.locator('section', { hasText: 'Activité récente' })
-    await expect(activite).not.toContainText('· —')
+    const attention = page.getByRole('region', { name: 'Demande attention' })
+    await expect(attention.getByRole('listitem').first()).toBeVisible()
+    await expect(attention).not.toContainText('· —')
   })
 
   test('la session survit à un rechargement', async ({ page }) => {

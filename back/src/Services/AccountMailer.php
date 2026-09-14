@@ -282,7 +282,7 @@ final class AccountMailer
     <tr><td align="center">
       <table role="presentation" width="100%" style="max-width:540px;background:#ffffff;border-radius:12px;padding:32px">
         <tr><td>
-          <p style="margin:0 0 24px;font-weight:700;font-size:18px;color:#243dec">SaaS App</p>
+          <p style="margin:0 0 24px;font-weight:700;font-size:18px;color:#0d0d0f">Relais</p>
           <h1 style="margin:0 0 16px;font-size:20px;color:#0f172a">' . $e($title) . '</h1>
           <p style="margin:0 0 8px;color:#334155">Bonjour ' . $e($name) . ',</p>
           <p style="margin:0;color:#334155;line-height:1.6">' . $e($intro) . '</p>

@@ -99,7 +99,7 @@ test.describe('moteur d’animation', () => {
     await login(page)
 
     await expect(page.getByRole('heading', { name: /bonjour/i })).toBeVisible()
-    await expect(page.getByText('état des modules')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Vos lignes' })).toBeVisible()
 
     const opacites = await page.evaluate(() =>
       [...document.querySelectorAll('[data-anim="block"]')].map((el) => getComputedStyle(el).opacity),

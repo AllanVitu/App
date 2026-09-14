@@ -31,7 +31,7 @@ final class Mailer
     public function send(string $toEmail, string $toName, string $subject, string $html, string $text): void
     {
         $fromAddress = Env::get('MAIL_FROM_ADDRESS', 'no-reply@saas.local') ?? 'no-reply@saas.local';
-        $fromName    = Env::get('MAIL_FROM_NAME', 'SaaS App') ?? 'SaaS App';
+        $fromName    = Env::get('MAIL_FROM_NAME', 'Relais') ?? 'Relais';
 
         // Une adresse ou un sujet contenant un retour à la ligne permettrait
         // d'injecter des en-têtes arbitraires (Bcc, Content-Type...).

@@ -1,11 +1,18 @@
 <script setup>
 /**
- * Barre de chemin.
+ * Barre du haut : où l'on est, de quoi chercher, et le compte.
  *
- * Reprend la logique d'un explorateur de fichiers : à gauche le chemin
- * courant, à droite l'heure. C'est ce qui donne à l'application son
- * caractère de poste de travail plutôt que de site web — on sait en
- * permanence *où* l'on est.
+ * Deux choses en sont parties. L'horloge, qui doublait celle du système. Le
+ * chemin brut (« /modules/tickets »), qui parlait la langue du routeur : le
+ * fil d'Ariane dit l'espace et l'écran, dans la langue de l'écran.
+ *
+ * Le champ de recherche n'en est pas un : c'est le bouton de la palette de
+ * commandes, qui cherche dans tous les modules à la fois. Il affiche son
+ * raccourci, pour qu'on apprenne à se passer de lui.
+ *
+ * L'indicateur « hors ligne » vivait dans une barre d'état en pied de page,
+ * qui a disparu. Il apparaît ici, et seulement quand il a quelque chose à
+ * dire : un voyant vert permanent est un voyant qu'on cesse de regarder.
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -17,6 +24,12 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { moduleLine } from '@/utils/modules'
 
+defineProps({
+  title: { type: String, default: '' },
+})
+
+defineEmits(['search'])
+
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
@@ -25,62 +38,27 @@ const ui = useUiStore()
 const menuOpen = ref(false)
 const loggingOut = ref(false)
 
-/** Chemin lisible : la racine s'écrit « /accueil » plutôt que « / ». */
-const path = computed(() => (route.path === '/' ? '/accueil' : route.path))
-
-/**
- * La ligne sur laquelle on se trouve, en PAVÉ et non en texte.
- *
- * Le fil d'ariane est l'endroit qui répond à « où suis-je » ; il porte donc
- * le repère de ligne. Un pavé, jamais du texte coloré : c'est la règle de
- * forme qui empêche les couleurs d'identité et les couleurs d'état de se
- * confondre — et elle dispense au passage ce pavé de tenir un contraste de
- * texte, ce qui lui laisse sa saturation.
- */
+/** Sur l'écran d'un module, la couleur de sa ligne précède son nom. */
 const ligne = computed(() => {
   const trouve = route.path.match(/^\/modules\/([a-z0-9-]+)/)
 
   return trouve ? moduleLine(trouve[1]) : null
 })
 
-// --- Horloge ----------------------------------------------------------------
-const now = ref(new Date())
-let timer = null
+const online = ref(navigator.onLine)
 
-const time = computed(() => now.value.toLocaleTimeString('fr-FR', { hour12: false }))
-
-const day = computed(() =>
-  now.value.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short' }),
-)
-
-function startClock() {
-  stopClock()
-  timer = setInterval(() => (now.value = new Date()), 1000)
-}
-
-function stopClock() {
-  clearInterval(timer)
-  timer = null
-}
-
-/** Onglet masqué : inutile de réveiller le navigateur chaque seconde. */
-function onVisibility() {
-  if (document.hidden) {
-    stopClock()
-  } else {
-    now.value = new Date()
-    startClock()
-  }
+function sync() {
+  online.value = navigator.onLine
 }
 
 onMounted(() => {
-  startClock()
-  document.addEventListener('visibilitychange', onVisibility)
+  window.addEventListener('online', sync)
+  window.addEventListener('offline', sync)
 })
 
 onBeforeUnmount(() => {
-  stopClock()
-  document.removeEventListener('visibilitychange', onVisibility)
+  window.removeEventListener('online', sync)
+  window.removeEventListener('offline', sync)
 })
 
 async function logout() {
@@ -98,43 +76,69 @@ async function logout() {
 </script>
 
 <template>
-  <header class="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-panel pl-2 pr-1.5">
+  <header class="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-paper px-3 lg:px-8">
     <button
       type="button"
-      class="p-1.5 text-ink-2 transition-colors hover:text-ink lg:hidden"
+      class="flex size-9 items-center justify-center rounded-card text-ink-2 transition-colors hover:text-ink lg:hidden"
       aria-label="Ouvrir le menu"
       @click="ui.toggleSidebar()"
     >
-      <AppIcon name="menu" :size="17" />
+      <AppIcon name="menu" :size="18" />
     </button>
 
-    <!-- Chemin courant, précédé de sa ligne quand on est dans un module -->
-    <span v-if="ligne" class="ligne h-4 shrink-0" :class="ligne" aria-hidden="true" />
-
-    <p class="min-w-0 flex-1 truncate text-[0.78rem] font-medium tracking-tight">
-      <span class="text-ink-3">{{ path.slice(0, path.lastIndexOf('/') + 1) }}</span
-      ><span class="text-ink">{{ path.slice(path.lastIndexOf('/') + 1) }}</span>
-    </p>
-
-    <!-- Horloge -->
-    <p
-      class="hidden shrink-0 items-baseline gap-2 text-[0.75rem] text-ink-2 tabular-nums sm:flex"
-      aria-hidden="true"
+    <nav
+      class="flex min-w-0 flex-1 items-center gap-2 text-[0.8125rem] text-ink-3"
+      aria-label="Fil d'Ariane"
     >
-      <span>{{ time }}</span>
-      <span class="text-ink-3">{{ day }}</span>
-    </p>
+      <template v-if="auth.organization">
+        <span class="hidden truncate sm:inline">{{ auth.organization.name }}</span>
+        <span class="hidden sm:inline" aria-hidden="true">/</span>
+      </template>
+      <span v-if="ligne" class="ligne h-4" :class="ligne" aria-hidden="true" />
+      <span class="truncate font-semibold text-ink" aria-current="page">{{
+        title || 'Relais'
+      }}</span>
+    </nav>
 
-    <div class="mx-1 hidden h-4 w-px bg-line sm:block" />
+    <span
+      v-if="!online"
+      class="flex shrink-0 items-center gap-1.5 text-xs text-brick"
+      role="status"
+    >
+      <span class="size-1.75 rounded-pill bg-brick" aria-hidden="true" />
+      Hors ligne
+    </span>
 
-    <SoundToggle />
-    <ThemeToggle />
+    <button
+      type="button"
+      class="hidden h-9 w-95 shrink-0 items-center gap-2.5 rounded-card border border-line-2 bg-panel pl-3 pr-2 text-[0.8125rem] text-ink-3 transition-colors hover:border-ink-3 hover:text-ink-2 md:flex"
+      @click="$emit('search')"
+    >
+      <AppIcon name="search" :size="16" class="shrink-0" />
+      <span class="flex-1 truncate text-left">Rechercher ou lancer une commande</span>
+      <kbd class="rounded-card border border-line-2 px-1.5 font-mono text-[0.6875rem] text-ink-2">
+        Ctrl K
+      </kbd>
+    </button>
 
-    <!-- Menu du compte -->
-    <div class="relative">
+    <button
+      type="button"
+      class="flex size-9 items-center justify-center rounded-card text-ink-2 transition-colors hover:text-ink md:hidden"
+      aria-label="Rechercher"
+      @click="$emit('search')"
+    >
+      <AppIcon name="search" :size="17" />
+    </button>
+
+    <div class="flex shrink-0 items-center gap-1">
+      <SoundToggle />
+      <ThemeToggle />
+    </div>
+
+    <div class="relative shrink-0">
       <button
         type="button"
-        class="flex size-7 items-center justify-center border border-line bg-raised text-[0.7rem] font-semibold transition-colors hover:border-ink"
+        class="flex size-9 items-center justify-center rounded-card border border-line-2 bg-raised text-[0.75rem] font-semibold transition-colors hover:border-ink"
         aria-haspopup="menu"
         :aria-expanded="menuOpen"
         aria-label="Menu du compte"
@@ -143,49 +147,44 @@ async function logout() {
         {{ auth.initials }}
       </button>
 
-      <!-- Zone transparente : un clic n'importe où referme le menu -->
       <div v-if="menuOpen" class="fixed inset-0 z-10" @click="menuOpen = false" />
 
       <Transition name="fade">
-        <div
-          v-if="menuOpen"
-          class="panel absolute right-0 z-20 mt-1.5 w-56 border-ink-3"
-          role="menu"
-        >
-          <div class="border-b border-line px-3 py-2.5">
-            <p class="truncate text-[0.78rem] font-semibold">{{ auth.user?.full_name }}</p>
-            <p class="truncate text-[0.72rem] text-ink-3">{{ auth.user?.email }}</p>
+        <div v-if="menuOpen" class="floating absolute right-0 z-20 mt-2 w-60" role="menu">
+          <div class="border-b border-line px-3.5 py-3">
+            <p class="truncate text-[0.8125rem] font-semibold">{{ auth.user?.full_name }}</p>
+            <p class="truncate text-[0.75rem] text-ink-3">{{ auth.user?.email }}</p>
           </div>
 
           <RouterLink
             :to="{ name: 'profile' }"
-            class="flex items-center gap-2.5 px-3 py-2 text-[0.78rem] text-ink-2 transition-colors hover:bg-raised hover:text-ink"
+            class="flex items-center gap-2.5 px-3.5 py-2.5 text-[0.8125rem] text-ink-2 transition-colors hover:bg-raised hover:text-ink"
             role="menuitem"
             @click="menuOpen = false"
           >
             <AppIcon name="user" :size="15" />
-            profil
+            Profil
           </RouterLink>
 
           <RouterLink
             :to="{ name: 'settings' }"
-            class="flex items-center gap-2.5 px-3 py-2 text-[0.78rem] text-ink-2 transition-colors hover:bg-raised hover:text-ink"
+            class="flex items-center gap-2.5 px-3.5 py-2.5 text-[0.8125rem] text-ink-2 transition-colors hover:bg-raised hover:text-ink"
             role="menuitem"
             @click="menuOpen = false"
           >
             <AppIcon name="settings" :size="15" />
-            paramètres
+            Paramètres
           </RouterLink>
 
           <button
             type="button"
-            class="flex w-full items-center gap-2.5 border-t border-line px-3 py-2 text-left text-[0.78rem] text-brick transition-colors hover:bg-brick-bg disabled:opacity-50"
+            class="flex w-full items-center gap-2.5 border-t border-line px-3.5 py-2.5 text-left text-[0.8125rem] text-brick transition-colors hover:bg-brick-bg disabled:opacity-50"
             role="menuitem"
             :disabled="loggingOut"
             @click="logout"
           >
             <AppIcon name="logout" :size="15" />
-            se déconnecter
+            Se déconnecter
           </button>
         </div>
       </Transition>

@@ -18,7 +18,7 @@ test.describe('recherche transverse', () => {
     await page.keyboard.press('Control+k')
     await expect(palette(page)).toBeVisible()
 
-    await page.getByLabel('Chercher').fill('refresh')
+    await page.getByLabel('Chercher', { exact: true }).fill('refresh')
 
     // « refresh » existe en ticket ET en déploiement dans le jeu de
     // démonstration : c'est exactement le cas qu'aucune recherche de module ne
@@ -34,7 +34,7 @@ test.describe('recherche transverse', () => {
   test('les accents ne changent rien au résultat', async ({ page }) => {
     await page.keyboard.press('Control+k')
 
-    const champ = page.getByLabel('Chercher')
+    const champ = page.getByLabel('Chercher', { exact: true })
 
     await champ.fill('systeme')
     await expect(palette(page).getByText(/Système/i).first()).toBeVisible()
@@ -52,7 +52,7 @@ test.describe('recherche transverse', () => {
     // premier module du catalogue.
     await expect(palette(page).getByText('aller à')).toBeVisible()
 
-    await page.getByLabel('Chercher').fill('supervision')
+    await page.getByLabel('Chercher', { exact: true }).fill('supervision')
 
     // ATTENDRE QUE LE FILTRE SOIT APPLIQUÉ avant d'appuyer sur Entrée.
     // « fill » rend la main dès la frappe ; sans cette attente, Entrée part
@@ -80,7 +80,7 @@ test.describe('recherche transverse', () => {
 
   test('un terme trop court ne lance pas de recherche', async ({ page }) => {
     await page.keyboard.press('Control+k')
-    await page.getByLabel('Chercher').fill('r')
+    await page.getByLabel('Chercher', { exact: true }).fill('r')
 
     // Le dire vaut mieux que de laisser croire à une absence de résultat.
     await expect(palette(page).getByText(/un caractère de plus/i)).toBeVisible()
