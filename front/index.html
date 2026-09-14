@@ -12,57 +12,15 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="theme-color" content="#0b0d11" />
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Archivo est demandé avec ses DEUX axes : la graisse et la CHASSE.
-         La chasse sert aux libellés en capitales, qui se condensent au lieu
-         de s'allonger — ce que fait toute signalétique quand le mot est plus
-         long que la place disponible. Sans « wdth » dans l'adresse, Google
-         sert la version à chasse fixe et « font-stretch » n'a aucun effet.
+    <!-- Aucune police n'est demandée à un tiers : Archivo et Geist Mono sont
+         servies par l'application (cf. src/main.js). Chargées depuis Google,
+         elles lui transmettaient l'adresse IP de chaque visiteur dès la page
+         de connexion, avant tout consentement. -->
 
-         Deux familles, comme avant : Geist Mono demeure pour ce qui s'aligne
-         en colonne, empreintes de commit et compteurs. -->
-    <link
-      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Geist+Mono:wght@100..900&display=swap"
-      rel="stylesheet"
-    />
-
-    <script>
-      // Applique le thème AVANT le premier rendu : sans cela, la page
-      // apparaîtrait une fraction de seconde dans le mauvais thème.
-      //
-      // Le sombre étant la référence de cette direction visuelle, c'est la
-      // classe « light » qui bascule — l'inverse de l'usage courant.
-      ;(function () {
-        try {
-          const stored = localStorage.getItem('theme') || 'system'
-          const light =
-            stored === 'light' ||
-            (stored === 'system' && window.matchMedia('(prefers-color-scheme: light)').matches)
-          document.documentElement.classList.toggle('light', light)
-
-          // Densité et mouvement suivent le même chemin, et pour la même
-          // raison : ils viennent du COMPTE, donc du réseau, et n'arrivent
-          // qu'après « /auth/me ». Sans cette avance, la page s'affiche à la
-          // densité par défaut puis saute — et joue ses animations d'entrée
-          // alors même qu'on les a coupées.
-          //
-          // Le serveur reste la source de vérité : ce miroir est corrigé dès
-          // que la réponse arrive (cf. stores/ui.js, applyDisplay).
-          const densite = localStorage.getItem('densite')
-          if (densite === 'compact' || densite === 'confortable') {
-            document.documentElement.dataset.densite = densite
-          }
-
-          const mouvement = localStorage.getItem('mouvement')
-          if (mouvement === 'reduit' || mouvement === 'normal') {
-            document.documentElement.dataset.mouvement = mouvement
-          }
-        } catch (e) {
-          /* stockage indisponible : les réglages par défaut s'appliquent */
-        }
-      })()
-    </script>
+    <!-- Bloquant, volontairement : le thème doit être posé avant le premier
+         rendu. Un fichier et non un script en ligne, que la politique de
+         sécurité du contenu refuse (cf. public/theme-boot.js). -->
+    <script src="/theme-boot.js"></script>
   </head>
   <body>
     <div id="app"></div>

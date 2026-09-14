@@ -524,7 +524,7 @@ avec la base** : l'une décrit les fichiers, l'autre les contient.
 - **Mots de passe** : bcrypt coût 12, réhachage transparent si le coût évolue.
   Un nouveau mot de passe doit valoir **80 bits au sens de la CNIL**
   (délibération n° 2022-100 : longueur × log2 de l'alphabet employé), mesurés
-  sur les 72 octets que bcrypt lit réellement (`AppCorePasswordPolicy`, copiée
+  sur les 72 octets que bcrypt lit réellement (`App\Core\PasswordPolicy`, copiée
   côté client pour l'indicateur). « Motdepasse1 » est refusé, « cheval batterie
   agrafe » accepté. La connexion n'applique pas la règle : un compte plus ancien
   continue d'ouvrir sa session.
@@ -566,7 +566,14 @@ avec la base** : l'une décrit les fichiers, l'autre les contient.
 - **Jetons d'invitation** : mêmes règles que les jetons e-mail — 32 octets
   aléatoires, stockés hachés, usage unique, 7 jours. Réinviter la même adresse
   invalide le lien précédent.
-- **En-têtes** : `nosniff`, `X-Frame-Options: DENY`, CSP en déploiement.
+- **En-têtes** : `nosniff`, `X-Frame-Options: DENY`, `Permissions-Policy`,
+  COOP, CORP, HSTS, et en déploiement une CSP **sans
+  `'unsafe-inline'` ni origine tierce** : un script ou un style glissé dans la
+  page par une injection n'est pas exécuté. `npm run check:csp` vérifie la
+  compilation, `e2e/tests/csp.spec.js` un navigateur sous l'image de production.
+- **Aucun tiers au chargement** : les polices sont servies par l'application.
+  Chargées depuis Google, elles lui transmettaient l'adresse IP de chaque
+  visiteur avant tout consentement.
 - **Fichiers téléversés** : type lu dans les octets, métadonnées retirées, ni
   SVG ni PDF, servis par adresse signée avec `nosniff` et une CSP `sandbox` ;
   les octets quittent le disque avec leur description (cf. « Les fichiers »).
@@ -646,17 +653,17 @@ Trois portes, exécutables en local exactement comme en intégration continue.
 
 ```bash
 docker compose exec php composer check   # PSR-12 + PHPStan niveau 6 + PHPUnit
-docker compose exec node npm run check   # ESLint + Prettier + Vitest + build + 2 garde-fous
+docker compose exec node npm run check   # ESLint + Prettier + Vitest + build + 3 garde-fous
 docker compose exec php composer migrate  # applique les migrations en attente
 cd e2e && npm test                       # parcours navigateur (Playwright)
 ```
 
 | Suite                 | Portée                                          | Volume    |
 | --------------------- | ----------------------------------------------- | --------- |
-| PHPUnit `unit`        | Jetons, traces, métadonnées d'image — sans base | 40 tests  |
-| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel           | 249 tests |
-| Vitest                | Formatage, client HTTP, composables, signaleur  | 161 tests |
-| Playwright            | Parcours complets dans Chromium                 | 76 tests  |
+| PHPUnit `unit`        | Jetons, traces, images, IP, mots de passe       | 70 tests  |
+| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel           | 251 tests |
+| Vitest                | Formatage, client HTTP, composables, signaleur  | 179 tests |
+| Playwright            | Parcours complets dans Chromium                 | 79 tests  |
 
 Les composables portent l'essentiel de la logique du client : file
 d'écritures, glisser-déposer, raccourcis, pagination, synchronisation de

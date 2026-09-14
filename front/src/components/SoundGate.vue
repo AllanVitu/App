@@ -96,21 +96,7 @@ function choose(withSound) {
     aria-labelledby="gate-title"
   >
     <!-- Marque : un dégradé radial animé, tracé en CSS -->
-    <div
-      data-gate
-      class="size-20 rounded-full"
-      style="
-        background: radial-gradient(
-          circle at 34% 30%,
-          #d6ffe8 0%,
-          #7ee2a8 26%,
-          #2f9d7a 55%,
-          #0d2b22 100%
-        );
-        box-shadow: 0 0 60px -18px #7ee2a8;
-      "
-      aria-hidden="true"
-    />
+    <div data-gate class="pastille-son size-20 rounded-full" aria-hidden="true" />
 
     <div data-gate class="text-center">
       <h1 id="gate-title" class="text-lg font-semibold tracking-tight">saas os</h1>

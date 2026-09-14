@@ -200,8 +200,8 @@
      solution qu'emploie toute signalétique quand le mot ne tient pas.
      Geist Mono reste pour ce qui s'aligne en colonne : empreintes, durées,
      compteurs, journaux. */
-  --font-sans: 'Archivo', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
+  --font-sans: 'Archivo Variable', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'Cascadia Code', Consolas, monospace;
 }
 
 /* ---------------------------------------------------------------------------
@@ -215,7 +215,7 @@
   body {
     background: var(--c-paper);
     color: var(--c-ink);
-    font-family: 'Archivo', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+    font-family: 'Archivo Variable', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
     font-size: 15px;
     line-height: 1.45;
     -webkit-font-smoothing: antialiased;
@@ -364,6 +364,34 @@
   /* Deux classes vivaient ici : « caret », un curseur clignotant, et
      « marquee », un bandeau défilant. La première imitait un terminal sur un
      écran où rien ne se tape ; la seconde n'était utilisée NULLE PART. */
+
+  /* LES DEUX DÉCORS QUI VIVAIENT DANS UN ATTRIBUT « style ».
+     Écrits dans le gabarit, ils finissaient — selon le nombre de nœuds
+     voisins — insérés par innerHTML, et la politique de sécurité du contenu
+     (« style-src 'self' ») les refusait : l'écran de connexion perdait sa
+     grille, sans erreur ailleurs que dans la console. Une classe est servie
+     dans la feuille de style, et passe. */
+
+  /* La grille de mesure du panneau de connexion (cf. AuthLayout). */
+  .grille-mesure {
+    background-image:
+      linear-gradient(to right, var(--c-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--c-line) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(80% 65% at 22% 18%, #000 0%, transparent 100%);
+  }
+
+  /* La pastille de l'écran de choix du son (cf. SoundGate). */
+  .pastille-son {
+    background: radial-gradient(
+      circle at 34% 30%,
+      #d6ffe8 0%,
+      #7ee2a8 26%,
+      #2f9d7a 55%,
+      #0d2b22 100%
+    );
+    box-shadow: 0 0 60px -18px #7ee2a8;
+  }
 }
 
 /* ---------------------------------------------------------------------------

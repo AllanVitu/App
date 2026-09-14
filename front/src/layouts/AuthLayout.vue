@@ -112,17 +112,7 @@ const root = useMotion(() => {
 
            Deux dégradés linéaires : aucune image, aucune requête, et rien qui
            s'anime — le coût de peinture est celui d'un aplat. -->
-      <div
-        class="pointer-events-none absolute inset-0"
-        style="
-          background-image:
-            linear-gradient(to right, var(--c-line) 1px, transparent 1px),
-            linear-gradient(to bottom, var(--c-line) 1px, transparent 1px);
-          background-size: 56px 56px;
-          mask-image: radial-gradient(80% 65% at 22% 18%, #000 0%, transparent 100%);
-        "
-        aria-hidden="true"
-      />
+      <div class="grille-mesure pointer-events-none absolute inset-0" aria-hidden="true" />
 
       <header class="relative flex items-center gap-3">
         <!-- LA MARQUE : trois barres de signal sur une plaque.

@@ -19,6 +19,12 @@ import { useUiStore } from './stores/ui'
 // GSAP a depuis été retiré du projet, mais la règle reste : un composant qui
 // anime importe « @/animations/motion » lui-même, et le compilateur place le
 // moteur dans un morceau à part, chargé avec ceux qui s'en servent.
+// Les polices sont servies par l'application, et non plus par Google : une
+// police tierce transmet l'adresse IP du visiteur dès l'écran de connexion,
+// avant tout consentement. « wdth » et non « wght » pour Archivo : la chasse
+// variable sert aux libellés en capitales (cf. assets/css/main.css).
+import '@fontsource-variable/archivo/wdth.css'
+import '@fontsource-variable/geist-mono/wght.css'
 import './assets/css/main.css'
 
 const app = createApp(App)
