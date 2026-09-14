@@ -102,7 +102,7 @@
   --c-brick: #ff5f52;
   --c-brick-bg: #2e1210;
 
-  /* LES CINQ LIGNES — en BLOC uniquement, donc 3:1 suffisent.
+  /* LES LIGNES DE MODULE — en BLOC uniquement, donc 3:1 suffisent.
      Un arc froid, du cyan au rose : aucune ne longe le vert, l'ambre ou le
      rouge de la sémantique. */
   --c-mod-backend: #00c4cc;
@@ -111,6 +111,7 @@
   --c-mod-supervision: #d946ef;
   --c-mod-design: #f43f7f;
   --c-mod-disponibilite: #7dd3fc;
+  --c-mod-documentation: #a5b4fc;
 
   /* Bleu contre orange : le seul couple qui reste franc sous les trois
      dichromatismes. Le rouge contre vert, qui vient spontanément à l'esprit,
@@ -156,6 +157,7 @@
   --c-mod-supervision: #a21caf;
   --c-mod-design: #c81e5b;
   --c-mod-disponibilite: #0c4a6e;
+  --c-mod-documentation: #312e81;
 
   --c-chart-1: #0a63c9;
   --c-chart-2: #c9490e;
@@ -187,6 +189,7 @@
   --color-mod-supervision: var(--c-mod-supervision);
   --color-mod-design: var(--c-mod-design);
   --color-mod-disponibilite: var(--c-mod-disponibilite);
+  --color-mod-documentation: var(--c-mod-documentation);
 
   --color-chart-1: var(--c-chart-1);
   --color-chart-2: var(--c-chart-2);

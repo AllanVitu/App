@@ -42,6 +42,7 @@ const LIGNES = {
   supervision: 'bg-mod-supervision',
   design: 'bg-mod-design',
   disponibilite: 'bg-mod-disponibilite',
+  documentation: 'bg-mod-documentation',
 }
 
 /**

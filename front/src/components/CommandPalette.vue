@@ -61,6 +61,8 @@ const MODULE_NAMES = {
   tickets: 'tickets',
   supervision: 'supervision',
   design: 'design',
+  disponibilite: 'disponibilité',
+  documentation: 'documentation',
 }
 
 /** Replie les accents et la casse : « systeme » doit trouver « Système ».
@@ -177,9 +179,16 @@ function go(item) {
     return
   }
 
-  // Un résultat ouvre SON module. Le désigner à l'intérieur demanderait à
-  // chaque écran de savoir se positionner sur une ligne — ce qu'aucun ne sait
-  // faire aujourd'hui. Mieux vaut mener au bon endroit que promettre plus.
+  // Un résultat ouvre SON module. La documentation sait en plus ouvrir la
+  // page elle-même : la page ouverte vit dans son adresse (?page=…). Les
+  // autres écrans ne savent pas encore se positionner sur une ligne, et mieux
+  // vaut mener au bon endroit que promettre plus.
+  if (item.entry.module === 'documentation') {
+    router.push({ path: modulePath('documentation'), query: { page: item.entry.id } })
+
+    return
+  }
+
   router.push(modulePath(item.entry.module))
 }
 

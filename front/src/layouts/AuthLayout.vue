@@ -93,6 +93,15 @@ const LIGNES = [
     terminus: [580, 230],
     etiquette: { x: 588, y: 208, ancre: 'end' },
   },
+  {
+    slug: 'documentation',
+    nom: 'DOCUMENTATION',
+    trace: 'M330 300H150L80 230',
+    trait: 'stroke-mod-documentation',
+    station: [230, 300],
+    terminus: [80, 230],
+    etiquette: { x: 62, y: 208, ancre: 'start' },
+  },
 ]
 
 /**
@@ -250,8 +259,8 @@ const root = useMotion(() => {
             Du ticket à la production, sans changer d'outil.
           </h2>
           <p data-anim="claim" class="max-w-[30rem] text-[0.97rem] text-ink-2 [text-wrap:pretty]">
-            Tickets, déploiements, erreurs, disponibilité et fichiers de design se croisent au même
-            endroit. Quand quelque chose casse, vous voyez aussi ce qui l'a cassé.
+            Tickets, déploiements, erreurs, disponibilité, documentation et fichiers de design se
+            croisent au même endroit. Quand quelque chose casse, vous voyez aussi ce qui l'a cassé.
           </p>
         </div>
       </template>

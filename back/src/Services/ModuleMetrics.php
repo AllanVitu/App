@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Models\BackendRepository;
 use App\Models\DeploymentRepository;
 use App\Models\DesignRepository;
+use App\Models\DocPageRepository;
 use App\Models\ErrorRepository;
 use App\Models\ProbeRepository;
 use App\Models\TicketRepository;
@@ -60,6 +61,7 @@ final class ModuleMetrics
                 'supervision' => $this->errorState($organizationId),
                 'design'      => $this->designState($organizationId),
                 'disponibilite' => $this->probeState($organizationId),
+                'documentation' => $this->docState($organizationId),
                 // Module ajouté en base sans code dédié : il reste adossé à la
                 // table générique, et le catalogue continue de fonctionner.
                 default       => $this->genericState($module),
@@ -307,5 +309,29 @@ final class ModuleMetrics
         }
 
         return $this->state($stats['total'], 'sonde', 'sondes', $signals);
+    }
+
+    /**
+     * Documentation : combien de pages, et combien ont bougé cette semaine.
+     *
+     * Une page n'est jamais « en alerte » : une procédure ancienne n'est pas
+     * une panne, et le tableau de bord n'a pas à culpabiliser qui que ce soit.
+     * Le seul signal utile est qu'elle vit.
+     *
+     * @return array<string, mixed>
+     */
+    private function docState(string $organizationId): array
+    {
+        $stats = $this->stats(
+            'documentation',
+            $organizationId,
+            fn (): array => (new DocPageRepository())->statsForOrganization($organizationId),
+        );
+
+        $signals = $stats['updated_7d'] > 0
+            ? [$this->signal('modifiée cette semaine', 'modifiées cette semaine', $stats['updated_7d'], 'good')]
+            : [];
+
+        return $this->state($stats['pages'], 'page', 'pages', $signals);
     }
 }

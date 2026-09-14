@@ -23,6 +23,7 @@ apparaît dans le menu et dispose aussitôt d'un écran, en attendant le sien.
 | `supervision` | `error_groups`, `error_events`       | Erreurs groupées, piles d'appels, courbe sur 14 jours     |
 | `design`      | `design_files`, `design_versions`    | Maquettes téléversées, versions, aperçu sur la carte      |
 | `disponibilite` | `probes`, `probe_states`, `probe_checks`, `probe_incidents` | Sondes HTTP, pannes, disponibilité sur 30 jours |
+| `documentation` | `doc_pages` | Pages en arbre, recherche dans les textes, mise en forme sans HTML |
 
 Deux services font converger le tout sans que le client connaisse le métier
 d'aucun module : `ModuleMetrics` décide de ce que signifie le chiffre de
@@ -318,6 +319,16 @@ mise à jour partielle, suppression logique.
 | GET/PUT/DELETE | `/api/design/files/{id}`          |                                             |
 | POST           | `/api/design/files/{id}/versions` | Ajoute ; image jointe en multipart          |
 
+**Disponibilité et Documentation**
+
+| Méthode        | Route                    | Particularité                                              |
+| -------------- | ------------------------ | ---------------------------------------------------------- |
+| GET/POST       | `/api/probes`            | Création réservée aux administrateurs ; 25 sondes par espace |
+| GET/PUT/DELETE | `/api/probes/{id}`       | Détail avec l'historique des appels                        |
+| POST           | `/api/probes/{id}/check` | Avance l'échéance du worker ; 202, une fois par 30 s        |
+| GET/POST       | `/api/docs`              | `?q=` cherche dans les titres ET les textes                 |
+| GET/PUT/DELETE | `/api/docs/{id}`         | Fil d'Ariane ; une page ne se range pas sous elle-même     |
+
 **Annuler une suppression.** Toutes les suppressions sont LOGIQUES : la ligne
 reste en base, marquée. Il ne manquait que le chemin de retour — l'interface
 l'offre pendant huit secondes, l'API sans limite de temps.
@@ -329,6 +340,8 @@ l'offre pendant huit secondes, l'API sans limite de temps.
 | POST    | `/api/deployments/{id}/restore`  |
 | POST    | `/api/errors/{id}/restore`       |
 | POST    | `/api/design/files/{id}/restore` |
+| POST    | `/api/probes/{id}/restore`       |
+| POST    | `/api/docs/{id}/restore`         |
 
 **Clés d'API et données ingérées** — le module `backend`
 
@@ -590,6 +603,13 @@ avec la base** : l'une décrit les fichiers, l'autre les contient.
   plus, dix secondes au plus ; créer ou régler une sonde est réservé aux
   administrateurs, et « vérifier maintenant » n'émet rien dans la requête :
   il avance l'échéance du worker.
+- **Pages de Documentation** : le texte est stocké tel qu'il a été écrit et
+  n'est JAMAIS converti en HTML — ni par l'API, ni dans le navigateur. Le
+  client le découpe en titres, listes et blocs de code et l'affiche comme du
+  texte, sans `v-html` ; un lien n'est cliquable que vers http, https, mailto
+  ou un chemin de l'application. `<script>` écrit dans une page s'affiche
+  `<script>`, et `e2e/tests/documentation.spec.js` le vérifie dans un vrai
+  navigateur.
 - **Notification hors bande** à chaque changement de mot de passe.
 
 ### Jeu de données de démonstration

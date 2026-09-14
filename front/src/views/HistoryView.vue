@@ -55,6 +55,7 @@ const MODULES = [
   { value: 'deploiement', label: 'déploiement' },
   { value: 'supervision', label: 'supervision' },
   { value: 'disponibilite', label: 'disponibilité' },
+  { value: 'documentation', label: 'documentation' },
   { value: 'design', label: 'design' },
 ]
 

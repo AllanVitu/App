@@ -19,6 +19,7 @@ use App\Controllers\DashboardController;
 use App\Controllers\DataController;
 use App\Controllers\DeploymentController;
 use App\Controllers\DesignController;
+use App\Controllers\DocController;
 use App\Controllers\ErrorController;
 use App\Controllers\FileController;
 use App\Controllers\HealthController;
@@ -244,6 +245,14 @@ $router->put('/api/probes/{id}', [ProbeController::class, 'update'], $admin);
 $router->delete('/api/probes/{id}', [ProbeController::class, 'destroy'], $admin);
 $router->post('/api/probes/{id}/restore', [ProbeController::class, 'restore'], $admin);
 $router->post('/api/probes/{id}/check', [ProbeController::class, 'check'], $admin);
+
+// Documentation : tout membre écrit, comme dans Tickets (cf. DocController).
+$router->get('/api/docs', [DocController::class, 'index'], $auth);
+$router->post('/api/docs', [DocController::class, 'store'], $auth);
+$router->get('/api/docs/{id}', [DocController::class, 'show'], $auth);
+$router->put('/api/docs/{id}', [DocController::class, 'update'], $auth);
+$router->delete('/api/docs/{id}', [DocController::class, 'destroy'], $auth);
+$router->post('/api/docs/{id}/restore', [DocController::class, 'restore'], $auth);
 
 // --- Design ----------------------------------------------------------------
 // Une version s'ajoute, ne se modifie ni ne se supprime : c'est ce qui fait

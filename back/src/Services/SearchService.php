@@ -137,6 +137,41 @@ final class SearchService
                      AND (unaccent(f.name) ILIKE unaccent(:terme) OR unaccent(f.description) ILIKE unaccent(:terme))
                    ORDER BY f.updated_at DESC
                    LIMIT :par_module)
+
+                 UNION ALL
+
+                 -- L'hôte en référence : c'est ce qu'on reconnaît d'une sonde.
+                 (SELECT 'disponibilite',
+                         p.id,
+                         split_part(split_part(p.url, '://', 2), '/', 1),
+                         p.name,
+                         CASE WHEN p.is_paused THEN 'en pause' ELSE p.url END,
+                         p.updated_at
+                    FROM probes p
+                   WHERE p.organization_id = :organization_id AND p.deleted_at IS NULL
+                     AND (unaccent(p.name) ILIKE unaccent(:terme) OR p.url ILIKE :terme)
+                   ORDER BY p.updated_at DESC
+                   LIMIT :par_module)
+
+                 UNION ALL
+
+                 -- Le TEXTE des pages aussi : on cherche une procédure par ce
+                 -- qu'elle dit, rarement par son titre exact.
+                 (SELECT 'documentation',
+                         dp.id,
+                         'page',
+                         dp.title,
+                         COALESCE(
+                             (SELECT parent.title FROM doc_pages parent
+                               WHERE parent.id = dp.parent_id AND parent.deleted_at IS NULL),
+                             'Documentation'
+                         ),
+                         dp.updated_at
+                    FROM doc_pages dp
+                   WHERE dp.organization_id = :organization_id AND dp.deleted_at IS NULL
+                     AND (unaccent(dp.title) ILIKE unaccent(:terme) OR unaccent(dp.body) ILIKE unaccent(:terme))
+                   ORDER BY dp.updated_at DESC
+                   LIMIT :par_module)
              )
              SELECT module, id::text AS id, ref, title, subtitle, happened_at
                FROM resultats

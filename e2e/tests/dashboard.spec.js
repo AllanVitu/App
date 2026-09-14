@@ -21,7 +21,7 @@ test.describe('tableau de bord', () => {
     const lignes = page.getByRole('region', { name: 'Vos lignes' })
     const tuiles = lignes.getByRole('link')
 
-    await expect(tuiles).toHaveCount(6)
+    await expect(tuiles).toHaveCount(7)
     await expect(tuiles.first()).toHaveAttribute('href', /^\/modules\//)
 
     // Une tuile dit où en est son module, avec l'unité qui a un sens chez

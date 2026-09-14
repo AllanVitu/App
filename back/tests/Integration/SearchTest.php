@@ -40,6 +40,11 @@ final class SearchTest extends ApiTestCase
             'kind' => 'maquette',
         ], $entete);
 
+        $this->call('POST', '/api/docs', [
+            'title' => "Procédure {$marqueur}",
+            'body'  => 'Arrêter le worker, puis restaurer la base.',
+        ], $entete);
+
         return $session;
     }
 
@@ -73,6 +78,7 @@ final class SearchTest extends ApiTestCase
         $this->assertContains('tickets', $modules);
         $this->assertContains('deploiement', $modules);
         $this->assertContains('design', $modules);
+        $this->assertContains('documentation', $modules);
     }
 
     #[Test]
@@ -84,17 +90,49 @@ final class SearchTest extends ApiTestCase
         $this->assertNotSame($mien['id'], $autrui['id']);
 
         // Les deux comptes ont des données portant le MÊME marqueur : si une
-        // branche de l'UNION oubliait son user_id, chacun verrait six lignes
-        // au lieu de trois.
+        // branche de l'UNION oubliait son user_id, chacun verrait huit lignes
+        // au lieu de quatre.
         foreach ([$mien, $autrui] as $session) {
             $resultats = $this->chercher($session['token'], 'cloison');
 
             $this->assertCount(
-                3,
+                4,
                 $resultats,
                 'un compte ne doit voir que ses propres données',
             );
         }
+    }
+
+    #[Test]
+    public function une_sonde_et_le_texte_d_une_page_se_trouvent_aussi(): void
+    {
+        $session = $this->register('sondes-pages@test.local');
+        $entete  = $this->bearer($session['token']);
+
+        $sonde = $this->call('POST', '/api/probes', [
+            'name'             => 'Paiement quasar',
+            'url'              => 'https://boutique.relais-demo.fr/paiement',
+            'method'           => 'GET',
+            'interval_seconds' => 300,
+            'timeout_ms'       => 5000,
+            'slow_ms'          => 1000,
+        ], $entete);
+        $this->assertSame(201, $sonde['status']);
+
+        $page = $this->call('POST', '/api/docs', [
+            'title' => 'Astreinte',
+            'body'  => 'Si le paiement tombe, relancer la file nébuleuse.',
+        ], $entete);
+        $this->assertSame(201, $page['status']);
+
+        $parNom = $this->chercher($session['token'], 'quasar');
+        $this->assertSame(['disponibilite'], array_column($parNom, 'module'));
+        $this->assertSame('boutique.relais-demo.fr', $parNom[0]['ref']);
+
+        // Le texte, pas seulement le titre — et les accents repliés.
+        $parTexte = $this->chercher($session['token'], 'nebuleuse');
+        $this->assertSame(['documentation'], array_column($parTexte, 'module'));
+        $this->assertSame('Astreinte', $parTexte[0]['title']);
     }
 
     #[Test]

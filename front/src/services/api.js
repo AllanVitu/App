@@ -266,6 +266,17 @@ export const probesApi = {
   checkSoon: (id) => http.post(`/probes/${id}/check`),
 }
 
+export const docsApi = {
+  // L’arbre ne transporte que les titres et le début du texte, jamais les corps.
+  tree: (signal) => http.get('/docs', { signal }).then(unwrap),
+  search: (q, signal) => http.get('/docs', { params: { q }, signal }).then(unwrap),
+  find: (id) => http.get(`/docs/${id}`).then(unwrap),
+  create: (payload) => http.post('/docs', payload).then(unwrap),
+  update: (id, payload) => http.put(`/docs/${id}`, payload).then(unwrap),
+  remove: (id) => http.delete(`/docs/${id}`),
+  restore: (id) => http.post(`/docs/${id}/restore`).then(unwrap),
+}
+
 // --- Supervision ------------------------------------------------------------
 
 export const errorsApi = {

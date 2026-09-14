@@ -48,6 +48,11 @@ const ICONS = {
     'M5.2 6.2a9.5 9.5 0 0 1 13.6 0',
     'M12 13a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z',
   ],
+  // Un livre ouvert : ce que l'équipe a écrit pour la prochaine fois.
+  book: [
+    'M12 7v14',
+    'M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z',
+  ],
   menu: ['M4 6h16', 'M4 12h16', 'M4 18h16'],
   close: ['M18 6 6 18', 'm6 6 12 12'],
   plus: ['M12 5v14', 'M5 12h14'],

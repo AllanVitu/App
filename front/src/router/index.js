@@ -61,6 +61,12 @@ const routes = [
         meta: { title: 'Disponibilité' },
       },
       {
+        path: 'modules/documentation',
+        name: 'module-documentation',
+        component: () => import('@/views/modules/DocumentationView.vue'),
+        meta: { title: 'Documentation' },
+      },
+      {
         // Repli pour un module ajouté EN BASE sans écran dédié : le catalogue
         // le fait apparaître dans le menu, et cette vue générique lui donne
         // de quoi exister (titre, statut, échéance) en attendant le sien.
