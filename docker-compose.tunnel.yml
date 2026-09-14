@@ -1,0 +1,34 @@
+# Surcouche de déploiement de test, à combiner avec docker-compose.prod.yml :
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.tunnel.yml --env-file .env.production up -d --build
+#
+# - cloudflared ouvre un tunnel « quick » (sans compte) vers le service web ;
+# - mailpit reçoit les e-mails de l'application (lisibles sur http://127.0.0.1:8026) ;
+# - le réseau a un sous-réseau FIXE, pour que TRUSTED_PROXIES désigne exactement
+#   les conteneurs de ce déploiement, et rien d'autre.
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: relais_tunnel
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--url", "http://web:80"]
+    depends_on:
+      - web
+    networks:
+      - saas_net
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: relais_mailpit
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8026:8025"
+    networks:
+      - saas_net
+
+networks:
+  saas_net:
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24

@@ -714,6 +714,33 @@ Sans elle, l'API voit tous les visiteurs arriver de la même adresse : vingt
 mots de passe erronés, de qui que ce soit, fermeraient la connexion à tout le
 monde pour un quart d'heure.
 
+
+### Déploiement de test : un lien public depuis un poste
+
+Pour essayer l'application en conditions réelles sans serveur : la même
+configuration de production, derrière un tunnel Cloudflare « quick » (sans
+compte) qui donne une adresse https publique.
+
+```bash
+cp .env.production.example .env.production
+# secrets aléatoires ; MAIL_HOST=mailpit, MAIL_PORT=1025, MAIL_ENCRYPTION=none,
+# HTTP_PORT=127.0.0.1:8090, TRUSTED_PROXIES=172.31.250.0/24
+docker compose -f docker-compose.prod.yml -f docker-compose.tunnel.yml --env-file .env.production up -d --build
+docker logs relais_tunnel 2>&1 | grep trycloudflare.com   # l'adresse publique
+# la reporter dans APP_URL, puis relancer la même commande « up -d »
+```
+
+- Les e-mails ne partent pas : Mailpit les reçoit, lisibles sur
+  http://127.0.0.1:8026.
+- Le port web n'est publié que sur la machine, et `TRUSTED_PROXIES` ne désigne
+  que le sous-réseau du déploiement : l'adresse IP enregistrée est celle du
+  visiteur, et rien d'autre sur le réseau ne peut s'en faire passer pour lui.
+- L'adresse change à chaque redémarrage du tunnel, et le trafic transite par
+  Cloudflare : **c'est un banc d'essai, pas un hébergement de données
+  clients.** Une mise en production réelle se fait sur un serveur en France ou
+  dans l'Union européenne, identité de l'éditeur et de l'hébergeur renseignées
+  (cf. « Données personnelles »).
+
 ## Tests et qualité
 
 Trois portes, exécutables en local exactement comme en intégration continue.
