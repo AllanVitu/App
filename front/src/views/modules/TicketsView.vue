@@ -312,7 +312,11 @@ const filtered = computed(() => {
 
     if (!needle) return true
 
-    // Le numéro est cherché comme le texte : « 128 » doit trouver #128.
+    // « #128 », tel que l'écrivent les liens, la documentation et la
+    // recherche transverse, désigne un numéro EXACT — pas #1280.
+    if (/^#[0-9]+$/.test(needle)) return ticket.number === Number(needle.slice(1))
+
+    // Sans dièse, le numéro est cherché comme le texte : « 128 » doit trouver #128.
     return (
       String(ticket.number).includes(needle) ||
       ticket.title.toLowerCase().includes(needle) ||

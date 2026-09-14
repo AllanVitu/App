@@ -142,6 +142,7 @@ test.describe("espace de travail", () => {
     await ligne.click()
     await page.keyboard.press('Backspace')
     await expect(ligne).toHaveCount(0)
+    await expect(page.getByText(/Ticket #[0-9]+ supprimé/)).toBeVisible()
   })
 
   test("le rôle décide de ce que l'écran propose", async ({ page }) => {

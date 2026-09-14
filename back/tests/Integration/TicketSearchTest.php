@@ -49,6 +49,22 @@ final class TicketSearchTest extends ApiTestCase
         $this->assertSame([3], $this->chercher($token, '3'), 'le numéro');
     }
 
+    #[Test]
+    public function un_numero_precede_d_un_diese_est_exact(): void
+    {
+        $token = $this->register()['token'];
+
+        for ($i = 1; $i <= 12; $i++) {
+            $this->creer($token, ['title' => "Ticket {$i}"]);
+        }
+
+        // « #1 » est le ticket 1, pas les tickets 10, 11 et 12 : c'est ainsi
+        // que les liens des erreurs et de la documentation désignent un ticket.
+        $this->assertSame([1], $this->chercher($token, '#1'));
+        $this->assertSame([12], $this->chercher($token, '#12'));
+        $this->assertSame([], $this->chercher($token, '#99'));
+    }
+
     /**
      * « % » et « _ » sont des jokers en SQL. Tapés dans une recherche, ils
      * doivent redevenir des caractères — sans quoi « % » renverrait tous les

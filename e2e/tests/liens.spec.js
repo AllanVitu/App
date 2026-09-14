@@ -17,6 +17,11 @@ test.describe('liens entre modules', () => {
     const titre = `Discussion de parcours ${Date.now()}`
 
     await page.goto('/modules/tickets')
+
+    // La touche part quand l'écran l'écoute : avant que la liste soit là, « c »
+    // tombe dans le vide.
+    await expect(page.getByRole('heading', { name: 'tickets' })).toBeVisible()
+    await expect(page.getByRole('option').first()).toBeVisible()
     await page.keyboard.press('c')
     await page.getByPlaceholder(/Entrée pour créer/i).fill(titre)
     await page.keyboard.press('Enter')
@@ -52,7 +57,9 @@ test.describe('liens entre modules', () => {
       await page.reload()
       await ligne.click()
       await page.keyboard.press('Backspace')
-      await expect(page.getByText(titre, { exact: true })).toBeHidden()
+      // Le bandeau d'annulation ne paraît qu'une fois la suppression reçue par
+      // le serveur : l'attendre, c'est ne pas couper la requête en fermant.
+      await expect(page.getByText(/Ticket #[0-9]+ supprimé/)).toBeVisible()
     }
   })
 
@@ -93,6 +100,10 @@ test.describe('liens entre modules', () => {
     await ticket.first().click()
     await page.keyboard.press('Backspace')
     await expect(ticket).toHaveCount(0)
+
+    // Le bandeau paraît quand le serveur a répondu. Naviguer avant couperait
+    // la requête en vol : le ticket vivrait encore, et l'erreur avec lui.
+    await expect(page.getByText(/Ticket #[0-9]+ supprimé/)).toBeVisible()
 
     await page.goto('/modules/supervision')
     await page.locator('[data-column]').getByRole('option').filter({ hasText: titreErreur }).first().click()

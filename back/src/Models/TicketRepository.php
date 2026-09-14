@@ -103,7 +103,13 @@ final class TicketRepository
         // │  tient sous le plafond, puis plus du tout le jour où elle le      │
         // │  dépasse.                                                         │
         // └───────────────────────────────────────────────────────────────────┘
-        if (!empty($filters['search'])) {
+        if (!empty($filters['search']) && preg_match('/^#([0-9]{1,9})$/', $filters['search'], $numero) === 1) {
+            // « #128 », tel que l'écrivent les liens, la documentation et la
+            // recherche transverse, désigne un numéro EXACT — l'écran fait de
+            // même (cf. TicketsView, « filtered »).
+            $conditions[]     = 't.number = :numero';
+            $params['numero'] = (int) $numero[1];
+        } elseif (!empty($filters['search'])) {
             $conditions[] = '(t.number::text ILIKE :search
                               OR t.title ILIKE :search
                               OR t.description ILIKE :search
