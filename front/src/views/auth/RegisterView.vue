@@ -122,10 +122,23 @@ async function submit() {
 
 <template>
   <div ref="root">
-    <h1 data-anim="head" class="text-[1.3rem] font-semibold">créer un compte</h1>
-    <p data-anim="head" class="mt-1.5 text-sm text-ink-2">Quelques secondes suffisent.</p>
+    <h1 data-anim="head">
+      <span class="label-caps block">{{ invitation ? 'Invitation' : 'Inscription' }}</span>
+      <span
+        class="mt-2.5 block text-[1.875rem] font-bold leading-[1.1] tracking-[-0.015em] [font-stretch:85%] [text-wrap:balance]"
+      >
+        {{ invitation ? 'Rejoignez votre équipe.' : "Créez l'espace de votre équipe." }}
+      </span>
+    </h1>
+    <p data-anim="head" class="mt-2 text-[0.9375rem] text-ink-2">
+      {{
+        invitation
+          ? "Créez votre compte : vous entrerez directement dans l'espace qui vous a invité."
+          : 'Deux minutes, puis vous invitez qui vous voulez.'
+      }}
+    </p>
 
-    <form ref="formEl" class="mt-8 space-y-4" novalidate @submit.prevent="submit">
+    <form ref="formEl" class="mt-7 space-y-4" novalidate @submit.prevent="submit">
       <div
         v-if="globalError"
         class="flex items-start gap-2.5 rounded-field border border-brick/40 bg-brick-bg px-3.5 py-2.5 text-[0.8rem] text-ink"
@@ -139,7 +152,7 @@ async function submit() {
         v-model="form.full_name"
         data-anim="field"
         label="Nom complet"
-        placeholder="Jean Dupont"
+        placeholder="Camille Martin"
         autocomplete="name"
         required
         :error="errors.full_name"
@@ -150,7 +163,7 @@ async function submit() {
         data-anim="field"
         label="Adresse e-mail"
         type="email"
-        placeholder="vous@exemple.fr"
+        placeholder="vous@entreprise.fr"
         autocomplete="email"
         required
         :error="errors.email"
@@ -161,18 +174,35 @@ async function submit() {
           v-model="form.password"
           label="Mot de passe"
           type="password"
-          placeholder="••••••••"
+          placeholder="••••••••••••"
           autocomplete="new-password"
           required
           :error="errors.password"
           :hint="PASSWORD_HINT"
         />
 
-        <div v-if="form.password" class="mt-2">
-          <div class="h-1 w-full overflow-hidden rounded-full bg-line">
-            <div class="h-full rounded-full transition-all" :class="strength.classes" />
+        <!-- Cinq segments et non une jauge continue : on lit « quatre sur
+             cinq » d'un coup d'œil, pas « un peu plus des trois quarts ».
+             Vert à partir de « bon », parce que « bon » veut dire « accepté »
+             (cf. utils/password). -->
+        <div v-if="form.password" class="mt-2.5">
+          <div class="grid grid-cols-5 gap-1" aria-hidden="true">
+            <span
+              v-for="n in 5"
+              :key="n"
+              class="h-1"
+              :class="
+                n <= strength.score
+                  ? strength.score >= 4
+                    ? 'bg-moss'
+                    : strength.score === 3
+                      ? 'bg-ochre'
+                      : 'bg-brick'
+                  : 'bg-line'
+              "
+            />
           </div>
-          <p class="mt-1 text-xs text-ink-2">Robustesse : {{ strength.label }}</p>
+          <p class="mt-1.5 text-xs text-ink-2">Robustesse : {{ strength.label }}</p>
         </div>
       </div>
 
@@ -181,7 +211,7 @@ async function submit() {
         data-anim="field"
         label="Confirmation du mot de passe"
         type="password"
-        placeholder="••••••••"
+        placeholder="••••••••••••"
         autocomplete="new-password"
         required
         :error="errors.password_confirmation"
@@ -195,15 +225,14 @@ async function submit() {
             class="mt-0.5 size-4 shrink-0 accent-ink"
             :aria-invalid="Boolean(errors.terms_accepted)"
           />
-          <span class="text-[0.8rem] leading-snug text-ink-2">
+          <span class="text-[0.84rem] leading-snug text-ink-2">
             J'accepte les
             <RouterLink
               :to="{ name: 'terms' }"
-              class="font-medium text-ink underline underline-offset-2"
+              class="font-medium text-ink underline decoration-line-2 underline-offset-[3px] transition-colors hover:decoration-ink"
+              >conditions générales</RouterLink
             >
-              conditions générales
-            </RouterLink>
-            et la conservation des données décrites.
+            et la conservation des données qu'elles décrivent.
           </span>
         </label>
 
@@ -213,15 +242,15 @@ async function submit() {
       </div>
 
       <BaseButton data-anim="field" type="submit" :loading="loading" block size="lg">
-        Créer mon compte
+        {{ invitation ? 'Créer mon compte' : 'Créer mon espace' }}
       </BaseButton>
     </form>
 
-    <p class="mt-8 text-center text-sm text-ink-2">
-      Déjà inscrit ?
+    <p class="mt-7 border-t border-line pt-5.5 text-sm text-ink-2">
+      Déjà un compte ?
       <RouterLink
         :to="{ name: 'login' }"
-        class="font-medium text-ink underline underline-offset-2 hover:text-ink-2"
+        class="font-medium text-ink underline decoration-line-2 underline-offset-[3px] transition-colors hover:decoration-ink"
       >
         Se connecter
       </RouterLink>

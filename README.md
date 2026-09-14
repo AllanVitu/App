@@ -1,9 +1,11 @@
-# SaaS Starter — Vue 3 / PHP 8.3 / PostgreSQL 16 / Docker
+# Relais — Vue 3 / PHP 8.3 / PostgreSQL 16 / Docker
 
-Application SaaS complète : authentification (avec vérification d'adresse et
-mot de passe oublié), tableau de bord, cinq modules métier, profil et
-paramètres, recherche transverse. Interface « signalétique » à colonnes :
-une couleur de ligne par module, des blocs francs, un grotesque serré.
+Relais réunit ce qu'une équipe produit ouvre dans six onglets : tickets,
+déploiements, erreurs de production, backend et fichiers de design, au même
+endroit et pour toute l'équipe. Authentification (avec vérification d'adresse
+et mot de passe oublié), espaces de travail partagés, tableau de bord, profil
+et paramètres, recherche transverse. Interface « signalétique » : les modules
+sont des lignes, chacune sa couleur, des blocs francs, un grotesque serré.
 Animations anime.js, suite de tests et intégration continue.
 
 ## Les modules
@@ -223,7 +225,7 @@ déjà — le nom de l'espace et l'adresse invitée.
 | POST    | `/api/profile/avatar`    | Photo de profil, téléversée (multipart)         |
 | DELETE  | `/api/profile/avatar`    | Retrait de la photo                             |
 | GET/PUT | `/api/settings`          | Préférences (thème, densité, mouvement, fuseau) |
-| GET     | `/api/dashboard`         | Alertes, état des modules, activité             |
+| GET     | `/api/dashboard`         | Chiffres, ligne de production, alertes, ma journée, état des modules |
 | GET     | `/api/search`            | Recherche dans les cinq modules                 |
 | POST    | `/api/client-errors`     | Erreur du navigateur, rangée pour l'instance    |
 

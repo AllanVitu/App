@@ -79,6 +79,13 @@ async function submit() {
 }
 
 /** Pré-remplit le compte de démonstration créé par le seed SQL. */
+/**
+ * Le raccourci vers le compte de démonstration n'existe qu'en développement :
+ * en déploiement, la base n'en contient aucun (DB_SEED=none.sql), et un
+ * bouton qui remplit un formulaire voué à l'échec est un piège.
+ */
+const demo = import.meta.env.DEV
+
 function fillDemo() {
   form.email = 'demo@saas.local'
   form.password = 'Password123!'
@@ -87,10 +94,16 @@ function fillDemo() {
 
 <template>
   <div ref="root">
-    <h1 data-anim="head" class="text-[1.3rem] font-semibold">connexion</h1>
-    <p data-anim="head" class="mt-1.5 text-sm text-ink-2">Accédez à votre espace de travail.</p>
+    <h1 data-anim="head">
+      <span class="label-caps block">Connexion</span>
+      <span
+        class="mt-2.5 block text-[1.875rem] font-bold leading-[1.1] tracking-[-0.015em] [font-stretch:85%] [text-wrap:balance]"
+      >
+        Reprenez là où l'équipe s'est arrêtée.
+      </span>
+    </h1>
 
-    <form ref="formEl" class="mt-8 space-y-4" novalidate @submit.prevent="submit">
+    <form ref="formEl" class="mt-8 space-y-4.5" novalidate @submit.prevent="submit">
       <div
         v-if="globalError"
         class="flex items-start gap-2.5 rounded-field border border-brick/40 bg-brick-bg px-3.5 py-2.5 text-[0.8rem] text-ink"
@@ -105,7 +118,7 @@ function fillDemo() {
         data-anim="field"
         label="Adresse e-mail"
         type="email"
-        placeholder="vous@exemple.fr"
+        placeholder="vous@entreprise.fr"
         autocomplete="email"
         required
         :error="errors.email"
@@ -116,16 +129,16 @@ function fillDemo() {
           v-model="form.password"
           label="Mot de passe"
           type="password"
-          placeholder="••••••••"
+          placeholder="••••••••••••"
           autocomplete="current-password"
           required
           :error="errors.password"
         />
 
-        <div class="mt-1.5 text-right">
+        <div class="mt-2 text-right">
           <RouterLink
             :to="{ name: 'forgot-password' }"
-            class="text-xs font-medium text-ink underline underline-offset-2 hover:text-ink-2"
+            class="text-[0.8rem] text-ink-2 underline decoration-line-2 underline-offset-[3px] transition-colors hover:text-ink hover:decoration-ink"
           >
             Mot de passe oublié ?
           </RouterLink>
@@ -134,24 +147,33 @@ function fillDemo() {
 
       <BaseButton data-anim="field" type="submit" :loading="loading" block size="lg">
         Se connecter
+        <!-- Le raccourci est dit, pas imposé : la touche Entrée envoie déjà
+             tout formulaire. L'écrire, c'est l'apprendre à qui clique. -->
+        <kbd
+          class="ml-2 hidden rounded-card border border-current px-1.5 font-mono text-[0.6875rem] font-medium opacity-60 sm:inline"
+          aria-hidden="true"
+        >
+          Entrée
+        </kbd>
       </BaseButton>
     </form>
 
     <button
+      v-if="demo"
       type="button"
-      class="mt-4 w-full border border-dashed border-line px-3 py-2.5 text-xs text-ink-2 transition-colors hover:border-ink hover:text-ink"
+      class="mt-4 w-full rounded-card border border-dashed border-line-2 px-3 py-2.5 text-xs text-ink-2 transition-colors hover:border-ink hover:text-ink"
       @click="fillDemo"
     >
       Utiliser le compte de démonstration
     </button>
 
-    <p class="mt-8 text-center text-sm text-ink-2">
-      Pas encore de compte ?
+    <p class="mt-7 border-t border-line pt-5.5 text-sm text-ink-2">
+      Pas encore d'espace ?
       <RouterLink
         :to="{ name: 'register' }"
-        class="font-medium text-ink underline underline-offset-2 hover:text-ink-2"
+        class="font-medium text-ink underline decoration-line-2 underline-offset-[3px] transition-colors hover:decoration-ink"
       >
-        Créer un compte
+        Créer celui de votre équipe
       </RouterLink>
     </p>
   </div>

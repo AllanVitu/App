@@ -18,8 +18,8 @@ import { expect, login, test } from './support.js'
 test.describe('moteur d’animation', () => {
   /** Les écrans publics, tous servis par AuthLayout. */
   const PUBLICS = [
-    ['/connexion', 'connexion'],
-    ['/inscription', 'créer un compte'],
+    ['/connexion', 'reprenez là où'],
+    ['/inscription', 'créez l.espace de votre équipe'],
     ['/mot-de-passe-oublie', 'mot de passe oublié'],
   ]
 
@@ -116,7 +116,7 @@ test.describe('moteur d’animation', () => {
     // Le logotype est découpé en caractères animables ; le texte entier est
     // reporté sur le conteneur pour qu'un lecteur d'écran ne l'épelle pas.
     const marque = page.locator('[data-anim="brand-name"]')
-    await expect(marque).toHaveAttribute('aria-label', 'saas os')
+    await expect(marque).toHaveAttribute('aria-label', 'Relais')
 
     await expect
       .poll(async () =>
