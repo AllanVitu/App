@@ -37,7 +37,11 @@ final class AuthTest extends ApiTestCase
             'SELECT count(*) FROM organization_modules WHERE organization_id = :id',
         );
         $modules->execute(['id' => $orgId]);
-        $this->assertSame(5, (int) $modules->fetchColumn(), 'modules non attribués');
+        // Tous les modules ACTIFS du catalogue, et non un nombre écrit en dur :
+        // il valait 5 jusqu'à l'arrivée de Disponibilité, et aurait menti de
+        // nouveau au module suivant.
+        $catalogue = (int) Database::connection()->query('SELECT count(*) FROM modules WHERE is_active')->fetchColumn();
+        $this->assertSame($catalogue, (int) $modules->fetchColumn(), 'modules non attribués');
 
         $settings = Database::connection()->prepare(
             'SELECT count(*) FROM user_settings WHERE user_id = :id',

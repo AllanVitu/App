@@ -37,6 +37,8 @@ final class JobHandlers
             'tokens.purge'      => self::purgeTokens($payload),
             'rate_limits.purge' => (new RateLimiter())->purge(),
             'storage.purge'     => (new FileStorage())->purge(),
+            'probes.run'        => (new ProbeRunner())->runDue(self::entier($payload, 'batch', 20)),
+            'probes.purge'      => (new ProbeRunner())->purge(self::entier($payload, 'retention_days', 30)),
             default             => throw new \RuntimeException("Type de tâche inconnu : « {$type} »."),
         };
     }
@@ -92,5 +94,19 @@ final class JobHandlers
         );
 
         $statement->execute(['jours' => (string) $retention]);
+    }
+
+    /**
+     * Un entier lu dans la charge utile d'une tâche planifiée, borné à des
+     * valeurs raisonnables : la charge vient de la base, et une ligne modifiée à
+     * la main ne doit pas faire appeler dix mille sondes d'un coup.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private static function entier(array $payload, string $cle, int $defaut): int
+    {
+        $valeur = $payload[$cle] ?? $defaut;
+
+        return is_int($valeur) ? max(1, min(500, $valeur)) : $defaut;
     }
 }

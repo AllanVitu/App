@@ -8,6 +8,7 @@ use App\Models\BackendRepository;
 use App\Models\DeploymentRepository;
 use App\Models\DesignRepository;
 use App\Models\ErrorRepository;
+use App\Models\ProbeRepository;
 use App\Models\TicketRepository;
 
 /**
@@ -58,6 +59,7 @@ final class ModuleMetrics
                 'deploiement' => $this->deploymentState($organizationId),
                 'supervision' => $this->errorState($organizationId),
                 'design'      => $this->designState($organizationId),
+                'disponibilite' => $this->probeState($organizationId),
                 // Module ajouté en base sans code dédié : il reste adossé à la
                 // table générique, et le catalogue continue de fonctionner.
                 default       => $this->genericState($module),
@@ -272,5 +274,38 @@ final class ModuleMetrics
             'value' => $value,
             'tone'  => $tone,
         ];
+    }
+
+    /**
+     * Disponibilité : combien de sondes, et combien ne répondent plus.
+     *
+     * Une sonde en pause ne compte ni comme en panne ni comme lente : on l'a
+     * arrêtée exprès, elle ne dit rien de la production.
+     *
+     * @return array<string, mixed>
+     */
+    private function probeState(string $organizationId): array
+    {
+        $stats = $this->stats(
+            'disponibilite',
+            $organizationId,
+            fn (): array => (new ProbeRepository())->statsForOrganization($organizationId),
+        );
+
+        $signals = [];
+
+        if ($stats['down'] > 0) {
+            $signals[] = $this->signal('en panne', 'en panne', $stats['down'], 'alert');
+        }
+
+        if ($stats['slow'] > 0) {
+            $signals[] = $this->signal('lente', 'lentes', $stats['slow'], 'warn');
+        }
+
+        if ($signals === [] && $stats['paused'] > 0) {
+            $signals[] = $this->signal('en pause', 'en pause', $stats['paused'], 'neutral');
+        }
+
+        return $this->state($stats['total'], 'sonde', 'sondes', $signals);
     }
 }

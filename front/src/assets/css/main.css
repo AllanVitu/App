@@ -110,6 +110,7 @@
   --c-mod-tickets: #8b5cf6;
   --c-mod-supervision: #d946ef;
   --c-mod-design: #f43f7f;
+  --c-mod-disponibilite: #7dd3fc;
 
   /* Bleu contre orange : le seul couple qui reste franc sous les trois
      dichromatismes. Le rouge contre vert, qui vient spontanément à l'esprit,
@@ -154,6 +155,7 @@
   --c-mod-tickets: #6d28d9;
   --c-mod-supervision: #a21caf;
   --c-mod-design: #c81e5b;
+  --c-mod-disponibilite: #0c4a6e;
 
   --c-chart-1: #0a63c9;
   --c-chart-2: #c9490e;
@@ -184,6 +186,7 @@
   --color-mod-tickets: var(--c-mod-tickets);
   --color-mod-supervision: var(--c-mod-supervision);
   --color-mod-design: var(--c-mod-design);
+  --color-mod-disponibilite: var(--c-mod-disponibilite);
 
   --color-chart-1: var(--c-chart-1);
   --color-chart-2: var(--c-chart-2);

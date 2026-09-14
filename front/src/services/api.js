@@ -248,6 +248,24 @@ export const deploymentsApi = {
   restore: (id) => http.post(`/deployments/${id}/restore`).then(unwrap),
 }
 
+// --- Disponibilité ----------------------------------------------------------
+
+export const probesApi = {
+  list: (signal) =>
+    http.get('/probes', { signal }).then((response) => ({
+      probes: response.data.data,
+      meta: response.data.meta,
+    })),
+
+  find: (id) => http.get(`/probes/${id}`).then(unwrap),
+  create: (payload) => http.post('/probes', payload).then(unwrap),
+  update: (id, payload) => http.put(`/probes/${id}`, payload).then(unwrap),
+  remove: (id) => http.delete(`/probes/${id}`),
+  restore: (id) => http.post(`/probes/${id}/restore`).then(unwrap),
+  // Avance l’échéance : le worker appelle dans la minute (cf. ProbeController::check).
+  checkSoon: (id) => http.post(`/probes/${id}/check`),
+}
+
 // --- Supervision ------------------------------------------------------------
 
 export const errorsApi = {

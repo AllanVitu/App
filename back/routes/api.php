@@ -25,6 +25,7 @@ use App\Controllers\HealthController;
 use App\Controllers\ItemController;
 use App\Controllers\ModuleController;
 use App\Controllers\OrganizationController;
+use App\Controllers\ProbeController;
 use App\Controllers\ProfileController;
 use App\Controllers\SearchController;
 use App\Controllers\SessionController;
@@ -230,6 +231,19 @@ $router->get('/api/errors/{id}', [ErrorController::class, 'show'], $auth);
 $router->put('/api/errors/{id}', [ErrorController::class, 'update'], $auth);
 $router->delete('/api/errors/{id}', [ErrorController::class, 'destroy'], $auth);
 $router->post('/api/errors/{id}/restore', [ErrorController::class, 'restore'], $auth);
+
+// --- Disponibilité ----------------------------------------------------------
+//
+// Tout membre lit ; seuls les administrateurs règlent. Une sonde fait émettre
+// des requêtes par le serveur vers l'adresse de son choix, chaque minute :
+// c'est un pouvoir sur ce que Relais envoie à Internet, pas une préférence.
+$router->get('/api/probes', [ProbeController::class, 'index'], $auth);
+$router->post('/api/probes', [ProbeController::class, 'store'], $admin);
+$router->get('/api/probes/{id}', [ProbeController::class, 'show'], $auth);
+$router->put('/api/probes/{id}', [ProbeController::class, 'update'], $admin);
+$router->delete('/api/probes/{id}', [ProbeController::class, 'destroy'], $admin);
+$router->post('/api/probes/{id}/restore', [ProbeController::class, 'restore'], $admin);
+$router->post('/api/probes/{id}/check', [ProbeController::class, 'check'], $admin);
 
 // --- Design ----------------------------------------------------------------
 // Une version s'ajoute, ne se modifie ni ne se supprime : c'est ce qui fait

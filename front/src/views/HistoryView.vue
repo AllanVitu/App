@@ -54,6 +54,7 @@ const MODULES = [
   { value: 'backend', label: 'backend' },
   { value: 'deploiement', label: 'déploiement' },
   { value: 'supervision', label: 'supervision' },
+  { value: 'disponibilite', label: 'disponibilité' },
   { value: 'design', label: 'design' },
 ]
 
@@ -75,6 +76,11 @@ const ACTIONS = {
   reopened: 'a signalé le retour de',
   'key.created': 'a émis la clé',
   'key.revoked': 'a révoqué une clé',
+  // Constatés par le worker, sans auteur : la ligne se lit « Relais a
+  // constaté la panne de Paiement ». Une panne est une transition : le
+  // journal ne reçoit pas un « toujours en panne » par minute.
+  down: 'a constaté la panne de',
+  recovered: 'a constaté le retour de',
 }
 
 const auth = useAuthStore()

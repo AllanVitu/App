@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Models\DeploymentRepository;
 use App\Models\ErrorRepository;
+use App\Models\ProbeRepository;
 use App\Models\TicketRepository;
 
 /**
@@ -38,9 +39,11 @@ final class AttentionFeed
      */
     private const WEIGHT = [
         'failed'  => 0, // déploiement en erreur : la production est cassée
+        'probe_down' => 0, // une adresse ne répond plus : la production est injoignable
         'fatal'   => 1, // exception fatale non résolue
         'overdue' => 2, // échéance dépassée : un fait
         'error'   => 3, // exception non résolue, niveau ordinaire
+        'probe_slow' => 3, // une adresse répond au-delà de son seuil
         'urgent'  => 4, // priorité déclarée : une intention
     ];
 
@@ -52,6 +55,7 @@ final class AttentionFeed
         $entries = [
             ...$this->fromDeployments($organizationId),
             ...$this->fromErrors($organizationId),
+            ...$this->fromProbes($organizationId),
             ...$this->fromTickets($organizationId),
         ];
 
@@ -121,6 +125,28 @@ final class AttentionFeed
                 'at'     => $group['last_seen_at'],
             ],
             (new ErrorRepository())->needsAttention($organizationId, 3),
+        );
+    }
+
+    /**
+     * Une sonde en panne est un FAIT, au même rang qu'une mise en production en
+     * échec : l'une et l'autre disent que des utilisateurs sont touchés en ce
+     * moment. Une sonde lente passe après, avec les erreurs ordinaires.
+     *
+     * @return list<array{module: string, id: string, ref: string, title: string, reason: string, at: ?string}>
+     */
+    private function fromProbes(string $organizationId): array
+    {
+        return array_map(
+            static fn (array $probe): array => [
+                'module' => 'disponibilite',
+                'id'     => $probe['id'],
+                'ref'    => (string) (parse_url($probe['url'], PHP_URL_HOST) ?: $probe['url']),
+                'title'  => $probe['name'],
+                'reason' => $probe['outcome'] === 'down' ? 'probe_down' : 'probe_slow',
+                'at'     => $probe['since'],
+            ],
+            (new ProbeRepository())->needsAttention($organizationId, 3),
         );
     }
 }

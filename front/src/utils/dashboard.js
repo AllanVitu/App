@@ -26,6 +26,7 @@ const PLUS_GRAVE = {
   failed: 'une mise en production en échec',
   fatal: 'une erreur fatale',
   overdue: 'une échéance dépassée',
+  probe_down: 'une adresse qui ne répond plus',
 }
 
 /**
@@ -103,6 +104,8 @@ export const REASONS = {
   overdue: { label: 'en retard', tone: 'text-brick', dot: 'bg-brick' },
   error: { label: 'non résolue', tone: 'text-ochre', dot: 'bg-ochre' },
   urgent: { label: 'urgent', tone: 'text-ochre', dot: 'bg-ochre' },
+  probe_down: { label: 'en panne', tone: 'text-brick', dot: 'bg-brick' },
+  probe_slow: { label: 'lente', tone: 'text-ochre', dot: 'bg-ochre' },
 }
 
 export const reasonOf = (item) => REASONS[item.reason] ?? REASONS.urgent
@@ -129,7 +132,8 @@ export function attentionParts(item, relative) {
     }
   }
 
-  if (item.module === 'supervision') {
+  // Une erreur et une sonde se situent de la même façon : où, et depuis quand.
+  if (item.module === 'supervision' || item.module === 'disponibilite') {
     return {
       headline: item.title,
       meta: [item.ref, quand].filter(Boolean).join(' · '),

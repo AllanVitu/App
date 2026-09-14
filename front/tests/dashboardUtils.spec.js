@@ -39,6 +39,29 @@ describe('en-tête', () => {
   })
 })
 
+describe('sondes dans l’accueil', () => {
+  it('nomme une adresse qui ne répond plus comme le plus grave', () => {
+    expect(attentionSentence([{ reason: 'probe_down' }, { reason: 'urgent' }])).toBe(
+      'Deux éléments demandent votre attention, dont une adresse qui ne répond plus.',
+    )
+  })
+
+  it('situe une sonde par son hôte et depuis quand', () => {
+    expect(
+      attentionParts(
+        {
+          module: 'disponibilite',
+          reason: 'probe_down',
+          ref: 'boutique.fr',
+          title: 'Paiement',
+          at: 'x',
+        },
+        () => 'il y a 4 min',
+      ),
+    ).toEqual({ headline: 'Paiement', meta: 'boutique.fr · il y a 4 min', detail: null })
+  })
+})
+
 describe('chiffres de tête', () => {
   it('colore la variation selon le sens où la situation s’améliore', () => {
     expect(delta(212, 143, { goodWhen: 'down' })).toEqual({

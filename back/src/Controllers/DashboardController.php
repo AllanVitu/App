@@ -8,6 +8,7 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Models\ActivityRepository;
 use App\Models\ModuleRepository;
+use App\Models\ProbeRepository;
 use App\Services\ActivityFeed;
 use App\Services\AttentionFeed;
 use App\Services\DashboardDay;
@@ -48,6 +49,10 @@ final class DashboardController
             // Les quatre chiffres de tête, avec la période précédente pour
             // trois d'entre eux — le quatrième est un état, pas un flux.
             'summary'   => $feed->summary($organizationId, 7),
+            // Disponibilité sur trente jours, toutes sondes confondues. « uptime »
+            // vaut null tant qu'aucune sonde n'a été appelée : le client garde
+            // alors le taux de réussite, plutôt que d'afficher un chiffre vide.
+            'availability' => (new ProbeRepository())->availability($organizationId),
             // Mises en production et erreurs par heure, sur un même axe
             // (cf. DashboardDay::productionLine).
             'line'      => $day->productionLine($organizationId),

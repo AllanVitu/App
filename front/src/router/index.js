@@ -55,6 +55,12 @@ const routes = [
         meta: { title: 'Design' },
       },
       {
+        path: 'modules/disponibilite',
+        name: 'module-disponibilite',
+        component: () => import('@/views/modules/AvailabilityView.vue'),
+        meta: { title: 'Disponibilité' },
+      },
+      {
         // Repli pour un module ajouté EN BASE sans écran dédié : le catalogue
         // le fait apparaître dans le menu, et cette vue générique lui donne
         // de quoi exister (titre, statut, échéance) en attendant le sien.

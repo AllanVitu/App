@@ -41,6 +41,7 @@ const LIGNES = {
   tickets: 'bg-mod-tickets',
   supervision: 'bg-mod-supervision',
   design: 'bg-mod-design',
+  disponibilite: 'bg-mod-disponibilite',
 }
 
 /**

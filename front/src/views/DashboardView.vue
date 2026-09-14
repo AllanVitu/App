@@ -37,6 +37,7 @@ import { useRevalidate } from '@/composables/useRevalidate'
 import { dashboardApi } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import { availabilityKpi } from '@/utils/availability'
 import {
   PRIORITIES,
   attentionParts,
@@ -115,20 +116,20 @@ const kpis = computed(() => {
       note: delta(summary.deployments.value, summary.deployments.previous),
     },
     {
-      // Taux de RÉUSSITE et non d'échec : la valeur monte quand la situation
-      // s'améliore. La variation est en POINTS — « +5 % » d'un taux serait
-      // ambigu.
+      label: 'Erreurs · 7 j',
+      value: summary.errors.value,
+      note: delta(summary.errors.value, summary.errors.previous, { goodWhen: 'down' }),
+    },
+    // La disponibilité quand des sondes l'ont mesurée ; sinon le taux de
+    // RÉUSSITE des mises en production — qui monte quand la situation
+    // s'améliore, et varie en POINTS, « +5 % » d'un taux étant ambigu.
+    availabilityKpi(overview.value?.availability) ?? {
       label: 'Réussite · 7 j',
       value: summary.success_rate.value === null ? '—' : `${summary.success_rate.value} %`,
       note: delta(summary.success_rate.value, summary.success_rate.previous, {
         goodWhen: 'up',
         unit: ' pts',
       }),
-    },
-    {
-      label: 'Erreurs · 7 j',
-      value: summary.errors.value,
-      note: delta(summary.errors.value, summary.errors.previous, { goodWhen: 'down' }),
     },
   ]
 })

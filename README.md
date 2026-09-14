@@ -10,7 +10,7 @@ Animations anime.js, suite de tests et intégration continue.
 
 ## Les modules
 
-Les cinq modules ont chacun leur modèle de données, leurs endpoints et leur
+Les six modules ont chacun leur modèle de données, leurs endpoints et leur
 écran. La table générique `module_items` (titre, statut, échéance, charge
 utile JSONB) demeure comme REPLI : un module ajouté en base sans code dédié
 apparaît dans le menu et dispose aussitôt d'un écran, en attendant le sien.
@@ -22,6 +22,7 @@ apparaît dans le menu et dispose aussitôt d'un écran, en attendant le sien.
 | `tickets`     | `tickets`, `ticket_counters`         | Suivi clavier-first, priorités, cycle de vie, assignation |
 | `supervision` | `error_groups`, `error_events`       | Erreurs groupées, piles d'appels, courbe sur 14 jours     |
 | `design`      | `design_files`, `design_versions`    | Maquettes téléversées, versions, aperçu sur la carte      |
+| `disponibilite` | `probes`, `probe_states`, `probe_checks`, `probe_incidents` | Sondes HTTP, pannes, disponibilité sur 30 jours |
 
 Deux services font converger le tout sans que le client connaisse le métier
 d'aucun module : `ModuleMetrics` décide de ce que signifie le chiffre de
@@ -579,6 +580,16 @@ avec la base** : l'une décrit les fichiers, l'autre les contient.
 - **Fichiers téléversés** : type lu dans les octets, métadonnées retirées, ni
   SVG ni PDF, servis par adresse signée avec `nosniff` et une CSP `sandbox` ;
   les octets quittent le disque avec leur description (cf. « Les fichiers »).
+- **Sondes du module Disponibilité** : une sonde est une requête que le
+  serveur émet pour le compte d'un espace — la porte d'une falsification de
+  requête côté serveur (SSRF). `App\Services\UrlGuard` n'accepte que http et
+  https, sans identifiants, et refuse toute adresse privée, locale ou réservée
+  (métadonnées des clouds comprises) ; le nom est RÉSOLU PUIS ÉPINGLÉ à chaque
+  appel (`CURLOPT_RESOLVE`), pour qu'un DNS malveillant ne redirige pas la
+  connexion après la vérification. Aucune redirection suivie, 64 Ko lus au
+  plus, dix secondes au plus ; créer ou régler une sonde est réservé aux
+  administrateurs, et « vérifier maintenant » n'émet rien dans la requête :
+  il avance l'échéance du worker.
 - **Notification hors bande** à chaque changement de mot de passe.
 
 ### Jeu de données de démonstration
