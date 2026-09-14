@@ -638,9 +638,9 @@ cd e2e && npm test                       # parcours navigateur (Playwright)
 | Suite                 | Portée                                          | Volume    |
 | --------------------- | ----------------------------------------------- | --------- |
 | PHPUnit `unit`        | Jetons, traces, métadonnées d'image — sans base | 40 tests  |
-| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel           | 246 tests |
-| Vitest                | Formatage, client HTTP, composables, signaleur  | 151 tests |
-| Playwright            | Parcours complets dans Chromium                 | 75 tests  |
+| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel           | 249 tests |
+| Vitest                | Formatage, client HTTP, composables, signaleur  | 161 tests |
+| Playwright            | Parcours complets dans Chromium                 | 76 tests  |
 
 Les composables portent l'essentiel de la logique du client : file
 d'écritures, glisser-déposer, raccourcis, pagination, synchronisation de
@@ -795,6 +795,24 @@ effacerait une à une au lieu de revenir à la page d'avant.
 commodité : un lien « mes tickets » envoyé à un collègue lui montre les SIENS.
 Avec l'identifiant en clair, il aurait vu les vôtres en croyant regarder les
 siens — une adresse partageable doit rester vraie chez son destinataire.
+
+**Au-delà du plafond, les filtres interrogent le serveur.** Les écrans chargent
+leurs lignes d'un bloc, avec un plafond — 500 tickets —, pour que la recherche
+et les filtres restent locaux et instantanés. Au-delà, une recherche ne voyait
+que ce qui était chargé, et l'avertissement conseillait même de « chercher par
+numéro, par projet ou par étiquette pour atteindre le reste » : aucune recherche
+ne le faisait, et celle du serveur ignorait justement ces trois champs.
+
+[`useServerFilters`](front/src/composables/useServerFilters.js) tient désormais
+la règle, et sa première moitié compte autant que la seconde : tant que la liste
+de départ est complète, rien ne part ; dès qu'elle déborde, un filtre actif
+interroge le serveur, qui cherche exactement là où l'écran cherche. Une frappe
+ne vaut pas une requête, une réponse lente n'écrase jamais une plus récente, et
+le retour sur l'onglet, le flux temps réel ou une restauration relisent dans le
+mode courant plutôt que de remplacer une recherche par la liste brute. Construit
+sur Tickets, le module-patron ; Déploiement, Supervision et Design le
+recevront à leur tour — leur recherche serveur cherche déjà là où cherche leur
+écran.
 
 **Les données se rafraîchissent en revenant.**
 [`useRevalidate`](front/src/composables/useRevalidate.js) relit au retour sur

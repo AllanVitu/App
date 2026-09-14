@@ -43,6 +43,7 @@ import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useLoadMore } from '@/composables/useLoadMore'
 import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
+import { useServerFilters } from '@/composables/useServerFilters'
 import { useLiveRows } from '@/composables/useLiveRows'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -62,7 +63,10 @@ const total = ref(null)
 // une impasse (cf. composables/useLoadMore.js).
 const { loadingMore, loadMore } = useLoadMore({
   rows: tickets,
-  fetch: async (offset) => (await ticketsApi.list({ offset })).tickets,
+  // En mode serveur, la suite porte les mêmes filtres : sans eux, « charger la
+  // suite » mêlerait des tickets hors filtre aux résultats d'une recherche.
+  fetch: async (offset) =>
+    (await ticketsApi.list({ ...(serveur.active.value ? filtresServeur() : {}), offset })).tickets,
   onError: (message) => ui.notify(message, 'error'),
 })
 const projects = ref([])
@@ -93,6 +97,56 @@ const members = ref([])
 // L'écran vit dans son adresse : un filtre posé se partage, se met en favori,
 // et le bouton « précédent » le rend au lieu de le perdre.
 useQuerySync({ q: search, statut: statusFilter, assigne: assigneeFilter })
+
+/**
+ * La liste de DÉPART déborde-t-elle du plafond ?
+ *
+ * Posé par le chargement de départ, et par lui seul. Une réponse filtrée tient
+ * presque toujours sous le plafond : s'y fier ferait sortir du mode serveur au
+ * premier résultat (cf. composables/useServerFilters.js).
+ */
+const baseTronquee = ref(false)
+
+/** Les valeurs de l'adresse, traduites dans celles de l'API. */
+const ASSIGNE_API = { moi: 'me', personne: 'none' }
+
+/**
+ * Les filtres de l'écran au format de l'API — {} quand aucun n'est posé.
+ *
+ * Ce sont les MÊMES que ceux du filtrage local, et c'est la condition de tout :
+ * le serveur cherche désormais là où l'écran cherche (cf.
+ * TicketRepository::search). Refiltrer ses réponses en local ne retire donc
+ * rien.
+ */
+function filtresServeur() {
+  const terme = search.value.trim()
+
+  return {
+    ...(terme ? { search: terme } : {}),
+    ...(statusFilter.value ? { status: statusFilter.value } : {}),
+    ...(assigneeFilter.value
+      ? { assignee: ASSIGNE_API[assigneeFilter.value] ?? assigneeFilter.value }
+      : {}),
+  }
+}
+
+/**
+ * Au-delà du plafond, la recherche et les filtres interrogent le serveur, qui
+ * voit tout. En deçà, ils restent locaux et instantanés — l'atout de l'écran.
+ */
+const serveur = useServerFilters({
+  enabled: () => baseTronquee.value,
+  params: filtresServeur,
+  fetch: (params, signal) => ticketsApi.list(params, signal),
+  apply: ({ tickets: rows, meta }) => {
+    tickets.value = rows
+    total.value = meta.total ?? null
+    stats.value = meta.stats
+    projects.value = meta.projects
+  },
+  restore: () => load({ silent: true }),
+  onError: (message) => ui.notify(message, 'error'),
+})
 
 const activeId = ref(null)
 const panelOpen = ref(false)
@@ -145,6 +199,7 @@ async function load({ silent = false } = {}) {
     tickets.value = rows
     stats.value = meta.stats
     total.value = meta.total ?? null
+    baseTronquee.value = (meta.total ?? 0) > rows.length
     projects.value = meta.projects
   } catch (error) {
     ui.notify(error.message, 'error')
@@ -591,7 +646,9 @@ async function removeTicket(ticket) {
       try {
         await ticketsApi.restore(ticket.id)
         ui.notify(`Ticket #${ticket.number} restauré.`)
-        await load({ silent: true })
+        // Dans le mode courant : restaurer pendant une recherche ne doit pas
+        // la remplacer par la liste brute.
+        await serveur.reload()
       } catch (error) {
         ui.notify(error.message, 'error')
       }
@@ -709,7 +766,7 @@ function act(event, action) {
  * ailleurs. On relit SANS indicateur de chargement — remplacer l'écran par un
  * rond qui tourne au retour donnerait l'impression d'avoir tout perdu.
  */
-useRevalidate(() => load({ silent: true }))
+useRevalidate(() => serveur.reload())
 
 /**
  * Le flux : ce que les autres font, pendant qu'on regarde.
@@ -736,7 +793,8 @@ const { watchers } = useLiveRows({
   // Le panneau ouvert est épargné : voir un champ se réécrire sous ses doigts
   // est pire que de l'ignorer.
   protege: () => (panelOpen.value ? activeId.value : null),
-  recharger: () => load({ silent: true }),
+  // Même règle que le retour sur l'onglet : relire dans le mode courant.
+  recharger: () => serveur.reload(),
   decorer: (changes) => {
     // « assignee_name » ne figure pas dans le journal, qui ne transporte que
     // des valeurs brutes. La liste des membres l'a déjà : la relire coûterait
@@ -924,7 +982,7 @@ const SHORTCUTS = [
       :loaded="tickets.length"
       :total="total"
       unit="tickets"
-      hint="Cherchez par numéro, par projet ou par étiquette pour atteindre le reste."
+      hint="La recherche et les filtres interrogent aussi le serveur : ils atteignent le reste."
     />
 
     <!-- ============================ CORPS ============================ -->

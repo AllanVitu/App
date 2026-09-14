@@ -1,4 +1,6 @@
-import { expect, login, test } from './support.js'
+import { DEMO, expect, login, test } from './support.js'
+
+const API = process.env.E2E_API_URL ?? 'http://localhost:8080/api'
 
 /**
  * L'historique, et le flux hors des tickets.
@@ -93,42 +95,76 @@ test.describe('historique', () => {
     }
   })
 
-  test('un déploiement créé ailleurs apparaît sans rechargement', async ({ page, browser }) => {
+  test('un déploiement créé ailleurs apparaît sans rechargement', async ({
+    page,
+    browser,
+    request,
+  }) => {
     const marque = `flux-${Date.now()}`
 
     await login(page)
 
     const contexte = await browser.newContext()
 
-    await contexte.addInitScript(() => {
-      try {
-        window.localStorage.setItem('sound', 'off')
-      } catch {
-        /* stockage indisponible : l'écran s'affichera, le test le dira */
-      }
-    })
+    try {
+      await contexte.addInitScript(() => {
+        try {
+          window.localStorage.setItem('sound', 'off')
+        } catch {
+          /* stockage indisponible : l'écran s'affichera, le test le dira */
+        }
+      })
 
-    const autre = await contexte.newPage()
+      const autre = await contexte.newPage()
 
-    await login(autre)
-    await autre.goto('/modules/deploiement')
-    await expect(autre.getByRole('heading', { name: 'déploiement' })).toBeVisible()
+      await login(autre)
+      await autre.goto('/modules/deploiement')
+      await expect(autre.getByRole('heading', { name: 'déploiement' })).toBeVisible()
 
-    // La première fenêtre déclenche un déploiement.
-    await page.goto('/modules/deploiement')
-    await expect(page.getByRole('heading', { name: 'déploiement' })).toBeVisible()
+      // La première fenêtre déclenche un déploiement.
+      await page.goto('/modules/deploiement')
+      await expect(page.getByRole('heading', { name: 'déploiement' })).toBeVisible()
 
-    await page.getByRole('button', { name: 'déployer', exact: true }).click()
-    await page.getByLabel('branche', { exact: true }).fill(marque)
-    await page.getByLabel(/empreinte du commit/i).fill('abc1234')
-    await page.getByRole('button', { name: 'lancer', exact: true }).click()
+      await page.getByRole('button', { name: 'déployer', exact: true }).click()
+      await page.getByLabel('branche', { exact: true }).fill(marque)
+      await page.getByLabel(/empreinte du commit/i).fill('abc1234')
+      await page.getByRole('button', { name: 'lancer', exact: true }).click()
 
-    await expect(page.getByText(marque).first()).toBeVisible()
+      await expect(page.getByText(marque).first()).toBeVisible()
 
-    // CE QUI CHANGE : la seconde fenêtre le voit arriver, seule. Avant ce
-    // jalon, seul le tableau des tickets se comportait ainsi.
-    await expect(autre.getByText(marque).first()).toBeVisible({ timeout: PROPAGATION })
+      // CE QUI CHANGE : la seconde fenêtre le voit arriver, seule. Avant ce
+      // jalon, seul le tableau des tickets se comportait ainsi.
+      await expect(autre.getByText(marque).first()).toBeVisible({ timeout: PROPAGATION })
+    } finally {
+      await contexte.close()
 
-    await contexte.close()
+      // Ménage, même en cas d'échec. Sans lui, chaque exécution laissait une
+      // branche « flux-… » de plus dans le compte de démonstration : dix-huit
+      // exécutions plus tard, le panneau « état par branche » avait mangé
+      // l'écran des déploiements, et deux AUTRES parcours échouaient sans
+      // rapport avec ce qu'ils vérifient.
+      await supprimerDeploiements(request, marque)
+    }
   })
 })
+
+/**
+ * Supprime les déploiements d'une branche, par l'API.
+ *
+ * Par l'API plutôt que par l'écran : le ménage n'est pas ce que le parcours
+ * vérifie, et il doit aboutir même quand l'écran vient d'échouer.
+ */
+async function supprimerDeploiements(request, branche) {
+  const connexion = await request.post(`${API}/auth/login`, { data: DEMO })
+  const { access_token: jeton } = (await connexion.json()).data
+  const entetes = { Authorization: `Bearer ${jeton}` }
+
+  const liste = await request.get(`${API}/deployments`, {
+    params: { search: branche },
+    headers: entetes,
+  })
+
+  for (const deploiement of (await liste.json()).data) {
+    await request.delete(`${API}/deployments/${deploiement.id}`, { headers: entetes })
+  }
+}

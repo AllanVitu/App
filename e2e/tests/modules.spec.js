@@ -158,7 +158,9 @@ test.describe('modules', () => {
     await page.goto('/modules/deploiement')
     await page.getByRole('button', { name: /^déployer$/i }).click()
 
-    await page.getByLabel(/branche/i).fill('main')
+    // Nom EXACT : le panneau « état par branche », qui défile et prend le
+    // focus, porte lui aussi un nom accessible contenant « branche ».
+    await page.getByLabel('branche', { exact: true }).fill('main')
     await page.getByPlaceholder('a3f9c1d').fill('pas-du-hexa')
     await page.getByRole('button', { name: /^lancer$/i }).click()
 

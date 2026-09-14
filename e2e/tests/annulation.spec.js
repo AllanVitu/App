@@ -92,14 +92,14 @@ test.describe('ne pas perdre son travail', () => {
     await expect(page.getByRole('heading', { name: 'déploiement' })).toBeVisible()
 
     await page.getByRole('button', { name: /^déployer$/i }).click()
-    await page.getByLabel(/branche/i).fill('feat/quelque-chose-de-long')
+    await page.getByLabel('branche', { exact: true }).fill('feat/quelque-chose-de-long')
 
     // La question du navigateur est refusée : on reste sur place.
     page.once('dialog', (dialog) => dialog.dismiss())
     await page.getByRole('link', { name: /tickets/i }).first().click()
 
     await expect(page).toHaveURL(/deploiement/)
-    await expect(page.getByLabel(/branche/i)).toHaveValue('feat/quelque-chose-de-long')
+    await expect(page.getByLabel('branche', { exact: true })).toHaveValue('feat/quelque-chose-de-long')
 
     // Acceptée : on part, et la saisie est abandonnée en connaissance de cause.
     page.once('dialog', (dialog) => dialog.accept())

@@ -23,6 +23,20 @@
  * Le statut affiché est celui du dernier déploiement, même s'il a échoué :
  * masquer un échec derrière la dernière URL qui a marché ferait croire la
  * branche saine.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │  UNE HAUTEUR BORNÉE, PARCE QUE LES BRANCHES S'ACCUMULENT            │
+ * │                                                                     │
+ * │  Le panneau grandissait d'une ligne par branche, sans limite. À     │
+ * │  dix-huit branches, il occupait tout l'écran et écrasait le tableau │
+ * │  des déploiements à une hauteur nulle : ses cartes n'étaient plus   │
+ * │  atteignables. Constaté le 14 septembre 2026, quand deux parcours   │
+ * │  navigateur ont échoué pour cette seule raison — une équipe qui     │
+ * │  ouvre une branche par fonctionnalité y serait arrivée en un mois.  │
+ * │                                                                     │
+ * │  La liste défile désormais dans son cadre, et le tableau garde sa   │
+ * │  place quel que soit le nombre de branches.                         │
+ * └─────────────────────────────────────────────────────────────────────┘
  */
 import { computed } from 'vue'
 
@@ -58,13 +72,20 @@ const branches = computed(() => {
 </script>
 
 <template>
-  <section v-if="branches.length" class="card overflow-hidden">
+  <section v-if="branches.length" class="card shrink-0 overflow-hidden">
     <header class="flex items-baseline gap-2 border-b border-line px-4 py-2">
-      <h3 class="label-caps">état par branche</h3>
+      <h3 id="etat-par-branche" class="label-caps">état par branche</h3>
       <span class="text-[0.7rem] tabular-nums text-ink-3">{{ branches.length }}</span>
     </header>
 
-    <ul class="divide-y divide-line">
+    <!-- Défilement DANS le cadre. « tabindex » rend la zone atteignable au
+         clavier : une région qui défile sans pouvoir recevoir le focus ne
+         défile qu'à la souris. -->
+    <ul
+      class="max-h-48 divide-y divide-line overflow-y-auto"
+      tabindex="0"
+      aria-labelledby="etat-par-branche"
+    >
       <li
         v-for="row in branches"
         :key="row.branch"

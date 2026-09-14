@@ -91,8 +91,24 @@ final class TicketRepository
             $params['label'] = $filters['label'];
         }
 
+        // ┌───────────────────────────────────────────────────────────────────┐
+        // │  LE SERVEUR CHERCHE EXACTEMENT LÀ OÙ L'ÉCRAN CHERCHE               │
+        // │                                                                   │
+        // │  Numéro, titre, description, projet, étiquettes — la liste de     │
+        // │  TicketsView, champ pour champ. Le serveur ne regardait que le    │
+        // │  titre et la description, pendant que l'écran conseillait, au-    │
+        // │  delà du plafond, de « chercher par numéro, par projet ou par     │
+        // │  étiquette pour atteindre le reste » : un chemin qui n'existait   │
+        // │  pas. Une divergence ferait trouver un ticket tant que la liste   │
+        // │  tient sous le plafond, puis plus du tout le jour où elle le      │
+        // │  dépasse.                                                         │
+        // └───────────────────────────────────────────────────────────────────┘
         if (!empty($filters['search'])) {
-            $conditions[]     = '(t.title ILIKE :search OR t.description ILIKE :search)';
+            $conditions[] = '(t.number::text ILIKE :search
+                              OR t.title ILIKE :search
+                              OR t.description ILIKE :search
+                              OR t.project ILIKE :search
+                              OR EXISTS (SELECT 1 FROM unnest(t.labels) AS l(label) WHERE l.label ILIKE :search))';
             $params['search'] = '%' . $this->escapeLike($filters['search']) . '%';
         }
 
