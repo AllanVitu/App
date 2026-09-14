@@ -37,5 +37,8 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 80
 
+# 127.0.0.1 et non « localhost » : dans Alpine, localhost se résout d'abord en
+# ::1, où nginx n'écoute pas. La sonde échouait en « Connection refused » et
+# déclarait malade un service en parfaite santé.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-    CMD wget -qO- http://localhost/api/health >/dev/null || exit 1
+    CMD wget -qO- http://127.0.0.1/api/health >/dev/null || exit 1
