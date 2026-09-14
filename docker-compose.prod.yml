@@ -88,6 +88,13 @@ services:
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:?MAIL_FROM_ADDRESS est obligatoire}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-SaaS App}
       STORAGE_PATH: /var/www/storage
+      # Adresses (ou blocs CIDR, séparés par des virgules) des intermédiaires
+      # AUTORISÉS à dire d'où vient une requête par « X-Forwarded-For » : la
+      # terminaison TLS placée devant ce conteneur. Vide, personne ne l'est, et
+      # l'adresse retenue est celle qui se connecte réellement. Un en-tête
+      # écrit par le client ne choisit plus jamais l'adresse qui compte pour
+      # les limites de débit (cf. App\Core\ClientIp).
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       # Octets par espace de travail ; 1 Go par défaut.
       STORAGE_QUOTA_BYTES: ${STORAGE_QUOTA_BYTES:-1073741824}
     volumes:

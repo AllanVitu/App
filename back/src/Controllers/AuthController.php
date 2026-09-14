@@ -14,6 +14,7 @@ use App\Models\SettingsRepository;
 use App\Models\UserRepository;
 use App\Services\AccountMailer;
 use App\Services\Jwt;
+use App\Services\RateLimiter;
 use App\Services\RefreshTokenService;
 use App\Services\ThrottleService;
 
@@ -57,6 +58,20 @@ final class AuthController
      */
     public function register(Request $request): void
     {
+        // ┌───────────────────────────────────────────────────────────────────┐
+        // │  AVANT TOUTE VALIDATION                                           │
+        // │                                                                   │
+        // │  Chaque inscription réussie envoie un e-mail, à une adresse que   │
+        // │  personne n'a encore prouvé posséder : sans limite, ce formulaire │
+        // │  est un canon à courriels. Et le refus « compte existant » dit    │
+        // │  qu'une adresse est inscrite : compter aussi les tentatives       │
+        // │  refusées borne l'énumération des comptes.                        │
+        // │                                                                   │
+        // │  Vingt par heure : une famille ou une salle de classe derrière    │
+        // │  une même box passe, une boucle non.                              │
+        // └───────────────────────────────────────────────────────────────────┘
+        (new RateLimiter())->hit('register', $request->ip() ?? 'inconnue', 20, 3600);
+
         $validator = new Validator($request->all());
         $fullName  = $validator->string('full_name', min: 2, max: 120, label: 'nom complet');
         $email     = $validator->email();

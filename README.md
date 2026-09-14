@@ -533,9 +533,14 @@ avec la base** : l'une décrit les fichiers, l'autre les contient.
   chose pour une adresse connue ou non ; la connexion utilise un hachage
   factice pour aligner les temps de réponse.
 - **Limitation de débit** par e-mail ET par IP : 5 connexions, 3 demandes de
-  réinitialisation, 3 renvois de confirmation par quart d'heure. Pour le reste,
-  `RateLimiter` compte des appels par compte, IP ou clé, en fenêtre fixe ; la
-  clé n'est stockée qu'en **empreinte HMAC**, jamais en clair.
+  réinitialisation, 3 renvois de confirmation par quart d'heure, 20 inscriptions
+  par heure. Pour le reste, `RateLimiter` compte des appels par compte, IP ou
+  clé, en fenêtre fixe ; la clé n'est stockée qu'en **empreinte HMAC**, jamais
+  en clair.
+- **L'adresse IP ne se déclare pas** : `X-Forwarded-For` n'est lu que s'il
+  vient d'un intermédiaire listé dans `TRUSTED_PROXIES`, et de droite à gauche
+  (`App\Core\ClientIp`). Lu sans condition, il laissait chaque requête choisir
+  son adresse, donc rouvrir le verrou par IP à chaque tentative.
 - **Traces d'exception sans arguments** : `zend.exception_ignore_args` est
   activé en développement comme en production, et la supervision reconstruit
   ses propres traces sans eux.
@@ -623,6 +628,11 @@ Différences avec la stack de développement :
 
 ⚠ Le conteneur web écoute en HTTP : placez-le derrière une terminaison TLS.
 Sans HTTPS, le cookie de session marqué `Secure` ne sera pas transmis.
+
+⚠ Renseignez alors `TRUSTED_PROXIES` avec l'adresse de cette terminaison.
+Sans elle, l'API voit tous les visiteurs arriver de la même adresse : vingt
+mots de passe erronés, de qui que ce soit, fermeraient la connexion à tout le
+monde pour un quart d'heure.
 
 ## Tests et qualité
 

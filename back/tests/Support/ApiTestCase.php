@@ -21,6 +21,13 @@ use PHPUnit\Framework\TestCase;
 abstract class ApiTestCase extends TestCase
 {
     /**
+     * L'adresse de toutes les requêtes de test (bloc réservé à la
+     * documentation, RFC 5737). Sans elle, l'adresse serait nulle, et aucune
+     * limite par IP ne compterait quoi que ce soit.
+     */
+    protected const REMOTE_ADDRESS = '192.0.2.10';
+
+    /**
      * Tables vidées avant chaque test ; « modules » est conservée (catalogue).
      *
      * tickets et ticket_counters seraient vidées de toute façon par la cascade
@@ -130,7 +137,7 @@ abstract class ApiTestCase extends TestCase
         array $cookies = [],
         array $files = [],
     ): array {
-        $request = Request::create($method, $path, $body, $query, $headers, $cookies, $files);
+        $request = Request::create($method, $path, $body, $query, $headers, $cookies, $files, self::REMOTE_ADDRESS);
 
         // http_response_code() conserve sa valeur d'un appel à l'autre dans le
         // même processus : on la réinitialise pour ne pas hériter du test

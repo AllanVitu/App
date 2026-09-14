@@ -37,7 +37,8 @@ final class SessionsTest extends ApiTestCase
         return \App\Core\Request::create(
             'POST',
             '/api/auth/login',
-            headers: ['User-Agent' => $agent, 'X-Forwarded-For' => $ip],
+            headers: ['User-Agent' => $agent],
+            remoteAddress: $ip,
         );
     }
 

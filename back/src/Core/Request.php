@@ -27,6 +27,9 @@ final class Request
     /** @var array<string, UploadedFile> Fichiers d'un envoi multipart, par nom de champ */
     private array $files = [];
 
+    /** L'adresse qui a ouvert la connexion — celle du dernier intermédiaire, s'il y en a un. */
+    private ?string $remoteAddress = null;
+
     /**
      * @param array<string, string> $query
      * @param array<string, string> $headers
@@ -67,6 +70,7 @@ final class Request
         // est mémorisée, puis signalée au bon moment par assertBodyIsValid().
         $request->bodyIsMalformed = $body['malformed'];
         $request->files           = self::parseFiles();
+        $request->remoteAddress   = is_string($_SERVER['REMOTE_ADDR'] ?? null) ? $_SERVER['REMOTE_ADDR'] : null;
 
         return $request;
     }
@@ -93,6 +97,7 @@ final class Request
         array $headers = [],
         array $cookies = [],
         array $files = [],
+        ?string $remoteAddress = null,
     ): self {
         $request = new self(
             method:  strtoupper($method),
@@ -103,7 +108,8 @@ final class Request
             body:    $body,
         );
 
-        $request->files = $files;
+        $request->files         = $files;
+        $request->remoteAddress = $remoteAddress;
 
         return $request;
     }
@@ -309,23 +315,14 @@ final class Request
         return $matches[1];
     }
 
+    /**
+     * L'adresse qui compte pour les limites de débit et le journal des
+     * sessions. « X-Forwarded-For » n'est lu que s'il vient d'un intermédiaire
+     * déclaré : cf. ClientIp.
+     */
     public function ip(): ?string
     {
-        // Derrière Nginx : REMOTE_ADDR est l'IP du conteneur proxy.
-        // X-Forwarded-For n'est fiable que si le proxy est de confiance.
-        $forwarded = $this->header('x-forwarded-for');
-
-        if ($forwarded !== null) {
-            $first = trim(explode(',', $forwarded)[0]);
-
-            if (filter_var($first, FILTER_VALIDATE_IP) !== false) {
-                return $first;
-            }
-        }
-
-        $remote = $_SERVER['REMOTE_ADDR'] ?? null;
-
-        return is_string($remote) && filter_var($remote, FILTER_VALIDATE_IP) !== false ? $remote : null;
+        return ClientIp::resolve($this->remoteAddress, $this->header('x-forwarded-for'), ClientIp::trustedProxies());
     }
 
     public function userAgent(): ?string
