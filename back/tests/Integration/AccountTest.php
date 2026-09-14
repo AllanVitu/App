@@ -38,7 +38,7 @@ final class AccountTest extends ApiTestCase
         $response = $this->call('POST', '/api/auth/register', [
             'full_name' => 'Jean Dupont',
             'email'     => 'jean@test.local',
-            'password'  => 'Motdepasse1',
+            'password'  => 'Motdepasse1-solide',
             'terms_accepted' => true,
         ]);
 
@@ -82,7 +82,7 @@ final class AccountTest extends ApiTestCase
 
         $reponse = $this->call('POST', '/api/auth/password/reset', [
             'token'    => $token,
-            'password' => 'NouveauMdp1',
+            'password' => 'NouveauMdp1-solide',
         ]);
 
         $this->assertSame(400, $reponse['status']);
@@ -100,7 +100,7 @@ final class AccountTest extends ApiTestCase
         // nouveau est demandé.
         $reponse = $this->call('POST', '/api/auth/password/reset', [
             'token'    => $ancien,
-            'password' => 'NouveauMdp1',
+            'password' => 'NouveauMdp1-solide',
         ]);
 
         $this->assertSame(400, $reponse['status']);
@@ -151,13 +151,13 @@ final class AccountTest extends ApiTestCase
     #[Test]
     public function la_reinitialisation_change_le_mot_de_passe_et_ferme_les_sessions(): void
     {
-        $session = $this->register('jean@test.local', 'Motdepasse1');
+        $session = $this->register('jean@test.local', 'Motdepasse1-solide');
         $token = $this->issueToken($session['id'], UserTokenService::TYPE_PASSWORD_RESET);
 
         $reponse = $this->call('POST', '/api/auth/password/reset', [
             'token'                 => $token,
-            'password'              => 'NouveauMdp1',
-            'password_confirmation' => 'NouveauMdp1',
+            'password'              => 'NouveauMdp1-solide',
+            'password_confirmation' => 'NouveauMdp1-solide',
         ]);
 
         $this->assertSame(200, $reponse['status']);
@@ -173,13 +173,13 @@ final class AccountTest extends ApiTestCase
         // L'ancien mot de passe ne fonctionne plus…
         $this->assertSame(401, $this->call('POST', '/api/auth/login', [
             'email'    => 'jean@test.local',
-            'password' => 'Motdepasse1',
+            'password' => 'Motdepasse1-solide',
         ])['status']);
 
         // …le nouveau, si.
         $this->assertSame(200, $this->call('POST', '/api/auth/login', [
             'email'    => 'jean@test.local',
-            'password' => 'NouveauMdp1',
+            'password' => 'NouveauMdp1-solide',
         ])['status']);
     }
 
@@ -191,8 +191,8 @@ final class AccountTest extends ApiTestCase
 
         $reponse = $this->call('POST', '/api/auth/password/reset', [
             'token'                 => $token,
-            'password'              => 'NouveauMdp1',
-            'password_confirmation' => 'AutreMdp1',
+            'password'              => 'NouveauMdp1-solide',
+            'password_confirmation' => 'AutreMdp1-solide',
         ]);
 
         $this->assertSame(422, $reponse['status']);

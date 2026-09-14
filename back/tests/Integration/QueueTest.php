@@ -244,7 +244,7 @@ final class QueueTest extends ApiTestCase
         $this->call('POST', '/api/auth/register', [
             'full_name'      => 'Jean Dupont',
             'email'          => 'jean@test.local',
-            'password'       => 'Motdepasse1',
+            'password'       => 'Motdepasse1-solide',
             'terms_accepted' => true,
         ]);
 

@@ -62,7 +62,7 @@ final class ClientIpThrottleTest extends ApiTestCase
         $refus = $this->call('POST', '/api/auth/register', [
             'full_name'      => 'Vingt et unième',
             'email'          => 'vingt-et-unieme@test.local',
-            'password'       => 'Motdepasse1',
+            'password'       => 'Motdepasse1-solide',
             'terms_accepted' => true,
         ]);
 

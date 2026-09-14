@@ -87,9 +87,9 @@ final class Validator
     }
 
     /**
-     * Mot de passe : 8 caractères minimum, au moins une lettre et un chiffre.
-     * Volontairement simple — une politique trop stricte pousse aux mots de
-     * passe notés sur un post-it.
+     * Mot de passe NOUVEAU : 80 bits, mesurés comme la CNIL les mesure
+     * (cf. PasswordPolicy). La connexion ne passe pas par ici : un compte créé
+     * sous l'ancienne règle continue d'ouvrir sa session.
      */
     public function password(string $field = 'password', bool $required = true): ?string
     {
@@ -103,14 +103,10 @@ final class Validator
             return null;
         }
 
-        if (mb_strlen($value) < 8) {
-            $this->errors[$field] = 'Le mot de passe doit contenir au moins 8 caractères.';
-        } elseif (mb_strlen($value) > 200) {
-            // Garde-fou : bcrypt tronque au-delà de 72 octets, et un très long
-            // mot de passe est un vecteur de déni de service au hachage.
-            $this->errors[$field] = 'Le mot de passe est trop long (200 caractères maximum).';
-        } elseif (!preg_match('/[a-zA-Z]/', $value) || !preg_match('/\d/', $value)) {
-            $this->errors[$field] = 'Le mot de passe doit contenir au moins une lettre et un chiffre.';
+        $problem = PasswordPolicy::problem($value);
+
+        if ($problem !== null) {
+            $this->errors[$field] = $problem;
         }
 
         return $value;

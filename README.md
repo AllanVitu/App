@@ -522,6 +522,12 @@ avec la base** : l'une décrit les fichiers, l'autre les contient.
 ## Sécurité
 
 - **Mots de passe** : bcrypt coût 12, réhachage transparent si le coût évolue.
+  Un nouveau mot de passe doit valoir **80 bits au sens de la CNIL**
+  (délibération n° 2022-100 : longueur × log2 de l'alphabet employé), mesurés
+  sur les 72 octets que bcrypt lit réellement (`AppCorePasswordPolicy`, copiée
+  côté client pour l'indicateur). « Motdepasse1 » est refusé, « cheval batterie
+  agrafe » accepté. La connexion n'applique pas la règle : un compte plus ancien
+  continue d'ouvrir sa session.
 - **Jetons de session** : JWT HS256 de 15 min (algorithme imposé côté serveur,
   signature comparée en temps constant) + jeton de rafraîchissement opaque de
   14 j, stocké **haché en SHA-256** et transmis par cookie **HttpOnly**, avec

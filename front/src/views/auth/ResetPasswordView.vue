@@ -14,6 +14,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import { accountApi } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { PASSWORD_HINT } from '@/utils/password'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -109,7 +110,7 @@ async function submit() {
           type="password"
           autocomplete="new-password"
           required
-          hint="8 caractères minimum, dont une lettre et un chiffre."
+          :hint="PASSWORD_HINT"
           :error="errors.password"
         />
 

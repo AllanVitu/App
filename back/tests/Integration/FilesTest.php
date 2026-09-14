@@ -116,7 +116,7 @@ final class FilesTest extends ApiTestCase
         $id     = $this->identifiant((string) $this->televerserAvatar($compte['token'], Images::png())['body']['data']['avatar_url']);
         $chemin = (new FileStorage())->pathFor($this->cle($id));
 
-        $suppression = $this->call('DELETE', '/api/profile', ['password' => 'Motdepasse1'], $this->bearer($compte['token']));
+        $suppression = $this->call('DELETE', '/api/profile', ['password' => 'Motdepasse1-solide'], $this->bearer($compte['token']));
         $this->assertSame(204, $suppression['status']);
 
         (new FileStorage())->purge();

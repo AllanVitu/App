@@ -17,6 +17,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { formatDateTime } from '@/utils/format'
 import { cropToSquare } from '@/utils/images'
+import { PASSWORD_HINT } from '@/utils/password'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -341,7 +342,7 @@ onMounted(loadSessions)
           type="password"
           autocomplete="new-password"
           required
-          hint="8 caractères minimum, dont une lettre et un chiffre."
+          :hint="PASSWORD_HINT"
           :error="passwordErrors.new_password"
         />
 

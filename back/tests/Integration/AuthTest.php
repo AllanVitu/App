@@ -20,7 +20,7 @@ final class AuthTest extends ApiTestCase
         $response = $this->call('POST', '/api/auth/register', [
             'full_name' => 'Jean Dupont',
             'email'     => 'jean@test.local',
-            'password'  => 'Motdepasse1',
+            'password'  => 'Motdepasse1-solide',
             'terms_accepted' => true,
         ]);
 
@@ -52,12 +52,12 @@ final class AuthTest extends ApiTestCase
         $response = $this->call('POST', '/api/auth/register', [
             'full_name' => 'Jean Dupont',
             'email'     => 'jean@test.local',
-            'password'  => 'Motdepasse1',
+            'password'  => 'Motdepasse1-solide',
             'terms_accepted' => true,
         ]);
 
         $this->assertArrayNotHasKey('password_hash', $response['body']['data']['user']);
-        $this->assertStringNotContainsString('Motdepasse1', json_encode($response['body']));
+        $this->assertStringNotContainsString('Motdepasse1-solide', json_encode($response['body']));
     }
 
     #[Test]
@@ -66,7 +66,7 @@ final class AuthTest extends ApiTestCase
         $response = $this->call('POST', '/api/auth/register', [
             'full_name' => 'Jean Dupont',
             'email'     => 'jean@test.local',
-            'password'  => 'Motdepasse1',
+            'password'  => 'Motdepasse1-solide',
             // terms_accepted volontairement absent
         ]);
 
@@ -101,7 +101,7 @@ final class AuthTest extends ApiTestCase
         $response = $this->call('POST', '/api/auth/register', [
             'full_name' => 'Autre Personne',
             'email'     => 'jean@test.local',
-            'password'  => 'Motdepasse1',
+            'password'  => 'Motdepasse1-solide',
             'terms_accepted' => true,
         ]);
 
@@ -118,7 +118,7 @@ final class AuthTest extends ApiTestCase
         $response = $this->call('POST', '/api/auth/register', [
             'full_name' => 'Jean Majuscule',
             'email'     => 'Jean@Test.Local',
-            'password'  => 'Motdepasse1',
+            'password'  => 'Motdepasse1-solide',
             'terms_accepted' => true,
         ]);
 
@@ -141,11 +141,11 @@ final class AuthTest extends ApiTestCase
     #[Test]
     public function la_connexion_reussit_avec_les_bons_identifiants(): void
     {
-        $this->register('jean@test.local', 'Motdepasse1');
+        $this->register('jean@test.local', 'Motdepasse1-solide');
 
         $response = $this->call('POST', '/api/auth/login', [
             'email'    => 'jean@test.local',
-            'password' => 'Motdepasse1',
+            'password' => 'Motdepasse1-solide',
         ]);
 
         $this->assertSame(200, $response['status']);
@@ -155,11 +155,11 @@ final class AuthTest extends ApiTestCase
     #[Test]
     public function un_compte_inconnu_et_un_mot_de_passe_faux_donnent_la_meme_reponse(): void
     {
-        $this->register('jean@test.local', 'Motdepasse1');
+        $this->register('jean@test.local', 'Motdepasse1-solide');
 
         $inconnu = $this->call('POST', '/api/auth/login', [
             'email'    => 'personne@test.local',
-            'password' => 'Motdepasse1',
+            'password' => 'Motdepasse1-solide',
         ]);
 
         $mauvais = $this->call('POST', '/api/auth/login', [
@@ -177,7 +177,7 @@ final class AuthTest extends ApiTestCase
     #[Test]
     public function cinq_echecs_declenchent_la_limitation_de_debit(): void
     {
-        $this->register('jean@test.local', 'Motdepasse1');
+        $this->register('jean@test.local', 'Motdepasse1-solide');
 
         for ($attempt = 0; $attempt < 5; $attempt++) {
             $this->call('POST', '/api/auth/login', [
@@ -197,7 +197,7 @@ final class AuthTest extends ApiTestCase
         // attaquant saurait qu'il vient de le trouver.
         $avecBonMdp = $this->call('POST', '/api/auth/login', [
             'email'    => 'jean@test.local',
-            'password' => 'Motdepasse1',
+            'password' => 'Motdepasse1-solide',
         ]);
 
         $this->assertSame(429, $avecBonMdp['status']);
@@ -206,7 +206,7 @@ final class AuthTest extends ApiTestCase
     #[Test]
     public function une_connexion_reussie_efface_les_echecs_precedents(): void
     {
-        $this->register('jean@test.local', 'Motdepasse1');
+        $this->register('jean@test.local', 'Motdepasse1-solide');
 
         for ($attempt = 0; $attempt < 3; $attempt++) {
             $this->call('POST', '/api/auth/login', [
@@ -217,7 +217,7 @@ final class AuthTest extends ApiTestCase
 
         $this->call('POST', '/api/auth/login', [
             'email'    => 'jean@test.local',
-            'password' => 'Motdepasse1',
+            'password' => 'Motdepasse1-solide',
         ]);
 
         // Trois nouveaux échecs ne doivent pas suffire à bloquer : le compteur

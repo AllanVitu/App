@@ -159,7 +159,7 @@ abstract class ApiTestCase extends TestCase
      */
     protected function register(
         string $email = 'utilisateur@test.local',
-        string $password = 'Motdepasse1',
+        string $password = 'Motdepasse1-solide',
         string $name = 'Utilisateur Test',
     ): array {
         $response = $this->call('POST', '/api/auth/register', [

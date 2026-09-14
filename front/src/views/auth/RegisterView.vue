@@ -15,6 +15,7 @@ import BaseInput from '@/components/ui/BaseInput.vue'
 import { useMotion } from '@/composables/useMotion'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import { PASSWORD_HINT, passwordStrength } from '@/utils/password'
 
 const route = useRoute()
 const router = useRouter()
@@ -68,29 +69,23 @@ const root = useMotion(() => {
 })
 
 /**
- * Indicateur de robustesse — purement informatif. La règle qui fait foi
- * (8 caractères, une lettre, un chiffre) est appliquée par l'API.
+ * Indicateur de robustesse. Il comptait des cases — longueur, majuscules,
+ * chiffres — et annonçait « bon » des mots de passe que l'API refusait. Il
+ * applique désormais la règle de l'API (utils/password), qui seule fait foi :
+ * « bon » et « excellent » veulent dire « accepté », et rien d'autre.
  */
+const LEVELS = [
+  { label: 'très faible', classes: 'w-1/5 bg-brick' },
+  { label: 'faible', classes: 'w-2/5 bg-brick' },
+  { label: 'insuffisant', classes: 'w-3/5 bg-ochre' },
+  { label: 'bon', classes: 'w-4/5 bg-moss' },
+  { label: 'excellent', classes: 'w-full bg-moss' },
+]
+
 const strength = computed(() => {
-  const value = form.password
-  if (!value) return { score: 0, label: '', classes: '' }
+  const { score } = passwordStrength(form.password)
 
-  let score = 0
-  if (value.length >= 8) score++
-  if (value.length >= 12) score++
-  if (/[a-z]/.test(value) && /[A-Z]/.test(value)) score++
-  if (/\d/.test(value)) score++
-  if (/[^a-zA-Z0-9]/.test(value)) score++
-
-  const levels = [
-    { label: 'très faible', classes: 'w-1/5 bg-brick' },
-    { label: 'faible', classes: 'w-2/5 bg-brick' },
-    { label: 'moyen', classes: 'w-3/5 bg-ochre' },
-    { label: 'bon', classes: 'w-4/5 bg-ochre' },
-    { label: 'excellent', classes: 'w-full bg-moss' },
-  ]
-
-  return { score, ...levels[Math.max(0, score - 1)] }
+  return score ? { score, ...LEVELS[score - 1] } : { score: 0, label: '', classes: '' }
 })
 
 async function submit() {
@@ -170,7 +165,7 @@ async function submit() {
           autocomplete="new-password"
           required
           :error="errors.password"
-          hint="8 caractères minimum, dont une lettre et un chiffre."
+          :hint="PASSWORD_HINT"
         />
 
         <div v-if="form.password" class="mt-2">
