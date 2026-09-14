@@ -223,10 +223,14 @@ final class CollaborationTest extends ApiTestCase
         $flux = $this->flux($alice, 0);
         $premier = $flux['body']['data'][0];
 
-        // Le nom est RECOPIÉ dans le journal, contre toutes les habitudes de
-        // normalisation. Un journal qui se réécrit quand un compte disparaît
-        // n'est plus un journal : « Bob a créé TICK-1 » doit rester lisible.
-        $this->assertSame('Bob', $premier['actor_name']);
+        // Le FAIT survit à son auteur — sa référence, son titre, son moment :
+        // « Compte supprimé a créé TICK-1 » reste lisible. Le NOM, lui, ne
+        // survit pas. Il était autrefois recopié pour toujours ; c'est une
+        // donnée personnelle, et la personne a demandé l'effacement de son
+        // compte (RGPD, art. 17). Le déclencheur « anonymiser_journal » le
+        // retire au moment même de la suppression, y compris faite en psql
+        // comme ici.
+        $this->assertSame('Compte supprimé', $premier['actor_name']);
         $this->assertNull($premier['actor_id']);
         $this->assertSame('TICK-' . $ticket['number'], $premier['subject_ref']);
     }

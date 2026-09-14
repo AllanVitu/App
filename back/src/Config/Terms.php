@@ -18,8 +18,8 @@ namespace App\Config;
  */
 final class Terms
 {
-    public const CURRENT_VERSION = '1.0';
+    public const CURRENT_VERSION = '1.1';
 
     /** Date d'entrée en vigueur, affichée sur la page des conditions. */
-    public const EFFECTIVE_DATE = '2026-08-29';
+    public const EFFECTIVE_DATE = '2026-09-14';
 }

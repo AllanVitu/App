@@ -351,6 +351,10 @@ export const profileApi = {
   update: (payload) => http.put('/profile', payload).then(unwrap),
   updatePassword: (payload) => http.put('/profile/password', payload).then(unwrap),
   destroy: (password) => http.delete('/profile', { data: { password } }),
+  /** Tout ce qui se rattache au compte, en JSON (RGPD, art. 15 et 20). */
+  exportData: () => http.get('/profile/export').then(unwrap),
+  /** Accepte la version EN VIGUEUR des conditions ; renvoie le compte. */
+  acceptTerms: () => http.post('/profile/terms', { accepted: true }).then(unwrap),
 
   /**
    * La photo se TÉLÉVERSE, recadrée par le navigateur au préalable (cf.

@@ -16,6 +16,35 @@ import { useUiStore } from '@/stores/ui'
  * rechargements de page est assurée par le cookie HttpOnly de
  * rafraîchissement, inaccessible au JavaScript — c'est le rôle de initialize().
  */
+/**
+ * « Une session a existé sur ce navigateur. »
+ *
+ * Ce n'est PAS un secret : il n'ouvre rien, le cookie de rafraîchissement reste
+ * HttpOnly. Il évite seulement de demander au serveur une session qu'aucune
+ * connexion n'a jamais ouverte — un 401 par page publique, rouge dans la
+ * console de chaque visiteur.
+ *
+ * Stockage indisponible (navigation privée stricte) : on tente, comme avant.
+ */
+const INDICE = 'relais.session'
+
+function indiceDeSession() {
+  try {
+    return window.localStorage.getItem(INDICE) !== null
+  } catch {
+    return true
+  }
+}
+
+function marquerSession(ouverte) {
+  try {
+    if (ouverte) window.localStorage.setItem(INDICE, '1')
+    else window.localStorage.removeItem(INDICE)
+  } catch {
+    // Sans stockage, la restauration sera simplement tentée à chaque démarrage.
+  }
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
   const settings = ref(null)
@@ -63,6 +92,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = payload.user
     accessToken.value = payload.access_token
     setAccessToken(payload.access_token)
+    marquerSession(true)
 
     // Présents sur /login, /register et /refresh : la session est complète dès
     // le premier appel, sans aller-retour supplémentaire pour savoir où l'on
@@ -79,6 +109,7 @@ export const useAuthStore = defineStore('auth', () => {
     setTimeZone(null)
     accessToken.value = null
     setAccessToken(null)
+    marquerSession(false)
   }
 
   async function login(credentials) {
@@ -147,6 +178,12 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function initialize() {
     if (ready.value) return
+
+    // Aucune connexion n'a jamais eu lieu ici : il n'y a rien à restaurer.
+    if (!indiceDeSession()) {
+      ready.value = true
+      return
+    }
 
     try {
       await refresh()

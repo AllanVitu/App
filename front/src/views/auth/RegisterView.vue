@@ -232,7 +232,12 @@ async function submit() {
               class="font-medium text-ink underline decoration-line-2 underline-offset-[3px] transition-colors hover:decoration-ink"
               >conditions générales</RouterLink
             >
-            et la conservation des données qu'elles décrivent.
+            et j'ai lu la
+            <RouterLink
+              :to="{ name: 'privacy' }"
+              class="font-medium text-ink underline decoration-line-2 underline-offset-[3px] transition-colors hover:decoration-ink"
+              >politique de confidentialité</RouterLink
+            >.
           </span>
         </label>
 

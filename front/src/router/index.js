@@ -168,6 +168,18 @@ const routes = [
     component: () => import('@/views/TermsView.vue'),
     meta: { title: 'Conditions générales', silent: true },
   },
+  {
+    path: '/confidentialite',
+    name: 'privacy',
+    component: () => import('@/views/legal/PrivacyView.vue'),
+    meta: { title: 'Confidentialité', silent: true },
+  },
+  {
+    path: '/mentions-legales',
+    name: 'legal',
+    component: () => import('@/views/legal/LegalNoticeView.vue'),
+    meta: { title: 'Mentions légales', silent: true },
+  },
 
   {
     path: '/:pathMatch(.*)*',

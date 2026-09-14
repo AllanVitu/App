@@ -2,26 +2,18 @@
 /**
  * Conditions générales d'utilisation.
  *
- * Accessible sans être connecté : on ne peut pas demander d'accepter un
- * texte qu'il faudrait un compte pour lire.
- *
  * La version affichée doit correspondre à celle qu'enregistre l'API
- * (App\Config\Terms::CURRENT_VERSION) — c'est elle qui donne sa valeur à la
- * trace de consentement.
+ * (App\Config\Terms::CURRENT_VERSION, cf. utils/legal) — c'est elle qui donne
+ * sa valeur à la trace de consentement.
  */
-import BaseButton from '@/components/ui/BaseButton.vue'
-import { useAuthStore } from '@/stores/auth'
-
-const auth = useAuthStore()
-
-const VERSION = '1.0'
-const EFFECTIVE = '29 août 2026'
+import LegalPage from '@/components/legal/LegalPage.vue'
+import { TERMS_EFFECTIVE, TERMS_VERSION } from '@/utils/legal'
 
 const sections = [
   {
     title: 'Objet',
-    body: `Ces conditions régissent l'utilisation de l'application. Créer un
-      compte vaut acceptation ; sans acceptation, aucun compte n'est créé.`,
+    body: `Ces conditions régissent l'utilisation de Relais. Créer un compte vaut
+      acceptation ; sans acceptation, aucun compte n'est créé.`,
   },
   {
     title: 'Compte et sécurité',
@@ -31,52 +23,43 @@ const sections = [
       changement de mot de passe ferme immédiatement toutes les sessions.`,
   },
   {
-    title: 'Données que nous conservons',
-    body: `Votre adresse e-mail, votre nom, vos préférences d'affichage et les
-      contenus que vous créez dans les modules. Les tentatives de connexion
-      sont journalisées pendant 30 jours, à seule fin de détecter les attaques
-      par force brute.`,
+    title: 'Vos contenus',
+    body: `Ce que vous créez dans un espace appartient à cet espace et à son
+      équipe : ses membres le voient et le modifient selon leur rôle. Relais ne
+      s'en sert que pour vous rendre le service.`,
   },
   {
-    title: 'Ce que nous ne faisons pas',
-    body: `Aucune donnée n'est revendue, ni transmise à des tiers à des fins
-      publicitaires. Aucun traceur publicitaire n'est déposé. Les seuls
-      cookies utilisés sont ceux de votre session.`,
+    title: 'Données personnelles',
+    body: `Ce qui est conservé, pourquoi et combien de temps est détaillé dans la
+      politique de confidentialité. Aucune donnée n'est revendue ni transmise à
+      des fins publicitaires, et aucun traceur n'est déposé : le seul cookie est
+      celui de votre session.`,
   },
   {
     title: 'Suppression',
-    body: `Vous pouvez supprimer votre compte à tout moment depuis la page
-      Profil. La suppression est immédiate et définitive : elle emporte vos
-      contenus, vos préférences et vos sessions.`,
+    body: `Vous pouvez supprimer votre compte à tout moment depuis la page Profil.
+      La suppression est immédiate : vos sessions, préférences, photo et
+      adhésions disparaissent, et un espace dont vous étiez le seul membre est
+      supprimé avec tout son contenu. Dans un espace partagé, ce que vous y avez
+      écrit reste à l'équipe, sans votre nom.`,
   },
   {
     title: 'Modification des présentes conditions',
-    body: `Toute nouvelle version porte un numéro distinct. Votre acceptation
-      étant enregistrée avec le numéro de version, une modification appelle un
-      nouveau consentement — l'ancien ne vaut que pour l'ancien texte.`,
+    body: `Toute nouvelle version porte un numéro distinct. Votre acceptation est
+      enregistrée avec ce numéro : une modification vous est signalée à votre
+      prochaine visite, et appelle un nouveau consentement.`,
   },
 ]
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-2xl px-5 py-12">
-    <p class="label-caps">version {{ VERSION }} · en vigueur le {{ EFFECTIVE }}</p>
-    <h1 class="mt-2 text-2xl font-semibold">Conditions générales d'utilisation</h1>
-
-    <div class="mt-8 space-y-7">
-      <section v-for="section in sections" :key="section.title">
-        <h2 class="text-[0.95rem] font-semibold">{{ section.title }}</h2>
-        <p class="mt-1.5 text-[0.88rem] leading-relaxed text-ink-2">{{ section.body }}</p>
-      </section>
-    </div>
-
-    <div class="mt-10 flex flex-wrap gap-3 border-t border-line pt-6">
-      <BaseButton :to="auth.isAuthenticated ? { name: 'dashboard' } : { name: 'register' }">
-        {{ auth.isAuthenticated ? 'Retour au tableau de bord' : "Retour à l'inscription" }}
-      </BaseButton>
-      <BaseButton v-if="!auth.isAuthenticated" :to="{ name: 'login' }" variant="secondary">
-        Se connecter
-      </BaseButton>
-    </div>
-  </div>
+  <LegalPage
+    :surtitre="`version ${TERMS_VERSION} · en vigueur le ${TERMS_EFFECTIVE}`"
+    titre="Conditions générales d'utilisation"
+  >
+    <section v-for="section in sections" :key="section.title">
+      <h2 class="text-[0.95rem] font-semibold text-ink">{{ section.title }}</h2>
+      <p class="mt-1.5">{{ section.body }}</p>
+    </section>
+  </LegalPage>
 </template>

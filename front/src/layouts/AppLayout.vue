@@ -17,6 +17,7 @@ import CommandPalette from '@/components/CommandPalette.vue'
 import ShortcutSheet from '@/components/ShortcutSheet.vue'
 import AppTopbar from '@/components/AppTopbar.vue'
 import EmailVerificationBanner from '@/components/EmailVerificationBanner.vue'
+import TermsUpdateBanner from '@/components/TermsUpdateBanner.vue'
 import SoundGate from '@/components/SoundGate.vue'
 import { useAppShortcuts } from '@/composables/useAppShortcuts'
 import { useModulesStore } from '@/stores/modules'
@@ -141,6 +142,7 @@ onMounted(async () => {
           class="min-h-0 flex-1 overflow-y-auto bg-paper px-4 py-5 lg:px-8 lg:py-7"
         >
           <EmailVerificationBanner />
+          <TermsUpdateBanner />
 
           <RouterView v-slot="{ Component }">
             <Transition name="fade" mode="out-in">

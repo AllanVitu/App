@@ -158,6 +158,37 @@ async function deleteAccount() {
   }
 }
 
+// --- Vos données --------------------------------------------------------------
+
+const exporting = ref(false)
+
+/**
+ * Le fichier est assemblé dans le navigateur à partir de la réponse : aucune
+ * adresse de téléchargement à signer, rien qui reste en cache côté serveur.
+ */
+async function downloadData() {
+  exporting.value = true
+
+  try {
+    const donnees = await profileApi.exportData()
+    const fichier = new Blob([JSON.stringify(donnees, null, 2)], { type: 'application/json' })
+    const adresse = URL.createObjectURL(fichier)
+    const lien = document.createElement('a')
+
+    lien.href = adresse
+    lien.download = `relais-mes-donnees-${new Date().toISOString().slice(0, 10)}.json`
+    lien.click()
+
+    // Révoquée après coup : la révoquer tout de suite peut interrompre le
+    // téléchargement dans certains navigateurs.
+    setTimeout(() => URL.revokeObjectURL(adresse), 10_000)
+  } catch (error) {
+    ui.notify(error.message, 'error')
+  } finally {
+    exporting.value = false
+  }
+}
+
 const memberSince = computed(() => formatDateTime(auth.user?.created_at))
 const lastLogin = computed(() => formatDateTime(auth.user?.last_login_at))
 
@@ -428,6 +459,27 @@ onMounted(loadSessions)
         <AppIcon name="info" :size="14" class="mt-0.5 shrink-0" />
         Changer de mot de passe ferme toutes les sessions, y compris celle-ci.
       </p>
+    </section>
+
+    <!-- Vos données -->
+    <section class="card p-6">
+      <h3 class="text-base font-semibold">Vos données</h3>
+      <p class="mt-1 text-sm text-ink-2">
+        Tout ce qui se rattache à votre compte — profil, espaces, sessions, contenus, historique —
+        dans un fichier JSON, lisible par une autre application.
+      </p>
+
+      <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <BaseButton variant="secondary" :loading="exporting" @click="downloadData">
+          Télécharger mes données
+        </BaseButton>
+        <RouterLink
+          :to="{ name: 'privacy' }"
+          class="text-[0.8rem] text-ink-2 underline-offset-4 transition-colors hover:text-ink hover:underline"
+        >
+          Politique de confidentialité
+        </RouterLink>
+      </div>
     </section>
 
     <!-- Zone sensible -->

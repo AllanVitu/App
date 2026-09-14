@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Core\Database;
+use App\Services\SchemaBuilder;
 use App\Services\SignedUrl;
 
 /**
@@ -254,9 +255,17 @@ final class OrganizationRepository
         // ON DELETE CASCADE emporte les données de l'espace — c'est le sens
         // même de la suppression, et la raison pour laquelle seul un
         // propriétaire y a droit.
-        Database::connection()
-            ->prepare('DELETE FROM organizations WHERE id = :id')
-            ->execute(['id' => $organizationId]);
+        //
+        // La cascade emporte des LIGNES, jamais un schéma : sans le DROP, les
+        // tables Backend de l'espace et les données qu'elles ont reçues lui
+        // survivraient, inatteignables et pourtant conservées.
+        Database::transaction(function () use ($organizationId): void {
+            (new SchemaBuilder())->dropSchema($organizationId);
+
+            Database::connection()
+                ->prepare('DELETE FROM organizations WHERE id = :id')
+                ->execute(['id' => $organizationId]);
+        });
     }
 
     public function setActive(string $userId, string $organizationId): void

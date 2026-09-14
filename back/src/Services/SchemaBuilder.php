@@ -145,6 +145,20 @@ final class SchemaBuilder
     }
 
     /**
+     * Efface le schéma d'un espace, et toutes les tables qu'il contient.
+     *
+     * Appelé à la suppression de l'espace : la cascade de PostgreSQL emporte
+     * ses lignes, jamais un schéma — sans cela, les tables Backend et les
+     * données qu'elles ont reçues survivraient à l'espace qui les a créées.
+     */
+    public function dropSchema(string $organizationId): void
+    {
+        Database::connection()->exec(
+            'DROP SCHEMA IF EXISTS ' . $this->quote($this->schemaFor($organizationId)) . ' CASCADE',
+        );
+    }
+
+    /**
      * Fragment de définition d'une colonne.
      *
      * « id uuid » reçoit une valeur par défaut et devient la clé primaire :

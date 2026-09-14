@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Config\Terms;
 use App\Core\HttpException;
 use App\Core\Request;
 use App\Core\Response;
 use App\Core\Validator;
 use App\Models\UserRepository;
 use App\Services\AccountMailer;
+use App\Services\DataExport;
 use App\Services\FileStorage;
 use App\Services\Queue;
 use App\Services\RateLimiter;
@@ -192,5 +194,46 @@ final class ProfileController
         Queue::push('storage.purge');
 
         Response::noContent();
+    }
+
+    /**
+     * GET /api/profile/export
+     *
+     * Droits d'accès et de portabilité (RGPD, art. 15 et 20) : tout ce qui se
+     * rattache au compte, en JSON (cf. DataExport). Dix par heure : un export
+     * pèse, et personne n'en a besoin de onze.
+     */
+    public function export(Request $request): void
+    {
+        (new RateLimiter())->hit('data-export', $request->userId(), 10, 3600);
+
+        if (!headers_sent()) {
+            header('Content-Disposition: attachment; filename="relais-mes-donnees-' . gmdate('Y-m-d') . '.json"');
+            header('Cache-Control: no-store');
+        }
+
+        Response::json((new DataExport())->forUser($request->userId()));
+    }
+
+    /**
+     * POST /api/profile/terms
+     *
+     * Accepte la version EN VIGUEUR des conditions. La version n'est jamais lue
+     * dans la requête : on accepte le texte que le serveur publie, pas un
+     * numéro qu'un client aurait choisi.
+     */
+    public function acceptTerms(Request $request): void
+    {
+        $validator = new Validator($request->all());
+
+        if (!$validator->boolean('accepted')) {
+            $validator->addError('accepted', 'Cochez la case pour accepter les conditions générales.');
+        }
+
+        $validator->check();
+
+        $this->users->acceptTerms($request->userId(), Terms::CURRENT_VERSION);
+
+        Response::json($this->users->findById($request->userId()));
     }
 }

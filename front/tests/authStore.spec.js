@@ -51,7 +51,11 @@ const PROFIL = {
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
+  window.localStorage.clear()
 })
+
+/** Une connexion a déjà eu lieu sur ce navigateur. */
+const sessionConnue = () => window.localStorage.setItem('relais.session', '1')
 
 describe('store auth', () => {
   // ────────────────────────────────────────────────── ce qui définit « connecté »
@@ -148,8 +152,21 @@ describe('store auth', () => {
 
   // ──────────────────────────────────────────────────────── le démarrage
 
+  it('ne demande rien au serveur pour un visiteur jamais connecté', async () => {
+    const auth = useAuthStore()
+
+    await auth.initialize()
+
+    // Aucune connexion n'a eu lieu ici : un appel de rafraîchissement ne
+    // pourrait que répondre 401, rouge dans la console de chaque visiteur.
+    expect(authApi.refresh).not.toHaveBeenCalled()
+    expect(auth.ready).toBe(true)
+    expect(auth.isAuthenticated).toBe(false)
+  })
+
   it('traite l’absence de cookie comme un état normal', async () => {
     const auth = useAuthStore()
+    sessionConnue()
 
     // Un visiteur non connecté n'est pas une erreur. Si « initialize »
     // relançait, la garde de navigation ne se terminerait jamais et
@@ -160,10 +177,29 @@ describe('store auth', () => {
 
     expect(auth.ready).toBe(true)
     expect(auth.isAuthenticated).toBe(false)
+
+    // La session a expiré : son indice part avec elle, le prochain démarrage
+    // ne redemandera rien.
+    expect(window.localStorage.getItem('relais.session')).toBeNull()
+  })
+
+  it('pose l’indice à la connexion et le retire à la déconnexion', async () => {
+    const auth = useAuthStore()
+
+    authApi.login.mockResolvedValue(SESSION)
+    authApi.me.mockResolvedValue(PROFIL)
+    authApi.logout.mockResolvedValue()
+
+    await auth.login({ email: 'camille@exemple.fr', password: 'secret' })
+    expect(window.localStorage.getItem('relais.session')).toBe('1')
+
+    await auth.logout()
+    expect(window.localStorage.getItem('relais.session')).toBeNull()
   })
 
   it('restaure la session quand le cookie est valide', async () => {
     const auth = useAuthStore()
+    sessionConnue()
 
     authApi.refresh.mockResolvedValue(SESSION)
     authApi.me.mockResolvedValue(PROFIL)
@@ -176,6 +212,7 @@ describe('store auth', () => {
 
   it('ne se restaure qu’une fois', async () => {
     const auth = useAuthStore()
+    sessionConnue()
 
     authApi.refresh.mockResolvedValue(SESSION)
     authApi.me.mockResolvedValue(PROFIL)

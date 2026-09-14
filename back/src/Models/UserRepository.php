@@ -211,12 +211,80 @@ final class UserRepository
             ->execute(['id' => $id]);
     }
 
+    /**
+     * Accepte une version des conditions générales — celle que le serveur
+     * publie, jamais une version choisie par le client.
+     */
+    public function acceptTerms(string $id, string $version): void
+    {
+        Database::connection()
+            ->prepare('UPDATE users SET terms_accepted_at = NOW(), terms_accepted_version = :version WHERE id = :id')
+            ->execute(['id' => $id, 'version' => $version]);
+    }
+
+    /**
+     * Supprime un compte — et ce qui ne vivait que par lui.
+     *
+     * La cascade emporte adhésions, sessions, jetons, préférences et photo ;
+     * le déclencheur « anonymiser_journal » retire le nom de l'historique.
+     * Restent deux décisions que la base ne prend pas seule :
+     *
+     *  - un espace dont le compte était le SEUL membre part avec lui, contenu
+     *    et schéma compris. Sans cela, il resterait en base un espace sans
+     *    personne pour le voir ni le supprimer ;
+     *  - un espace partagé reste à l'équipe, et ne reste pas sans
+     *    propriétaire : le rôle passe à l'administrateur le plus ancien, à
+     *    défaut au membre le plus ancien.
+     *
+     * Le tout dans une transaction : un compte à moitié supprimé serait le
+     * pire des deux mondes.
+     */
     public function delete(string $id): void
     {
-        // ON DELETE CASCADE se charge des données liées (items, sessions...).
-        Database::connection()
-            ->prepare('DELETE FROM users WHERE id = :id')
-            ->execute(['id' => $id]);
+        Database::transaction(function (\PDO $pdo) use ($id): void {
+            $seuls = $pdo->prepare(
+                "SELECT m.organization_id
+                   FROM memberships m
+                   JOIN organizations o ON o.id = m.organization_id
+                  WHERE m.user_id = :id
+                    AND o.kind = 'team'
+                    AND NOT EXISTS (
+                        SELECT 1 FROM memberships autre
+                         WHERE autre.organization_id = m.organization_id AND autre.user_id <> m.user_id
+                    )",
+            );
+            $seuls->execute(['id' => $id]);
+
+            $organisations = new OrganizationRepository();
+
+            foreach ($seuls->fetchAll(\PDO::FETCH_COLUMN) as $organizationId) {
+                $organisations->delete((string) $organizationId);
+            }
+
+            $pdo->prepare(
+                "UPDATE memberships m
+                    SET role = 'owner'
+                   FROM (
+                       SELECT DISTINCT ON (candidat.organization_id) candidat.organization_id, candidat.user_id
+                         FROM memberships candidat
+                        WHERE candidat.user_id <> :id
+                          AND candidat.organization_id IN (
+                              SELECT organization_id FROM memberships WHERE user_id = :id AND role = 'owner'
+                          )
+                          AND NOT EXISTS (
+                              SELECT 1 FROM memberships proprietaire
+                               WHERE proprietaire.organization_id = candidat.organization_id
+                                 AND proprietaire.role = 'owner'
+                                 AND proprietaire.user_id <> :id
+                          )
+                        ORDER BY candidat.organization_id, (candidat.role = 'admin') DESC, candidat.created_at
+                   ) AS heritier
+                  WHERE m.organization_id = heritier.organization_id
+                    AND m.user_id = heritier.user_id",
+            )->execute(['id' => $id]);
+
+            $pdo->prepare('DELETE FROM users WHERE id = :id')->execute(['id' => $id]);
+        });
     }
 
     /**

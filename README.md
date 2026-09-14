@@ -544,6 +544,31 @@ garde ce qui se requête (`stored_files`). Chaque espace dispose de
 `STORAGE_QUOTA_BYTES` octets, un gigaoctet par défaut. **Sauvegardez le volume
 avec la base** : l'une décrit les fichiers, l'autre les contient.
 
+## Données personnelles (RGPD)
+
+- **Information** : `/confidentialite` (RGPD, art. 13), `/mentions-legales`
+  (LCEN, art. 6-III) et `/conditions`, lisibles sans compte. L'identité de
+  l'éditeur et de l'hébergeur se renseigne dans `front/src/utils/legal.js` :
+  tant qu'un champ est vide, la page affiche « à compléter » plutôt qu'une
+  identité inventée. **À remplir avant toute ouverture au public.**
+- **Durées de conservation**, appliquées chaque jour par le worker
+  (`App\Services\Retention`) et publiées dans la politique de
+  confidentialité : tentatives de connexion 30 jours, sessions 14 jours après
+  expiration, liens de confirmation 7 jours, invitations 30 jours, historique
+  12 mois, erreurs reçues 90 jours, relevés de sondes 30 jours, e-mails en
+  échec 30 jours, corbeille 30 jours.
+- **Droits** : export JSON de tout ce qui se rattache au compte
+  (`GET /api/profile/export`, sans aucune empreinte de secret), rectification
+  depuis le profil, suppression immédiate. Un espace dont le compte était le
+  seul membre part avec lui, schéma Backend compris ; un espace partagé reste
+  à l'équipe, trouve un nouveau propriétaire, et l'historique n'affiche plus
+  que « Compte supprimé ».
+- **Conditions générales versionnées** : chaque acceptation est enregistrée
+  avec son numéro ; une nouvelle version s'accepte depuis un bandeau
+  (`POST /api/profile/terms`), jamais sur un numéro choisi par le client.
+- **Aucun traceur** : un seul cookie, strictement nécessaire à la session,
+  donc sans bandeau de consentement (loi Informatique et Libertés, art. 82).
+
 ## Sécurité
 
 - **Mots de passe** : bcrypt coût 12, réhachage transparent si le coût évolue.

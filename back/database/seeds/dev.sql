@@ -55,7 +55,8 @@ VALUES (
     -- redirigé vers l'écran de consentement à chaque connexion, y compris
     -- pendant les tests de bout en bout.
     NOW(),
-    '1.0'
+    -- À tenir égal à App\Config\Terms::CURRENT_VERSION.
+    '1.1'
 )
 ON CONFLICT (email) DO NOTHING;
 

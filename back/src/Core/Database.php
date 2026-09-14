@@ -71,6 +71,17 @@ final class Database
     public static function transaction(callable $callback): mixed
     {
         $pdo = self::connection();
+
+        // Déjà dans une transaction : c'est l'englobante qui valide ou annule.
+        // Supprimer un compte supprime des espaces, qui effacent leur schéma —
+        // trois gestes qui réussissent ensemble ou pas du tout. Une exception
+        // levée ici remonte jusqu'à elle, qui annule le tout.
+        $englobante = $pdo->inTransaction();
+
+        if ($englobante) {
+            return $callback($pdo);
+        }
+
         $pdo->beginTransaction();
 
         try {

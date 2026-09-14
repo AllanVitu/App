@@ -39,6 +39,15 @@ final class JobHandlers
             'storage.purge'     => (new FileStorage())->purge(),
             'probes.run'        => (new ProbeRunner())->runDue(self::entier($payload, 'batch', 20)),
             'probes.purge'      => (new ProbeRunner())->purge(self::entier($payload, 'retention_days', 30)),
+            // Les durées publiées dans la politique de confidentialité (cf. Retention).
+            'login_attempts.purge' => (new Retention())->loginAttempts(self::entier($payload, 'retention_days', 30)),
+            'activity.purge'       => (new Retention())->activity(self::entier($payload, 'retention_days', 365)),
+            'error_events.purge'   => (new Retention())->errorEvents(self::entier($payload, 'retention_days', 90)),
+            'jobs.purge'           => (new Retention())->failedJobs(self::entier($payload, 'retention_days', 30)),
+            'invitations.purge'    => (new Retention())->invitations(self::entier($payload, 'retention_days', 30)),
+            'user_tokens.purge'    => (new Retention())->userTokens(self::entier($payload, 'retention_days', 7)),
+            'presence.purge'       => (new Retention())->presence(),
+            'trash.purge'          => (new Retention())->trash(self::entier($payload, 'retention_days', 30)),
             default             => throw new \RuntimeException("Type de tâche inconnu : « {$type} »."),
         };
     }

@@ -154,6 +154,10 @@ $router->get('/api/profile', [ProfileController::class, 'show'], $auth);
 $router->put('/api/profile', [ProfileController::class, 'update'], $auth);
 $router->put('/api/profile/password', [ProfileController::class, 'updatePassword'], $auth);
 $router->delete('/api/profile', [ProfileController::class, 'destroy'], $auth);
+// Droits d'accès et de portabilité (RGPD, art. 15 et 20), et acceptation d'une
+// nouvelle version des conditions générales.
+$router->get('/api/profile/export', [ProfileController::class, 'export'], $auth);
+$router->post('/api/profile/terms', [ProfileController::class, 'acceptTerms'], $auth);
 
 // La photo se TÉLÉVERSE. POST et non PUT : PHP ne lit un envoi multipart que
 // sur POST.

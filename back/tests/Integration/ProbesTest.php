@@ -291,43 +291,6 @@ final class ProbesTest extends ApiTestCase
     }
 
     /**
-     * Invite une adresse comme simple membre et l'inscrit par le lien reçu.
-     *
-     * @param array{token: string} $hote
-     *
-     * @return array{token: string}
-     */
-    private function membre(array $hote, string $email): array
-    {
-        $invitation = $this->call('POST', '/api/organizations/invitations', [
-            'email' => $email,
-            'role'  => 'member',
-        ], $this->bearer($hote['token']));
-
-        $this->assertSame(201, $invitation['status'], 'invitation refusée');
-
-        $statement = Database::connection()->prepare(
-            "SELECT payload FROM jobs WHERE type = 'mail.send' AND payload->>'to' = :email ORDER BY created_at DESC LIMIT 1",
-        );
-        $statement->execute(['email' => $email]);
-
-        $payload = json_decode((string) $statement->fetchColumn(), true, 512, JSON_THROW_ON_ERROR);
-        preg_match('/token=([a-f0-9]{64})/', (string) $payload['text'], $trouve);
-
-        $inscription = $this->call('POST', '/api/auth/register', [
-            'full_name'        => 'Membre Simple',
-            'email'            => $email,
-            'password'         => 'Motdepasse1-solide',
-            'terms_accepted'   => true,
-            'invitation_token' => $trouve[1],
-        ]);
-
-        $this->assertSame(201, $inscription['status'], json_encode($inscription['body']) ?: '');
-
-        return ['token' => (string) $inscription['body']['data']['access_token']];
-    }
-
-    /**
      * @param list<'up'|'slow'|'down'> $script
      */
     private function labo(array $script): Prober

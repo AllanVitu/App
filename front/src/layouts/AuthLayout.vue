@@ -342,6 +342,12 @@ const root = useMotion(() => {
         <RouterLink :to="{ name: 'terms' }" class="transition-colors hover:text-ink-2">
           Conditions générales
         </RouterLink>
+        <RouterLink :to="{ name: 'privacy' }" class="transition-colors hover:text-ink-2">
+          Confidentialité
+        </RouterLink>
+        <RouterLink :to="{ name: 'legal' }" class="transition-colors hover:text-ink-2">
+          Mentions légales
+        </RouterLink>
       </footer>
     </div>
   </div>

@@ -34,5 +34,9 @@ export default defineConfig({
     include: ['tests/**/*.spec.js'],
     globals: true,
     restoreMocks: true,
+    // Vitest 3 a séparé les deux gestes : « restore » ne remet plus à zéro
+    // l'historique d'appels d'un vi.fn(). Sans « clear », un appel fait dans
+    // un test déborderait sur le suivant, qui le verrait comme le sien.
+    clearMocks: true,
   },
 })
