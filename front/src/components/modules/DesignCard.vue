@@ -2,9 +2,10 @@
 /**
  * Un fichier de design, en carte de tableau.
  *
- * La vignette est un DÉGRADÉ de la couleur d'accent du fichier, pas une
- * image : deux teintes suffisent à rendre une carte reconnaissable d'un coup
- * d'œil, et le module documente le travail de design — il ne l'héberge pas.
+ * La vignette est l'IMAGE de la dernière version qui en porte une — et, à
+ * défaut, un dégradé de la couleur d'accent du fichier. Une maquette se
+ * reconnaît à son allure avant son nom ; la couleur n'était qu'un substitut,
+ * du temps où le module promettait des fichiers sans en stocker aucun.
  *
  * La pastille de type n'est pas reprise ici, contrairement aux autres cartes
  * du projet : elle répéterait le titre de la colonne, qui est le type. Sur
@@ -13,20 +14,46 @@
  * de sa colonne — mais un type de fichier ne se lit pas dans l'urgence, et le
  * nom de la colonne est annoncé juste avant.
  */
+import { computed, ref, watch } from 'vue'
+
 import PresenceMark from '@/components/ui/PresenceMark.vue'
+import { assetUrl } from '@/utils/assets'
 import { formatRelative } from '@/utils/format'
 
-defineProps({
+const props = defineProps({
   file: { type: Object, required: true },
   /** Qui a ce fichier ouvert en ce moment (cf. ui/PresenceMark). */
   watchers: { type: Array, default: () => [] },
 })
+
+const echec = ref(false)
+const apercu = computed(() => (echec.value ? null : assetUrl(props.file.preview_url)))
+
+// Une nouvelle version, une nouvelle adresse : l'échec de la précédente — un
+// lien expiré sur une carte restée longtemps à l'écran — ne vaut pas pour elle.
+watch(
+  () => props.file.preview_url,
+  () => {
+    echec.value = false
+  },
+)
 </script>
 
 <template>
   <div class="-m-2.5 overflow-hidden rounded-card">
+    <img
+      v-if="apercu"
+      :src="apercu"
+      alt=""
+      loading="lazy"
+      decoding="async"
+      referrerpolicy="no-referrer"
+      class="block h-20 w-full bg-raised object-cover"
+      @error="echec = true"
+    />
     <span
-      class="block h-14 w-full"
+      v-else
+      class="block h-20 w-full"
       :style="{
         background: `linear-gradient(135deg, ${file.accent} 0%, ${file.accent}33 100%)`,
       }"

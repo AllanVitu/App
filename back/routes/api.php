@@ -20,6 +20,7 @@ use App\Controllers\DataController;
 use App\Controllers\DeploymentController;
 use App\Controllers\DesignController;
 use App\Controllers\ErrorController;
+use App\Controllers\FileController;
 use App\Controllers\HealthController;
 use App\Controllers\ItemController;
 use App\Controllers\ModuleController;
@@ -150,6 +151,17 @@ $router->get('/api/profile', [ProfileController::class, 'show'], $auth);
 $router->put('/api/profile', [ProfileController::class, 'update'], $auth);
 $router->put('/api/profile/password', [ProfileController::class, 'updatePassword'], $auth);
 $router->delete('/api/profile', [ProfileController::class, 'destroy'], $auth);
+
+// La photo se TÉLÉVERSE. POST et non PUT : PHP ne lit un envoi multipart que
+// sur POST.
+$router->post('/api/profile/avatar', [ProfileController::class, 'uploadAvatar'], $auth);
+$router->delete('/api/profile/avatar', [ProfileController::class, 'removeAvatar'], $auth);
+
+// --- Fichiers ----------------------------------------------------------------
+// SANS session, et c'est la règle : une balise <img> n'en envoie pas. La
+// signature de l'adresse tient lieu d'autorisation, et l'API ne la remet qu'à
+// qui a le droit de voir le fichier (cf. FileController, SignedUrl).
+$router->get('/api/files/{id}', [FileController::class, 'show']);
 
 // --- Paramètres ------------------------------------------------------------
 $router->get('/api/settings', [SettingsController::class, 'show'], $auth);

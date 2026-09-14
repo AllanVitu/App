@@ -40,7 +40,19 @@ test.describe('historique', () => {
     await page.keyboard.press('Escape')
 
     await expect(page.getByRole('option').filter({ hasText: titre })).toBeVisible()
+
+    // La priorité part par la file d'écritures (cf. useWriteQueue), pas au
+    // moment de la touche. Naviguer aussitôt pouvait devancer la requête :
+    // le 14 septembre 2026, le journal d'un échec ne contenait que la
+    // création, et rejoué neuf fois le test passait neuf fois. On attend donc
+    // la RÉPONSE du serveur — c'est elle qui fait le fait, pas la touche.
+    const ecriture = page.waitForResponse(
+      (reponse) =>
+        reponse.request().method() === 'PUT' &&
+        /\/api\/tickets\/[0-9a-f-]{36}$/.test(new URL(reponse.url()).pathname),
+    )
     await page.keyboard.press('1')
+    expect((await ecriture).ok()).toBe(true)
 
     await page.goto('/historique')
     await expect(page.getByRole('heading', { name: 'historique' })).toBeVisible()

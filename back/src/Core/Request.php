@@ -24,6 +24,9 @@ final class Request
     /** Vrai si le corps annonçait du JSON mais n'a pas pu être décodé. */
     private bool $bodyIsMalformed = false;
 
+    /** @var array<string, UploadedFile> Fichiers d'un envoi multipart, par nom de champ */
+    private array $files = [];
+
     /**
      * @param array<string, string> $query
      * @param array<string, string> $headers
@@ -63,6 +66,7 @@ final class Request
         // try du contrôleur frontal (et avant les en-têtes CORS). L'anomalie
         // est mémorisée, puis signalée au bon moment par assertBodyIsValid().
         $request->bodyIsMalformed = $body['malformed'];
+        $request->files           = self::parseFiles();
 
         return $request;
     }
@@ -75,10 +79,11 @@ final class Request
      * testable de bout en bout — sans elle, il faudrait simuler `php://input`,
      * impossible en ligne de commande.
      *
-     * @param array<string, mixed>  $body
-     * @param array<string, string> $query
-     * @param array<string, string> $headers
-     * @param array<string, string> $cookies
+     * @param array<string, mixed>        $body
+     * @param array<string, string>       $query
+     * @param array<string, string>       $headers
+     * @param array<string, string>       $cookies
+     * @param array<string, UploadedFile> $files
      */
     public static function create(
         string $method,
@@ -87,8 +92,9 @@ final class Request
         array $query = [],
         array $headers = [],
         array $cookies = [],
+        array $files = [],
     ): self {
-        return new self(
+        $request = new self(
             method:  strtoupper($method),
             path:    '/' . trim($path, '/'),
             query:   $query,
@@ -96,6 +102,10 @@ final class Request
             cookies: $cookies,
             body:    $body,
         );
+
+        $request->files = $files;
+
+        return $request;
     }
 
     /**
@@ -143,13 +153,22 @@ final class Request
      */
     private static function parseBody(): array
     {
+        $contentType = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
+
+        // Un envoi de fichier : PHP a déjà lu le corps et rempli $_POST et
+        // $_FILES — « php://input » est vide pour ce type de contenu.
+        if (str_contains($contentType, 'multipart/form-data')) {
+            /** @var array<string, mixed> $fields */
+            $fields = $_POST;
+
+            return ['data' => $fields, 'malformed' => false];
+        }
+
         $raw = file_get_contents('php://input');
 
         if ($raw === false || $raw === '') {
             return ['data' => [], 'malformed' => false];
         }
-
-        $contentType = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
 
         if (str_contains($contentType, 'application/json')) {
             $decoded = json_decode($raw, true);
@@ -201,6 +220,41 @@ final class Request
     public function all(): array
     {
         return $this->body;
+    }
+
+    /**
+     * Le fichier envoyé sous ce nom de champ, ou null si aucun ne l'a été.
+     *
+     * « Aucun fichier choisi » est une absence, pas une erreur : un champ de
+     * fichier laissé vide arrive avec UPLOAD_ERR_NO_FILE.
+     */
+    public function file(string $field): ?UploadedFile
+    {
+        $file = $this->files[$field] ?? null;
+
+        return $file === null || $file->error === UPLOAD_ERR_NO_FILE ? null : $file;
+    }
+
+    /**
+     * @return array<string, UploadedFile>
+     */
+    private static function parseFiles(): array
+    {
+        $files = [];
+
+        foreach ($_FILES as $field => $entry) {
+            if (!is_string($field) || !is_array($entry)) {
+                continue;
+            }
+
+            $file = UploadedFile::fromGlobals($entry);
+
+            if ($file !== null) {
+                $files[$field] = $file;
+            }
+        }
+
+        return $files;
     }
 
     // --- Query string -------------------------------------------------------

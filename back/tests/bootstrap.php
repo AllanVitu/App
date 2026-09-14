@@ -45,6 +45,24 @@ putenv('MAIL_PORT=1');
 putenv('MAIL_FROM_ADDRESS=no-reply@test.local');
 putenv('MAIL_FROM_NAME=Tests');
 
+// Les fichiers téléversés vont dans un dossier jetable, vidé à chaque
+// exécution : un test n'hérite pas des fichiers d'un autre, et rien n'est
+// jamais écrit dans le volume de développement.
+$storage = sys_get_temp_dir() . '/saas-tests-storage';
+putenv('STORAGE_PATH=' . $storage);
+
+if (is_dir($storage)) {
+    $entries = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($storage, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::CHILD_FIRST,
+    );
+
+    /** @var SplFileInfo $entry */
+    foreach ($entries as $entry) {
+        $entry->isDir() ? rmdir($entry->getPathname()) : unlink($entry->getPathname());
+    }
+}
+
 // Les journaux applicatifs (échecs SMTP attendus, traces d'exception) sont
 // détournés vers un fichier : ils restent consultables sans noyer la sortie
 // de PHPUnit, où seuls les résultats de test doivent apparaître.

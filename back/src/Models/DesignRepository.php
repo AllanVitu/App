@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Core\Database;
+use App\Services\SignedUrl;
 use PDO;
 
 /**
@@ -23,6 +24,37 @@ final class DesignRepository
 
     private const COLUMNS = 'f.id, f.name, f.kind, f.description, f.accent,
                              f.created_at, f.updated_at, f.version';
+
+    /**
+     * L'aperçu d'un fichier : l'image de la version la plus récente QUI EN A UNE.
+     *
+     * « Qui en a une », et pas « la dernière » : une version qui ne consigne
+     * qu'une note ne doit pas faire disparaître l'image de la précédente.
+     */
+    private const PREVIEW_JOIN = 'LEFT JOIN LATERAL (
+                   SELECT dv.asset_id AS preview_id
+                     FROM design_versions dv
+                    WHERE dv.file_id = f.id AND dv.asset_id IS NOT NULL
+                    ORDER BY dv.number DESC
+                    LIMIT 1
+               ) p ON TRUE';
+
+    /**
+     * Une version, son auteur et son image, lus ensemble partout où l'on
+     * montre un historique.
+     *
+     * La jointure sur l'image exige le MÊME espace que la version : une ligne
+     * mal écrite à la main ne doit pas faire afficher le fichier d'un autre.
+     */
+    private const VERSION_SELECT = 'SELECT v.id, v.number, v.label, v.notes, v.created_at, v.created_by,
+                                           u.full_name AS author_name,
+                                           s.id AS asset_id, s.media_type AS asset_type,
+                                           s.byte_size AS asset_size, s.width AS asset_width,
+                                           s.height AS asset_height, s.original_name AS asset_name
+                                      FROM design_versions v
+                                 LEFT JOIN users u ON u.id = v.created_by
+                                 LEFT JOIN stored_files s
+                                        ON s.id = v.asset_id AND s.organization_id = v.organization_id';
 
     /**
      * Fichiers, avec le nombre de versions et la date de la dernière.
@@ -66,13 +98,14 @@ final class DesignRepository
         $direction = strtoupper($filters['direction'] ?? '') === 'ASC' ? 'ASC' : 'DESC';
 
         $statement = Database::connection()->prepare(
-            'SELECT ' . self::COLUMNS . ", v.versions, v.last_version_at
+            'SELECT ' . self::COLUMNS . ', v.versions, v.last_version_at, p.preview_id
                FROM design_files f
                LEFT JOIN LATERAL (
                    SELECT COUNT(*) AS versions, MAX(created_at) AS last_version_at
                      FROM design_versions
                     WHERE file_id = f.id
                ) v ON TRUE
+               ' . self::PREVIEW_JOIN . "
               WHERE {$where}
               ORDER BY f.{$sort} {$direction} NULLS LAST, f.name
               LIMIT :limit OFFSET :offset",
@@ -100,13 +133,14 @@ final class DesignRepository
     public function find(string $id, string $organizationId): ?array
     {
         $statement = Database::connection()->prepare(
-            'SELECT ' . self::COLUMNS . ', v.versions, v.last_version_at
+            'SELECT ' . self::COLUMNS . ', v.versions, v.last_version_at, p.preview_id
                FROM design_files f
                LEFT JOIN LATERAL (
                    SELECT COUNT(*) AS versions, MAX(created_at) AS last_version_at
                      FROM design_versions
                     WHERE file_id = f.id
                ) v ON TRUE
+               ' . self::PREVIEW_JOIN . '
               WHERE f.id = :id AND f.organization_id = :organization_id AND f.deleted_at IS NULL',
         );
 
@@ -129,9 +163,7 @@ final class DesignRepository
     public function versionsForFile(string $fileId, string $organizationId, int $limit = 50): array
     {
         $statement = Database::connection()->prepare(
-            'SELECT v.id, v.number, v.label, v.notes, v.created_at, v.created_by, u.full_name AS author_name
-               FROM design_versions v
-          LEFT JOIN users u ON u.id = v.created_by
+            self::VERSION_SELECT . '
               WHERE v.file_id = :file_id AND v.organization_id = :organization_id
               ORDER BY v.number DESC
               LIMIT :limit',
@@ -244,10 +276,9 @@ final class DesignRepository
     public function addVersion(string $fileId, string $organizationId, ?string $authorId, array $attributes): array
     {
         $statement = Database::connection()->prepare(
-            'INSERT INTO design_versions (file_id, organization_id, created_by, label, notes)
-             VALUES (:file_id, :organization_id, :created_by, :label, :notes)
-             RETURNING id, number, label, notes, created_at, created_by,
-                       (SELECT u.full_name FROM users u WHERE u.id = created_by) AS author_name',
+            'INSERT INTO design_versions (file_id, organization_id, created_by, label, notes, asset_id)
+             VALUES (:file_id, :organization_id, :created_by, :label, :notes, :asset_id)
+             RETURNING id',
         );
 
         $statement->execute([
@@ -256,12 +287,30 @@ final class DesignRepository
             'created_by'      => $authorId,
             'label'           => $attributes['label'],
             'notes'           => $attributes['notes'],
+            'asset_id'        => $attributes['asset_id'] ?? null,
         ]);
 
-        /** @var array<string, mixed> $row */
+        // Relue par la même requête que l'historique : la version renvoyée
+        // après un ajout a exactement la forme de celles qu'on liste.
+        /** @var array<string, mixed> $version */
+        $version = $this->findVersion((string) $statement->fetchColumn(), $organizationId);
+
+        return $version;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findVersion(string $id, string $organizationId): ?array
+    {
+        $statement = Database::connection()->prepare(
+            self::VERSION_SELECT . ' WHERE v.id = :id AND v.organization_id = :organization_id',
+        );
+
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
         $row = $statement->fetch();
 
-        return $this->hydrateVersion($row);
+        return $row === false ? null : $this->hydrateVersion($row);
     }
 
     /**
@@ -280,6 +329,14 @@ final class DesignRepository
             // anonyme ne dit qu'une moitié de ce qu'on lui demande.
             'created_by'  => $row['created_by'] !== null ? (string) $row['created_by'] : null,
             'author_name' => $row['author_name'] !== null ? (string) $row['author_name'] : null,
+            'asset'       => $row['asset_id'] !== null ? [
+                'url'        => SignedUrl::forFile((string) $row['asset_id']),
+                'media_type' => (string) $row['asset_type'],
+                'byte_size'  => (int) $row['asset_size'],
+                'width'      => $row['asset_width'] !== null ? (int) $row['asset_width'] : null,
+                'height'     => $row['asset_height'] !== null ? (int) $row['asset_height'] : null,
+                'name'       => $row['asset_name'] !== null ? (string) $row['asset_name'] : null,
+            ] : null,
         ];
     }
 
@@ -356,6 +413,9 @@ final class DesignRepository
             'accent'          => (string) $row['accent'],
             'versions'        => (int) ($row['versions'] ?? 0),
             'last_version_at' => Database::toIso($row['last_version_at'] ?? null),
+            'preview_url'     => ($row['preview_id'] ?? null) !== null
+                ? SignedUrl::forFile((string) $row['preview_id'])
+                : null,
             'created_at'      => Database::toIso($row['created_at']),
             'updated_at'      => Database::toIso($row['updated_at']),
             // Jeton de concurrence, posé par un déclencheur et jamais par le

@@ -36,6 +36,7 @@ final class JobHandlers
             'mail.send'         => self::sendMail($payload),
             'tokens.purge'      => self::purgeTokens($payload),
             'rate_limits.purge' => (new RateLimiter())->purge(),
+            'storage.purge'     => (new FileStorage())->purge(),
             default             => throw new \RuntimeException("Type de tâche inconnu : « {$type} »."),
         };
     }

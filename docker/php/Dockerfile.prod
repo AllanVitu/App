@@ -42,6 +42,13 @@ COPY --chown=www-data:www-data back/database/migrations ./database/migrations
 # en exécution de code persistante.
 RUN chown -R root:root /var/www/html && chmod -R 0555 /var/www/html
 
+# Le SEUL dossier où PHP peut écrire : les fichiers téléversés, hors du code
+# et hors de la racine web. Un volume nommé en hérite le propriétaire au
+# premier montage.
+RUN mkdir -p /var/www/storage \
+    && chown www-data:www-data /var/www/storage \
+    && chmod 0750 /var/www/storage
+
 COPY docker/php/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

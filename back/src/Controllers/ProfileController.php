@@ -10,6 +10,9 @@ use App\Core\Response;
 use App\Core\Validator;
 use App\Models\UserRepository;
 use App\Services\AccountMailer;
+use App\Services\FileStorage;
+use App\Services\Queue;
+use App\Services\RateLimiter;
 use App\Services\RefreshTokenService;
 
 /**
@@ -18,6 +21,12 @@ use App\Services\RefreshTokenService;
 final class ProfileController
 {
     private const BCRYPT_COST = 12;
+
+    /**
+     * Changements de photo par heure, par compte. Largement assez pour
+     * quelqu'un qui hésite, et une borne au disque qu'un compte peut remplir.
+     */
+    private const AVATAR_UPLOADS_PER_HOUR = 10;
 
     private UserRepository $users;
 
@@ -39,20 +48,67 @@ final class ProfileController
      *
      * L'e-mail n'est volontairement pas modifiable ici : le changer suppose
      * une vérification par lien de confirmation, hors périmètre actuel.
+     *
+     * L'avatar non plus : il se TÉLÉVERSE (cf. uploadAvatar). Un
+     * « avatar_url » encore envoyé est ignoré — l'URL libre d'autrefois
+     * faisait charger à toute l'équipe une image hébergée n'importe où, qui
+     * voyait passer leurs adresses IP.
      */
     public function update(Request $request): void
     {
         $validator = new Validator($request->all());
         $fullName  = $validator->string('full_name', min: 2, max: 120, label: 'nom complet');
-        $avatarUrl = $validator->string('avatar_url', required: false, max: 500, label: 'avatar');
         $validator->check();
 
-        if ($avatarUrl !== null && !$this->isSafeUrl($avatarUrl)) {
-            throw HttpException::validation(['avatar_url' => "L'URL de l'avatar doit être en http(s)."]);
+        /** @var string $fullName */
+        Response::json($this->users->updateProfile($request->userId(), $fullName));
+    }
+
+    /**
+     * POST /api/profile/avatar   (multipart, champ « avatar »)
+     *
+     * L'image arrive déjà recadrée par le navigateur ; elle est malgré tout
+     * contrôlée et débarrassée de ses métadonnées ici, comme n'importe quel
+     * envoi — le client n'est pas une barrière.
+     */
+    public function uploadAvatar(Request $request): void
+    {
+        $userId = $request->userId();
+
+        (new RateLimiter())->hit('avatar', $userId, self::AVATAR_UPLOADS_PER_HOUR, 3600);
+
+        $upload = $request->file('avatar');
+
+        if ($upload === null) {
+            throw HttpException::validation(['avatar' => 'Choisissez une image.']);
         }
 
-        /** @var string $fullName */
-        Response::json($this->users->updateProfile($request->userId(), $fullName, $avatarUrl));
+        $storage  = new FileStorage();
+        $stored   = $storage->store($upload, 'avatar', null, $userId, $userId, 'avatar');
+        $previous = $this->users->replaceAvatar($userId, (string) $stored['id']);
+
+        // L'ancienne photo part du disque : garder la photo d'hier de quelqu'un
+        // qui l'a remplacée, c'est garder une donnée qu'il a retirée.
+        if ($previous !== null) {
+            $storage->delete($previous);
+        }
+
+        Response::json($this->users->findById($userId));
+    }
+
+    /**
+     * DELETE /api/profile/avatar
+     */
+    public function removeAvatar(Request $request): void
+    {
+        $userId   = $request->userId();
+        $previous = $this->users->replaceAvatar($userId, null);
+
+        if ($previous !== null) {
+            (new FileStorage())->delete($previous);
+        }
+
+        Response::json($this->users->findById($userId));
     }
 
     /**
@@ -129,19 +185,12 @@ final class ProfileController
         $this->users->delete($userId);
         (new RefreshTokenService())->clearCookie();
 
+        // La cascade a emporté la description de sa photo, et la base a posé
+        // une pierre tombale. La purge efface les octets maintenant plutôt qu'à
+        // l'heure suivante : un compte effacé ne laisse pas son visage sur le
+        // disque.
+        Queue::push('storage.purge');
+
         Response::noContent();
-    }
-
-    /**
-     * N'accepte que http/https : évite les schémas javascript: ou data:
-     * qui deviendraient une XSS une fois l'URL injectée dans un <img>.
-     */
-    private function isSafeUrl(string $url): bool
-    {
-        if (filter_var($url, FILTER_VALIDATE_URL) === false) {
-            return false;
-        }
-
-        return in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true);
     }
 }

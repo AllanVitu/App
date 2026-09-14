@@ -228,7 +228,7 @@ onMounted(async () => {
             :key="membre.id"
             class="flex items-center gap-3 border-b border-line px-5 py-3 last:border-b-0"
           >
-            <UserAvatar :name="membre.full_name" />
+            <UserAvatar :name="membre.full_name" :src="membre.avatar_url" />
 
             <div class="min-w-0 flex-1">
               <p class="truncate text-[0.85rem]">

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Core\Database;
+use App\Services\SignedUrl;
 
 /**
  * Accès à la table users.
@@ -20,7 +21,7 @@ final class UserRepository
      * Colonnes exposables au client — jamais password_hash.
      */
     private const PUBLIC_COLUMNS =
-        'id, email, full_name, avatar_url, role, is_active, email_verified_at, last_login_at, created_at, terms_accepted_at, terms_accepted_version, active_organization_id';
+        'id, email, full_name, avatar_file_id, role, is_active, email_verified_at, last_login_at, created_at, terms_accepted_at, terms_accepted_version, active_organization_id';
 
     /**
      * @return array<string, mixed>|null
@@ -153,26 +154,45 @@ final class UserRepository
     /**
      * @return array<string, mixed>
      */
-    public function updateProfile(string $id, string $fullName, ?string $avatarUrl): array
+    public function updateProfile(string $id, string $fullName): array
     {
         $statement = Database::connection()->prepare(
             'UPDATE users
-                SET full_name = :full_name,
-                    avatar_url = :avatar_url
+                SET full_name = :full_name
               WHERE id = :id
           RETURNING ' . self::PUBLIC_COLUMNS,
         );
 
-        $statement->execute([
-            'id'         => $id,
-            'full_name'  => $fullName,
-            'avatar_url' => $avatarUrl,
-        ]);
+        $statement->execute(['id' => $id, 'full_name' => $fullName]);
 
         /** @var array<string, mixed> $row */
         $row = $statement->fetch();
 
         return $this->hydrate($row);
+    }
+
+    /**
+     * Pose, ou retire, la photo du compte — et rend l'identifiant de la
+     * précédente, que l'appelant doit supprimer.
+     *
+     * Lue et remplacée sous verrou : deux envois simultanés ne peuvent pas
+     * rendre la même photo précédente, donc la supprimer deux fois et en
+     * laisser une autre orpheline.
+     */
+    public function replaceAvatar(string $id, ?string $fileId): ?string
+    {
+        return Database::transaction(function () use ($id, $fileId): ?string {
+            $pdo = Database::connection();
+
+            $current = $pdo->prepare('SELECT avatar_file_id FROM users WHERE id = :id FOR UPDATE');
+            $current->execute(['id' => $id]);
+            $previous = $current->fetchColumn();
+
+            $pdo->prepare('UPDATE users SET avatar_file_id = :file_id WHERE id = :id')
+                ->execute(['id' => $id, 'file_id' => $fileId]);
+
+            return is_string($previous) ? $previous : null;
+        });
     }
 
     public function updatePassword(string $id, string $passwordHash): void
@@ -211,7 +231,12 @@ final class UserRepository
             'id'                => (string) $row['id'],
             'email'             => (string) $row['email'],
             'full_name'         => (string) $row['full_name'],
-            'avatar_url'        => $row['avatar_url'] !== null ? (string) $row['avatar_url'] : null,
+            // Le nom reste « avatar_url » pour le client, mais l'adresse est
+            // SIGNÉE et désigne un fichier rangé par l'application — plus jamais
+            // une URL tierce que chaque navigateur de l'équipe irait contacter.
+            'avatar_url'        => $row['avatar_file_id'] !== null
+                ? SignedUrl::forFile((string) $row['avatar_file_id'])
+                : null,
             'role'              => (string) $row['role'],
             'is_active'         => Database::toBool($row['is_active']),
             'email_verified_at' => Database::toIso($row['email_verified_at']),

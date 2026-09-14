@@ -57,9 +57,11 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile.prod
+    # Nommée : le worker démarre sur la MÊME image, sans la reconstruire.
+    image: saas-api-prod
     container_name: saas_php_prod
     restart: always
-    environment:
+    environment: &api-env
       APP_ENV: production
       APP_DEBUG: "false"
       DB_HOST: db
@@ -85,9 +87,44 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:?MAIL_FROM_ADDRESS est obligatoire}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-SaaS App}
+      STORAGE_PATH: /var/www/storage
+      # Octets par espace de travail ; 1 Go par défaut.
+      STORAGE_QUOTA_BYTES: ${STORAGE_QUOTA_BYTES:-1073741824}
+    volumes:
+      - storage_data:/var/www/storage
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - saas_net
+
+  # --------------------------------------------------------------------------
+  # Worker — ABSENT jusqu'ici, alors que l'application en dépend.
+  #
+  # Depuis que les e-mails passent par la file, AUCUN ne partait en
+  # production : confirmation d'adresse, réinitialisation, invitation,
+  # s'accumulaient dans « jobs » sans que rien ne les lise. La purge des jetons
+  # et celle des fichiers supprimés ne tournaient pas davantage.
+  # --------------------------------------------------------------------------
+  worker:
+    image: saas-api-prod
+    # L'image est construite par le service « php » : ne jamais la chercher
+    # sur un registre public, où ce nom pourrait désigner tout autre chose.
+    pull_policy: never
+    container_name: saas_worker_prod
+    restart: always
+    command: ["php", "bin/worker.php"]
+    environment:
+      <<: *api-env
+      # Les migrations appartiennent au service php, qui démarre en même temps.
+      DB_AUTO_MIGRATE: "false"
+    volumes:
+      - storage_data:/var/www/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      php:
+        condition: service_started
     networks:
       - saas_net
 
@@ -110,6 +147,9 @@ services:
 volumes:
   db_data:
     name: saas_db_data_prod
+  # À sauvegarder AVEC la base : l'une décrit les fichiers, l'autre les contient.
+  storage_data:
+    name: saas_storage_data_prod
 
 networks:
   saas_net:

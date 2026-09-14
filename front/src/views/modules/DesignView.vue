@@ -40,6 +40,7 @@ import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
 import { useLiveRows } from '@/composables/useLiveRows'
 import { useUiStore } from '@/stores/ui'
+import { assetUrl } from '@/utils/assets'
 import { formatRelative } from '@/utils/format'
 
 const ui = useUiStore()
@@ -82,6 +83,20 @@ const errors = ref({})
 
 const versionLabel = ref('')
 const versionNotes = ref('')
+
+// L'image de la version, facultative : une version peut ne consigner qu'une
+// décision prise à l'oral.
+const versionFile = ref(null)
+
+// Part envoyée, de 0 à 1 ; null hors envoi.
+const uploadProgress = ref(null)
+
+/**
+ * Ce que le serveur accepte, vérifié ici pour répondre tout de suite. C'est
+ * lui qui tranche : il lit le type dans les octets, pas dans le nom.
+ */
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+const IMAGE_MAX = 10 * 1024 * 1024
 
 const KINDS = [
   { value: 'maquette', label: 'maquette' },
@@ -307,26 +322,68 @@ async function patch(changes) {
   }
 }
 
+function choisirImage(evenement) {
+  const fichier = evenement.target.files?.[0] ?? null
+
+  // Vidé tout de suite : reprendre le même fichier après l'avoir retiré doit
+  // redéclencher la sélection.
+  evenement.target.value = ''
+
+  if (!fichier) return
+
+  if (!IMAGE_TYPES.includes(fichier.type)) {
+    ui.notify('Format refusé : PNG, JPEG, WebP ou GIF.', 'error')
+
+    return
+  }
+
+  if (fichier.size > IMAGE_MAX) {
+    ui.notify('Cette image dépasse 10 Mo.', 'error')
+
+    return
+  }
+
+  versionFile.value = fichier
+}
+
+function taille(octets) {
+  return octets >= 1024 * 1024
+    ? `${(octets / 1024 / 1024).toFixed(1).replace('.', ',')} Mo`
+    : `${Math.max(1, Math.round(octets / 1024))} Ko`
+}
+
 async function addVersion() {
   busy.value = true
+  uploadProgress.value = versionFile.value ? 0 : null
 
   try {
-    await designApi.addVersion(openId.value, {
-      label: versionLabel.value.trim() || null,
-      notes: versionNotes.value.trim() || null,
-    })
+    await designApi.addVersion(
+      openId.value,
+      {
+        label: versionLabel.value.trim() || null,
+        notes: versionNotes.value.trim() || null,
+        file: versionFile.value,
+      },
+      (part) => {
+        uploadProgress.value = part
+      },
+    )
 
     // Rechargé plutôt que complété localement : le numéro est attribué par
     // la base, et le déduire côté client le ferait diverger.
     detail.value = await designApi.find(openId.value)
     versionLabel.value = ''
     versionNotes.value = ''
+    versionFile.value = null
     play('success')
     load({ silent: true })
   } catch (error) {
-    ui.notify(error.message, 'error')
+    // Le refus d'un fichier arrive sur son champ : c'est la phrase utile
+    // (« Format refusé », « limite de stockage »), pas le titre générique.
+    ui.notify(error.errors?.file ?? error.message, 'error')
   } finally {
     busy.value = false
+    uploadProgress.value = null
   }
 }
 
@@ -613,6 +670,53 @@ onMounted(load)
               class="input-field mt-2 resize-y py-2 text-[0.8rem]"
               placeholder="Ce qui change"
             />
+
+            <!-- Le champ de fichier vit DANS son libellé : toute la zone
+                 s'ouvre au clic, et le lecteur d'écran l'annonce par son nom. -->
+            <label
+              class="mt-2 flex cursor-pointer items-center gap-2 rounded-field border border-dashed border-line-2 px-2.5 py-2 text-[0.74rem] text-ink-2 transition-colors focus-within:border-ink hover:border-ink-3"
+            >
+              <AppIcon name="plus" :size="14" class="shrink-0 text-ink-3" />
+              <span class="min-w-0 flex-1 truncate">
+                {{
+                  versionFile
+                    ? `${versionFile.name} · ${taille(versionFile.size)}`
+                    : 'joindre une image — PNG, JPEG, WebP, GIF'
+                }}
+              </span>
+              <input
+                type="file"
+                class="sr-only"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                aria-label="Image de la version"
+                @change="choisirImage"
+              />
+            </label>
+
+            <button
+              v-if="versionFile && !busy"
+              type="button"
+              class="mt-1 text-[0.7rem] text-ink-3 underline decoration-line-2 hover:text-ink"
+              @click="versionFile = null"
+            >
+              retirer l’image
+            </button>
+
+            <div
+              v-if="uploadProgress !== null"
+              class="mt-2 h-1 overflow-hidden bg-raised"
+              role="progressbar"
+              aria-label="Envoi de l’image"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              :aria-valuenow="Math.round(uploadProgress * 100)"
+            >
+              <div
+                class="h-full bg-ink"
+                :style="{ width: `${Math.round(uploadProgress * 100)}%` }"
+              />
+            </div>
+
             <button
               type="submit"
               class="chip mt-2 w-full justify-center border-ink bg-ink text-paper transition-opacity hover:opacity-90"
@@ -653,6 +757,26 @@ onMounted(load)
                   <span v-if="version.notes" class="mt-0.5 block text-[0.72rem] text-ink-2">
                     {{ version.notes }}
                   </span>
+                  <!-- L'image, ouverte en grand dans un onglet : son adresse
+                       signée tient lieu d'autorisation, et aucun référent ne
+                       part avec. -->
+                  <a
+                    v-if="assetUrl(version.asset?.url)"
+                    :href="assetUrl(version.asset.url)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="mt-1.5 block overflow-hidden rounded-field border border-line bg-raised"
+                    :aria-label="`Ouvrir l’image de la version ${version.number}`"
+                  >
+                    <img
+                      :src="assetUrl(version.asset.url)"
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      referrerpolicy="no-referrer"
+                      class="block max-h-32 w-full object-contain"
+                    />
+                  </a>
                   <!-- « Qui a publié cette version » : à plusieurs, un
                        historique anonyme ne répond qu'à la moitié de ce qu'on
                        lui demande. La mention disparaît si l'auteur a supprimé

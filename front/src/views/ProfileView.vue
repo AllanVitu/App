@@ -11,19 +11,75 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
+import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { profileApi } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { formatDateTime } from '@/utils/format'
+import { cropToSquare } from '@/utils/images'
 
 const router = useRouter()
 const auth = useAuthStore()
 const ui = useUiStore()
 
+// --- Photo -------------------------------------------------------------------
+/**
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │  L'AVATAR ÉTAIT UNE URL TAPÉE À LA MAIN                                 │
+ * │                                                                         │
+ * │  Et chaque affichage envoyait l'adresse IP de toute l'équipe au site    │
+ * │  qui hébergeait l'image. La photo se téléverse désormais, recadrée ici  │
+ * │  puis débarrassée de ses métadonnées par le serveur.                    │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
+const choixPhoto = ref(null)
+const photo = reactive({ busy: false, error: '' })
+
+/** Avant recadrage. Au-delà, le décodage seul ferait attendre sans raison. */
+const PHOTO_MAX = 20 * 1024 * 1024
+
+async function changerPhoto(evenement) {
+  const fichier = evenement.target.files?.[0]
+
+  // Vidé tout de suite : choisir deux fois le même fichier doit relancer l'envoi.
+  evenement.target.value = ''
+
+  if (!fichier) return
+
+  photo.busy = true
+  photo.error = ''
+
+  try {
+    if (fichier.size > PHOTO_MAX) {
+      throw new Error('Cette image dépasse 20 Mo : choisissez-en une plus légère.')
+    }
+
+    auth.setUser(await profileApi.uploadAvatar(await cropToSquare(fichier)))
+    ui.notify('Photo mise à jour.')
+  } catch (error) {
+    photo.error = error.errors?.avatar ?? error.message
+  } finally {
+    photo.busy = false
+  }
+}
+
+async function retirerPhoto() {
+  photo.busy = true
+  photo.error = ''
+
+  try {
+    auth.setUser(await profileApi.removeAvatar())
+    ui.notify('Photo retirée.')
+  } catch (error) {
+    photo.error = error.message
+  } finally {
+    photo.busy = false
+  }
+}
+
 // --- Informations ----------------------------------------------------------
 const profileForm = reactive({
   full_name: auth.user?.full_name ?? '',
-  avatar_url: auth.user?.avatar_url ?? '',
 })
 
 const profileErrors = ref({})
@@ -34,10 +90,7 @@ async function saveProfile() {
   profileErrors.value = {}
 
   try {
-    const updated = await profileApi.update({
-      full_name: profileForm.full_name,
-      avatar_url: profileForm.avatar_url || null,
-    })
+    const updated = await profileApi.update({ full_name: profileForm.full_name })
 
     auth.setUser(updated)
     ui.notify('Profil mis à jour.')
@@ -177,20 +230,9 @@ onMounted(loadSessions)
     <!-- Identité -->
     <section class="card p-6">
       <div class="flex flex-wrap items-center gap-5">
-        <img
-          v-if="auth.user?.avatar_url"
-          :src="auth.user.avatar_url"
-          alt=""
-          class="size-16 rounded-full object-cover"
-        />
-        <div
-          v-else
-          class="flex size-16 items-center justify-center rounded-full bg-raised text-xl font-semibold text-ink"
-        >
-          {{ auth.initials }}
-        </div>
+        <UserAvatar :name="auth.user?.full_name ?? ''" :src="auth.user?.avatar_url" size="lg" />
 
-        <div class="min-w-0">
+        <div class="min-w-0 flex-1">
           <h2 class="truncate text-lg font-semibold">{{ auth.user?.full_name }}</h2>
           <p class="truncate text-sm text-ink-2">{{ auth.user?.email }}</p>
           <span
@@ -201,7 +243,44 @@ onMounted(loadSessions)
             Administrateur
           </span>
         </div>
+
+        <!-- La photo se change à côté de là où elle se voit. Le champ de
+             fichier reste accessible au clavier et aux lecteurs d'écran : le
+             bouton ne fait que l'ouvrir. -->
+        <div class="flex flex-wrap items-center gap-2">
+          <input
+            id="photo-profil"
+            ref="choixPhoto"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            aria-label="Photo de profil"
+            class="sr-only"
+            @change="changerPhoto"
+          />
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            :loading="photo.busy"
+            @click="choixPhoto?.click()"
+          >
+            {{ auth.user?.avatar_url ? 'Changer la photo' : 'Ajouter une photo' }}
+          </BaseButton>
+          <BaseButton
+            v-if="auth.user?.avatar_url"
+            variant="ghost"
+            size="sm"
+            :disabled="photo.busy"
+            @click="retirerPhoto"
+          >
+            Retirer la photo
+          </BaseButton>
+        </div>
       </div>
+
+      <p v-if="photo.error" class="mt-3 text-sm text-brick" aria-live="polite">{{ photo.error }}</p>
+      <p v-else class="mt-3 text-[0.72rem] text-ink-3">
+        Recadrée au carré avant l’envoi. Position, date et appareil sont retirés de l’image.
+      </p>
 
       <dl class="mt-6 grid gap-4 border-t border-line pt-5 sm:grid-cols-2">
         <div>
@@ -232,14 +311,6 @@ onMounted(loadSessions)
         />
 
         <BaseInput :model-value="auth.user?.email" label="Adresse e-mail" type="email" disabled />
-
-        <BaseInput
-          v-model="profileForm.avatar_url"
-          label="URL de l'avatar"
-          placeholder="https://exemple.fr/photo.jpg"
-          hint="Adresse http(s) d'une image."
-          :error="profileErrors.avatar_url"
-        />
 
         <div class="flex justify-end">
           <BaseButton type="submit" :loading="savingProfile">Enregistrer</BaseButton>

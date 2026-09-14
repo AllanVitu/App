@@ -7,6 +7,7 @@ namespace Tests\Support;
 use App\Core\Database;
 use App\Core\Kernel;
 use App\Core\Request;
+use App\Core\UploadedFile;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -47,6 +48,10 @@ abstract class ApiTestCase extends TestCase
         'error_groups',
         'design_versions',
         'design_files',
+        // TRUNCATE ne réveille pas les déclencheurs de suppression : vider
+        // stored_files ne pose aucune pierre tombale, d'où les deux tables.
+        'stored_files',
+        'stored_file_tombstones',
         'organization_modules',
         'user_settings',
         'invitations',
@@ -79,10 +84,11 @@ abstract class ApiTestCase extends TestCase
     /**
      * Exécute une requête et renvoie le statut et le corps décodé.
      *
-     * @param array<string, mixed>  $body
-     * @param array<string, string> $headers
-     * @param array<string, string> $query
-     * @param array<string, string> $cookies
+     * @param array<string, mixed>        $body
+     * @param array<string, string>       $headers
+     * @param array<string, string>       $query
+     * @param array<string, string>       $cookies
+     * @param array<string, UploadedFile> $files
      *
      * @return array{status: int, body: array<string, mixed>}
      */
@@ -93,8 +99,38 @@ abstract class ApiTestCase extends TestCase
         array $headers = [],
         array $query = [],
         array $cookies = [],
+        array $files = [],
     ): array {
-        $request = Request::create($method, $path, $body, $query, $headers, $cookies);
+        $raw     = $this->callRaw($method, $path, $body, $headers, $query, $cookies, $files);
+        $decoded = json_decode($raw['output'], true);
+
+        return [
+            'status' => $raw['status'],
+            'body'   => is_array($decoded) ? $decoded : [],
+        ];
+    }
+
+    /**
+     * La même traversée, sortie brute : un fichier servi n'est pas du JSON.
+     *
+     * @param array<string, mixed>        $body
+     * @param array<string, string>       $headers
+     * @param array<string, string>       $query
+     * @param array<string, string>       $cookies
+     * @param array<string, UploadedFile> $files
+     *
+     * @return array{status: int, output: string}
+     */
+    protected function callRaw(
+        string $method,
+        string $path,
+        array $body = [],
+        array $headers = [],
+        array $query = [],
+        array $cookies = [],
+        array $files = [],
+    ): array {
+        $request = Request::create($method, $path, $body, $query, $headers, $cookies, $files);
 
         // http_response_code() conserve sa valeur d'un appel à l'autre dans le
         // même processus : on la réinitialise pour ne pas hériter du test
@@ -105,12 +141,7 @@ abstract class ApiTestCase extends TestCase
         (new Kernel($this->routesFile))->handle($request);
         $output = (string) ob_get_clean();
 
-        $decoded = json_decode($output, true);
-
-        return [
-            'status' => http_response_code(),
-            'body'   => is_array($decoded) ? $decoded : [],
-        ];
+        return ['status' => (int) http_response_code(), 'output' => $output];
     }
 
     /**

@@ -9,7 +9,10 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Core\Validator;
 use App\Models\DesignRepository;
+use App\Services\FileStorage;
 use App\Services\Journal;
+use App\Services\RateLimiter;
+use Throwable;
 
 /**
  * Module « Design » : fichiers et historique de versions.
@@ -22,6 +25,9 @@ use App\Services\Journal;
 final class DesignController
 {
     private const KINDS = ['maquette', 'prototype', 'systeme'];
+
+    /** Images par heure et par compte : de quoi itérer sur une maquette, pas remplir un disque. */
+    private const UPLOADS_PER_HOUR = 60;
 
     /**
      * Les champs suivis, et leur nom en français.
@@ -192,6 +198,10 @@ final class DesignController
      *
      * Le numéro est attribué par la base, par fichier : il n'est ni fourni
      * ni modifiable.
+     *
+     * JSON pour une version qui ne consigne qu'une note, multipart (champ
+     * « file ») pour une version qui porte son image. Une seule route : une
+     * version reste une version, qu'elle documente une décision ou une maquette.
      */
     public function storeVersion(Request $request): void
     {
@@ -202,12 +212,34 @@ final class DesignController
         $notes = $validator->string('notes', required: false, max: 5000, label: 'notes');
         $validator->check();
 
-        $version = $this->design->addVersion(
-            (string) $file['id'],
-            $request->organizationId(),
-            $request->actorId(),
-            ['label' => $label, 'notes' => $notes],
-        );
+        // Le fichier n'est rangé qu'une fois le reste validé : un intitulé trop
+        // long ne doit pas laisser dix mégaoctets derrière lui.
+        $upload  = $request->file('file');
+        $storage = new FileStorage();
+        $asset   = null;
+
+        if ($upload !== null) {
+            (new RateLimiter())->hit('design-upload', $request->userId(), self::UPLOADS_PER_HOUR, 3600);
+
+            $asset = $storage->store($upload, 'design', $request->organizationId(), null, $request->actorId());
+        }
+
+        try {
+            $version = $this->design->addVersion(
+                (string) $file['id'],
+                $request->organizationId(),
+                $request->actorId(),
+                ['label' => $label, 'notes' => $notes, 'asset_id' => $asset['id'] ?? null],
+            );
+        } catch (Throwable $e) {
+            // Sans sa version, le fichier rangé ne serait montré nulle part, et
+            // compterait pourtant dans le quota de l'espace.
+            if ($asset !== null) {
+                $storage->delete((string) $asset['id']);
+            }
+
+            throw $e;
+        }
 
         // Consigné sur le FICHIER, pas sur la version : c'est le fichier que
         // l'écran affiche et que le fil doit pouvoir ouvrir. Une entrée

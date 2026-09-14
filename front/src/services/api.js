@@ -10,6 +10,18 @@ import http from './http'
 
 const unwrap = (response) => response.data.data
 
+/**
+ * Réglages d'un envoi de fichier.
+ *
+ * Le type multipart est posé EXPLICITEMENT : le client est configuré en JSON,
+ * et axios convertirait sinon le FormData en objet JSON — sans le fichier.
+ * Posé ainsi, il laisse le navigateur écrire la frontière du corps lui-même.
+ *
+ * Et deux minutes au lieu de quinze secondes : une maquette de dix
+ * mégaoctets sur une connexion lente n'est pas une panne.
+ */
+const ENVOI = { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120_000 }
+
 // --- Authentification -------------------------------------------------------
 
 export const authApi = {
@@ -266,8 +278,29 @@ export const designApi = {
   update: (id, payload) => http.put(`/design/files/${id}`, payload).then(unwrap),
   remove: (id) => http.delete(`/design/files/${id}`),
   restore: (id) => http.post(`/design/files/${id}/restore`).then(unwrap),
-  /** Une version s'ajoute ; elle ne se modifie ni ne se supprime. */
-  addVersion: (id, payload) => http.post(`/design/files/${id}/versions`, payload).then(unwrap),
+  /**
+   * Une version s'ajoute ; elle ne se modifie ni ne se supprime.
+   *
+   * Sans image, elle part en JSON comme le reste ; avec, en multipart, et
+   * `onProgress` reçoit la part envoyée, de 0 à 1.
+   */
+  addVersion: (id, { label = null, notes = null, file = null } = {}, onProgress) => {
+    if (!file) return http.post(`/design/files/${id}/versions`, { label, notes }).then(unwrap)
+
+    const formulaire = new FormData()
+
+    if (label) formulaire.append('label', label)
+    if (notes) formulaire.append('notes', notes)
+    formulaire.append('file', file)
+
+    return http
+      .post(`/design/files/${id}/versions`, formulaire, {
+        ...ENVOI,
+        onUploadProgress: (evenement) =>
+          onProgress?.(evenement.total ? evenement.loaded / evenement.total : 0),
+      })
+      .then(unwrap)
+  },
 }
 
 // --- Profil -----------------------------------------------------------------
@@ -277,6 +310,18 @@ export const profileApi = {
   update: (payload) => http.put('/profile', payload).then(unwrap),
   updatePassword: (payload) => http.put('/profile/password', payload).then(unwrap),
   destroy: (password) => http.delete('/profile', { data: { password } }),
+
+  /**
+   * La photo se TÉLÉVERSE, recadrée par le navigateur au préalable (cf.
+   * utils/images.js). Renvoie le compte, avec sa nouvelle adresse signée.
+   */
+  uploadAvatar: (image) => {
+    const formulaire = new FormData()
+    formulaire.append('avatar', image, image.type === 'image/png' ? 'photo.png' : 'photo.webp')
+
+    return http.post('/profile/avatar', formulaire, ENVOI).then(unwrap)
+  },
+  removeAvatar: () => http.delete('/profile/avatar').then(unwrap),
 
   /**
    * Sessions ouvertes — sous « /auth » alors que l'écran est le profil.

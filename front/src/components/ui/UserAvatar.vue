@@ -1,6 +1,7 @@
 <script setup>
 /**
- * Les initiales de quelqu'un, dans un carré à filet.
+ * Quelqu'un, dans un carré à filet : sa photo s'il en a une, ses initiales
+ * sinon.
  *
  * ┌─────────────────────────────────────────────────────────────────────┐
  * │  LE MÊME CALCUL ÉTAIT ÉCRIT À QUATRE ENDROITS                       │
@@ -11,17 +12,28 @@
  * │  qui divergeraient à la première correction.                        │
  * └─────────────────────────────────────────────────────────────────────┘
  *
- * PAS D'IMAGE ICI, même quand le compte a un « avatar_url ». Les initiales
- * sont toujours disponibles, ne chargent rien, et ne laissent jamais un trou
- * pendant que le réseau répond. Le jour où les photos comptent vraiment,
- * elles se poseront dans ce composant et nulle part ailleurs.
+ * LA PHOTO SE POSE ICI, ET NULLE PART AILLEURS — c'était la promesse du jour
+ * où ce composant a remplacé ses copies.
+ *
+ * Les initiales restent le socle. Elles s'affichent tant que l'image n'est
+ * pas arrivée, et reviennent si elle ne vient pas : adresse expirée, fichier
+ * retiré, réseau coupé. La photo se pose PAR-DESSUS et n'apparaît qu'une fois
+ * chargée — jamais de trou à la place d'un visage, jamais de saut.
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+
+import { assetUrl } from '@/utils/assets'
 
 const props = defineProps({
   /** Nom complet. Vide ou absent donne le tiret de « personne ». */
   name: { type: String, default: '' },
-  size: { type: String, default: 'md', validator: (v) => ['xs', 'sm', 'md'].includes(v) },
+  /** Adresse signée de la photo, telle que l'API la renvoie. Null : les initiales. */
+  src: { type: String, default: null },
+  size: {
+    type: String,
+    default: 'md',
+    validator: (v) => ['xs', 'sm', 'md', 'lg'].includes(v),
+  },
   /** Repère de l'espace plutôt que d'une personne : arrondi, jamais carré. */
   muted: { type: Boolean, default: false },
 })
@@ -30,6 +42,7 @@ const SIZES = {
   xs: 'size-5 text-[0.56rem]',
   sm: 'size-7 text-[0.66rem]',
   md: 'size-8 text-[0.68rem]',
+  lg: 'size-16 text-xl',
 }
 
 /**
@@ -46,11 +59,22 @@ const initials = computed(() => {
     .map((part) => part[0].toUpperCase())
     .join('')
 })
+
+const adresse = computed(() => assetUrl(props.src))
+const chargee = ref(false)
+const echec = ref(false)
+
+// Une nouvelle adresse mérite un nouvel essai : l'échec de l'ancienne — une
+// signature expirée, typiquement — ne dit rien d'elle.
+watch(adresse, () => {
+  chargee.value = false
+  echec.value = false
+})
 </script>
 
 <template>
   <span
-    class="inline-flex shrink-0 items-center justify-center border font-semibold"
+    class="relative inline-flex shrink-0 items-center justify-center overflow-hidden border font-semibold"
     :class="[
       SIZES[size],
       muted ? 'border-line bg-panel text-ink-3' : 'border-line bg-raised text-ink',
@@ -60,6 +84,19 @@ const initials = computed(() => {
     <!-- Le titre porte le nom entier ; les initiales seules seraient
          indéchiffrables au lecteur d'écran. -->
     <span aria-hidden="true">{{ initials }}</span>
+
+    <img
+      v-if="adresse && !echec"
+      :src="adresse"
+      alt=""
+      decoding="async"
+      referrerpolicy="no-referrer"
+      class="absolute inset-0 size-full object-cover"
+      :class="chargee ? 'opacity-100' : 'opacity-0'"
+      @load="chargee = true"
+      @error="echec = true"
+    />
+
     <span class="sr-only">{{ name || 'Personne' }}</span>
   </span>
 </template>

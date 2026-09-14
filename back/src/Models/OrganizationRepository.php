@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Core\Database;
+use App\Services\SignedUrl;
 
 /**
  * Organisations, appartenances et invitations.
@@ -166,7 +167,7 @@ final class OrganizationRepository
     public function members(string $organizationId): array
     {
         $statement = Database::connection()->prepare(
-            'SELECT u.id, u.full_name, u.email, u.avatar_url, u.last_login_at,
+            'SELECT u.id, u.full_name, u.email, u.avatar_file_id, u.last_login_at,
                     m.role, m.created_at AS joined_at
                FROM memberships m
                JOIN users u ON u.id = m.user_id
@@ -181,7 +182,11 @@ final class OrganizationRepository
                 'id'            => (string) $row['id'],
                 'full_name'     => (string) $row['full_name'],
                 'email'         => (string) $row['email'],
-                'avatar_url'    => $row['avatar_url'] !== null ? (string) $row['avatar_url'] : null,
+                // Une adresse signée : l'écran Équipe est justement ce qui
+                // donne le droit de voir la photo d'un coéquipier.
+                'avatar_url'    => $row['avatar_file_id'] !== null
+                    ? SignedUrl::forFile((string) $row['avatar_file_id'])
+                    : null,
                 'role'          => (string) $row['role'],
                 'joined_at'     => Database::toIso($row['joined_at']),
                 'last_login_at' => Database::toIso($row['last_login_at']),

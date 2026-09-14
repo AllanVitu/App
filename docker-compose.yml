@@ -81,8 +81,11 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-no-reply@saas.local}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-SaaS App}
+      # --- Fichiers téléversés : hors du code monté, hors de la racine web ---
+      STORAGE_PATH: /var/www/storage
     volumes:
       - ./back:/var/www/html
+      - storage_data:/var/www/storage
     depends_on:
       db:
         condition: service_healthy
@@ -140,8 +143,11 @@ services:
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-no-reply@saas.local}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-SaaS App}
       DB_AUTO_MIGRATE: "false"
+      # Le worker purge les octets des fichiers supprimés : il lit le même volume.
+      STORAGE_PATH: /var/www/storage
     volumes:
       - ./back:/var/www/html
+      - storage_data:/var/www/storage
     depends_on:
       db:
         condition: service_healthy
@@ -236,6 +242,10 @@ volumes:
     name: saas_db_data
   front_node_modules:
     name: saas_front_node_modules
+  # Maquettes et photos de profil. « docker compose down -v » les emporte avec
+  # la base — c'est voulu : l'une sans l'autre ne décrirait plus rien.
+  storage_data:
+    name: saas_storage_data
 
 networks:
   saas_net:

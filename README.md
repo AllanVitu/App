@@ -19,7 +19,7 @@ apparaît dans le menu et dispose aussitôt d'un écran, en attendant le sien.
 | `deploiement` | `deployments`                        | Déploiements Git, journaux, relance                       |
 | `tickets`     | `tickets`, `ticket_counters`         | Suivi clavier-first, priorités, cycle de vie, assignation |
 | `supervision` | `error_groups`, `error_events`       | Erreurs groupées, piles d'appels, courbe sur 14 jours     |
-| `design`      | `design_files`, `design_versions`    | Fichiers et historique de versions                        |
+| `design`      | `design_files`, `design_versions`    | Maquettes téléversées, versions, aperçu sur la carte      |
 
 Deux services font converger le tout sans que le client connaisse le métier
 d'aucun module : `ModuleMetrics` décide de ce que signifie le chiffre de
@@ -161,9 +161,10 @@ App/
 │   │   ├── Middleware/         # Cors, Auth, Ingest (clés d'API)
 │   │   ├── Services/           # Jwt, RefreshToken, UserToken, Throttle, Mailer,
 │   │   │                       #   SchemaBuilder, Search, ModuleMetrics, AttentionFeed,
-│   │   │                       #   Journal, Queue, RateLimiter, Scrubber, SelfMonitor
-│   │   ├── Models/             # 9 dépôts PDO (requêtes préparées)
-│   │   └── Controllers/        # 15 : un par domaine, plus Health et Search
+│   │   │                       #   Journal, Queue, RateLimiter, Scrubber, SelfMonitor,
+│   │   │                       #   FileStorage, MetadataStripper, SignedUrl
+│   │   ├── Models/             # 13 dépôts PDO (requêtes préparées)
+│   │   └── Controllers/        # 20 : un par domaine, plus Health, Search et File
 │   ├── bin/                    # migrate.php (schéma) · worker.php (tâches)
 │   ├── tests/                  # PHPUnit : unit + integration
 │   └── database/
@@ -219,6 +220,8 @@ déjà — le nom de l'espace et l'adresse invitée.
 | GET/PUT | `/api/profile`           | Profil                                          |
 | PUT     | `/api/profile/password`  | Changement de mot de passe                      |
 | DELETE  | `/api/profile`           | Suppression du compte                           |
+| POST    | `/api/profile/avatar`    | Photo de profil, téléversée (multipart)         |
+| DELETE  | `/api/profile/avatar`    | Retrait de la photo                             |
 | GET/PUT | `/api/settings`          | Préférences (thème, densité, mouvement, fuseau) |
 | GET     | `/api/dashboard`         | Alertes, état des modules, activité             |
 | GET     | `/api/search`            | Recherche dans les cinq modules                 |
@@ -310,7 +313,7 @@ mise à jour partielle, suppression logique.
 | GET/PUT/DELETE | `/api/errors/{id}`                | Occurrences agrégées par la base            |
 | GET/POST       | `/api/design/files`               |                                             |
 | GET/PUT/DELETE | `/api/design/files/{id}`          |                                             |
-| POST           | `/api/design/files/{id}/versions` | Ajoute, n'écrase jamais                     |
+| POST           | `/api/design/files/{id}/versions` | Ajoute ; image jointe en multipart          |
 
 **Annuler une suppression.** Toutes les suppressions sont LOGIQUES : la ligne
 reste en base, marquée. Il ne manquait que le chemin de retour — l'interface
@@ -467,6 +470,55 @@ Un défaut de l'ingestion a été trouvé en chemin : un groupe d'erreurs
 Il réapparaît désormais, et son retour — comme celui d'une erreur résolue —
 est consigné dans le fil.
 
+## Les fichiers
+
+Le module Design promettait des fichiers et n'en stockait aucun ; l'avatar
+était une URL tapée à la main, et chaque affichage envoyait l'adresse IP de
+toute l'équipe au site qui hébergeait l'image. Les deux se téléversent
+désormais.
+
+| Route                                   | Champ    | Accepte               | Au plus |
+| --------------------------------------- | -------- | --------------------- | ------- |
+| `POST /api/profile/avatar`              | `avatar` | PNG, JPEG, WebP       | 2 Mo    |
+| `POST /api/design/files/{id}/versions`  | `file`   | PNG, JPEG, WebP, GIF  | 10 Mo   |
+| `GET /api/files/{id}?expires&signature` | —        | lecture, sans session | —       |
+
+Un fichier n'entre dans le volume qu'après cinq contrôles, du moins coûteux au
+plus coûteux : la réception, la taille, le **type lu dans les octets** — jamais
+l'extension ni ce qu'annonce le navigateur —, la structure, et les dimensions,
+contre l'image de quelques kilo-octets qui en occupe des centaines une fois
+décodée.
+
+Quatre décisions :
+
+- **Les métadonnées partent sans recompression.** Position GPS, date,
+  appareil, auteur : la structure JPEG, PNG ou WebP est parcourue bloc par bloc
+  et seuls les blocs de métadonnées sont omis. Les pixels ressortent à l'octet
+  près, et aucune bibliothèque de décodage d'image n'entre dans l'API. Ce qui
+  suit la fin déclarée d'une image est coupé.
+- **Ni SVG, ni PDF.** Un SVG peut porter du script, qui s'exécuterait depuis
+  l'origine de l'application ; un PDF garde le nom de son auteur dans des
+  propriétés qu'on ne sait pas retirer sans le réécrire.
+- **Des adresses signées plutôt qu'une session.** Une balise `<img>` n'envoie
+  pas d'en-tête d'autorisation. L'API remet donc une adresse signée (HMAC,
+  valable une à deux heures) à qui a le droit de voir le fichier, arrondie à
+  l'heure pour que le navigateur la garde en cache. Le fichier part avec
+  `nosniff`, une CSP `default-src 'none'; sandbox` et aucun référent.
+- **Un déclencheur, et non du code, pour l'effacement.** Supprimer un compte
+  ou un espace passe par des cascades où aucun PHP ne s'exécute. Chaque
+  suppression de fichier pose donc une « pierre tombale » en base, quel que
+  soit son chemin, et le worker efface les octets ensuite. Une photo
+  remplacée, retirée, ou celle d'un compte effacé ne reste pas sur le disque.
+
+Côté navigateur, la photo est recadrée au carré par le canevas avant l'envoi,
+ce qui ne transmet déjà plus aucune métadonnée — le serveur les retire malgré
+tout, puisque le client n'est pas une barrière.
+
+Les octets vivent dans le volume `storage_data`, hors de la racine web ; la base
+garde ce qui se requête (`stored_files`). Chaque espace dispose de
+`STORAGE_QUOTA_BYTES` octets, un gigaoctet par défaut. **Sauvegardez le volume
+avec la base** : l'une décrit les fichiers, l'autre les contient.
+
 ## Sécurité
 
 - **Mots de passe** : bcrypt coût 12, réhachage transparent si le coût évolue.
@@ -504,6 +556,9 @@ est consigné dans le fil.
   aléatoires, stockés hachés, usage unique, 7 jours. Réinviter la même adresse
   invalide le lien précédent.
 - **En-têtes** : `nosniff`, `X-Frame-Options: DENY`, CSP en déploiement.
+- **Fichiers téléversés** : type lu dans les octets, métadonnées retirées, ni
+  SVG ni PDF, servis par adresse signée avec `nosniff` et une CSP `sandbox` ;
+  les octets quittent le disque avec leur description (cf. « Les fichiers »).
 - **Notification hors bande** à chaque changement de mot de passe.
 
 ### Jeu de données de démonstration
@@ -542,7 +597,9 @@ ou `svg`. Le garde-fou a été validé en enfreignant la règle exprès.
 - anime.js compte en **millisecondes** là où GSAP comptait en secondes ;
 - ses animations partent d'un `[depuis, vers]` explicite, donc
   `prefers-reduced-motion` doit **poser l'état final** (`settle()`) et non
-  sauter l'animation — sinon l'élément reste dans son état de départ.## Déploiement
+  sauter l'animation — sinon l'élément reste dans son état de départ.
+
+## Déploiement
 
 ```bash
 cp .env.production.example .env.production   # renseigner les variables
@@ -555,6 +612,11 @@ Différences avec la stack de développement :
 - Nginx sert `front/dist` **et** relaie `/api` vers PHP-FPM : même origine,
   donc plus de CORS et cookie `SameSite=Strict` ;
 - PostgreSQL n'est pas publié sur l'hôte, `DB_SEED=none.sql` ;
+- un **worker** tourne sur la même image que l'API. Il manquait jusqu'ici :
+  aucun e-mail ne partait en production, et ni les jetons ni les fichiers
+  supprimés n'étaient purgés ;
+- les fichiers téléversés vivent dans le volume `saas_storage_data_prod`, à
+  sauvegarder avec la base ;
 - `display_errors=Off`, OPcache figé, en-têtes CSP ;
 - les variables sensibles sont **obligatoires** : la stack refuse de démarrer
   si elles manquent.
@@ -573,12 +635,12 @@ docker compose exec php composer migrate  # applique les migrations en attente
 cd e2e && npm test                       # parcours navigateur (Playwright)
 ```
 
-| Suite                 | Portée                                         | Volume    |
-| --------------------- | ---------------------------------------------- | --------- |
-| PHPUnit `unit`        | Jetons JWT, nettoyage des traces — sans base   | 25 tests  |
-| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel          | 229 tests |
-| Vitest                | Formatage, client HTTP, composables, signaleur | 143 tests |
-| Playwright            | Parcours complets dans Chromium                | 73 tests  |
+| Suite                 | Portée                                          | Volume    |
+| --------------------- | ----------------------------------------------- | --------- |
+| PHPUnit `unit`        | Jetons, traces, métadonnées d'image — sans base | 40 tests  |
+| PHPUnit `integration` | Routeur, middlewares, PostgreSQL réel           | 246 tests |
+| Vitest                | Formatage, client HTTP, composables, signaleur  | 151 tests |
+| Playwright            | Parcours complets dans Chromium                 | 75 tests  |
 
 Les composables portent l'essentiel de la logique du client : file
 d'écritures, glisser-déposer, raccourcis, pagination, synchronisation de

@@ -34,6 +34,15 @@ WORKDIR /var/www/html
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+# --- Stockage des fichiers téléversés ---
+# Hors de /var/www/html, donc hors du code monté et hors de la racine web.
+# Créé ICI et confié à www-data : un volume nommé vide hérite, au premier
+# montage, du propriétaire du dossier de l'image. Sans cela, il appartiendrait
+# à root et PHP ne pourrait rien y écrire.
+RUN mkdir -p /var/www/storage \
+    && chown www-data:www-data /var/www/storage \
+    && chmod 0750 /var/www/storage
+
 # php-fpm tourne en www-data (UID 82 sur Alpine)
 USER www-data
 
