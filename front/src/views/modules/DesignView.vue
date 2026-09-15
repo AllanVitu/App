@@ -38,6 +38,7 @@ import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useLoadMore } from '@/composables/useLoadMore'
 import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
+import { useServerFilters } from '@/composables/useServerFilters'
 import { useLiveRows } from '@/composables/useLiveRows'
 import { useUiStore } from '@/stores/ui'
 import { assetUrl } from '@/utils/assets'
@@ -56,7 +57,8 @@ const total = ref(null)
 // une impasse (cf. composables/useLoadMore.js).
 const { loadingMore, loadMore } = useLoadMore({
   rows: files,
-  fetch: async (offset) => (await designApi.list({ offset })).files,
+  fetch: async (offset) =>
+    (await designApi.list({ ...(serveur.active.value ? filtresServeur() : {}), offset })).files,
   onError: (message) => ui.notify(message, 'error'),
 })
 const loading = ref(true)
@@ -116,12 +118,55 @@ async function load({ silent = false } = {}) {
     files.value = rows
     stats.value = meta.stats
     total.value = meta.total ?? null
+    baseTronquee.value = (meta.total ?? 0) > rows.length
   } catch (error) {
     ui.notify(error.message, 'error')
   } finally {
     loading.value = false
   }
 }
+
+/**
+ * La liste de DÉPART déborde-t-elle du plafond ?
+ *
+ * Posé par le chargement de départ, et par lui seul : une réponse filtrée tient
+ * presque toujours sous le plafond, et s'y fier ferait sortir du mode serveur
+ * au premier résultat (cf. composables/useServerFilters.js).
+ */
+const baseTronquee = ref(false)
+
+/**
+ * Les filtres de l'écran au format de l'API — {} quand aucun n'est posé.
+ *
+ * Ce sont les MÊMES que ceux du filtrage local : le serveur cherche
+ * dans le nom et la description, comme l'écran (cf. DesignRepository::search).
+ * Refiltrer ses réponses en local ne retire donc rien.
+ */
+function filtresServeur() {
+  const terme = search.value.trim()
+
+  return {
+    ...(terme ? { search: terme } : {}),
+    ...(kindFilter.value ? { kind: kindFilter.value } : {}),
+  }
+}
+
+/**
+ * Au-delà du plafond, la recherche et les filtres interrogent le serveur, qui
+ * voit tout. En deçà, ils restent locaux et instantanés — la mécanique
+ * éprouvée sur Tickets.
+ */
+const serveur = useServerFilters({
+  enabled: () => baseTronquee.value,
+  params: filtresServeur,
+  fetch: (params, signal) => designApi.list(params, signal),
+  apply: ({ files: rows, meta }) => {
+    files.value = rows
+    total.value = meta.total ?? null
+  },
+  restore: () => load({ silent: true }),
+  onError: (message) => ui.notify(message, 'error'),
+})
 
 const filtered = computed(() => {
   const needle = search.value.trim().toLowerCase()
@@ -260,7 +305,7 @@ async function createFile() {
     composing.value = false
     draft.value = { name: '', kind: 'maquette', description: '', accent: '#7ee2a8' }
     play('success')
-    load({ silent: true })
+    serveur.reload()
   } catch (error) {
     errors.value = error.errors ?? {}
 
@@ -376,7 +421,7 @@ async function addVersion() {
     versionNotes.value = ''
     versionFile.value = null
     play('success')
-    load({ silent: true })
+    serveur.reload()
   } catch (error) {
     // Le refus d'un fichier arrive sur son champ : c'est la phrase utile
     // (« Format refusé », « limite de stockage »), pas le titre générique.
@@ -407,11 +452,11 @@ async function removeFile(file) {
       } catch (error) {
         ui.notify(error.message, 'error')
       } finally {
-        load({ silent: true })
+        serveur.reload()
       }
     })
 
-    load({ silent: true })
+    serveur.reload()
   } catch (error) {
     files.value.splice(index, 0, previous)
     ui.notify(error.message, 'error')
@@ -423,7 +468,7 @@ async function removeFile(file) {
  * ailleurs. On relit SANS indicateur de chargement — remplacer l'écran par un
  * rond qui tourne au retour donnerait l'impression d'avoir tout perdu.
  */
-useRevalidate(() => load({ silent: true }))
+useRevalidate(() => serveur.reload())
 
 /**
  * Le flux : ce que les autres font, pendant qu'on regarde.
@@ -438,7 +483,7 @@ const { watchers } = useLiveRows({
   rows: files,
   subject: () => openId.value,
   protege: () => openId.value,
-  recharger: () => load({ silent: true }),
+  recharger: () => serveur.reload(),
 })
 
 onMounted(load)
@@ -484,7 +529,7 @@ onMounted(load)
       :loaded="files.length"
       :total="total"
       unit="fichiers"
-      hint="Filtrez par type, ou cherchez un nom."
+      hint="La recherche et les filtres interrogent aussi le serveur : ils atteignent le reste."
     />
 
     <form v-if="composing" class="card shrink-0 p-4" @submit.prevent="createFile">

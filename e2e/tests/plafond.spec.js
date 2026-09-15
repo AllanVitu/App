@@ -6,24 +6,66 @@ import { expect, login, MOTDEPASSE, test } from './support.js'
  * ┌─────────────────────────────────────────────────────────────────────────┐
  * │  LE SEUL NIVEAU OÙ CETTE PROMESSE SE VÉRIFIE ENTIÈRE                    │
  * │                                                                         │
- * │  PHPUnit prouve que le serveur trouve un ticket au-delà de 500 ;        │
+ * │  PHPUnit prouve que le serveur trouve une ligne au-delà du plafond ;    │
  * │  Vitest, que le composable interroge le serveur au bon moment. Aucun    │
  * │  des deux ne prouve que l'écran, avec sa liste plafonnée, son           │
- * │  avertissement et son filtrage local, affiche au bout du compte le      │
- * │  ticket qu'il n'avait pas chargé. C'est ce que fait ce parcours.        │
+ * │  avertissement et son filtrage local, affiche au bout du compte la      │
+ * │  ligne qu'il n'avait pas chargée. C'est ce que font ces parcours.       │
  * └─────────────────────────────────────────────────────────────────────────┘
  *
- * Un compte NEUF, et non le compte de démonstration : 505 tickets versés dans
- * l'espace partagé par toute la suite rendraient les autres parcours
- * méconnaissables.
+ * Un compte NEUF par parcours, et non le compte de démonstration : des
+ * centaines de lignes versées dans l'espace partagé par toute la suite
+ * rendraient les autres parcours méconnaissables. Le compte est supprimé à la
+ * fin, et son espace — dont il est le seul membre — part avec lui, lignes
+ * comprises.
  */
 
 const API = process.env.E2E_API_URL ?? 'http://localhost:8080/api'
 
-/** Le premier ticket créé est le plus ancien : trié du plus récent au plus ancien, il est hors des 500. */
+/** La première ligne créée est la plus ancienne : triée de la plus récente à la plus ancienne, elle est hors du plafond. */
 const CIBLE = 'Au-delà du plafond'
-const NOMBRE = 505
 const PAR_LOT = 20
+
+/** Ouvre un compte neuf, et renvoie de quoi appeler l'API en son nom. */
+async function compteNeuf(request, prefixe) {
+  const marque = Date.now()
+  const compte = { email: `${prefixe}-${marque}@test.local`, password: MOTDEPASSE }
+
+  const inscription = await request.post(`${API}/auth/register`, {
+    data: {
+      full_name: `Plafond ${marque}`,
+      email: compte.email,
+      password: MOTDEPASSE,
+      password_confirmation: MOTDEPASSE,
+      terms_accepted: true,
+    },
+  })
+  expect(inscription.status()).toBe(201)
+
+  const { access_token: jeton } = (await inscription.json()).data
+
+  return { compte, autorisation: { Authorization: `Bearer ${jeton}` } }
+}
+
+/** Crée la cible, puis « nombre - 1 » lignes ordinaires, par lots. */
+async function remplir(creer, nombre) {
+  await creer(CIBLE, 1)
+
+  for (let debut = 2; debut <= nombre; debut += PAR_LOT) {
+    const lot = []
+
+    for (let n = debut; n < debut + PAR_LOT && n <= nombre; n += 1) {
+      lot.push(creer(`Ligne ordinaire ${n}`, n))
+    }
+
+    await Promise.all(lot)
+  }
+}
+
+/** Le compte part, et son espace avec lui. */
+async function supprimer(request, autorisation) {
+  await request.delete(`${API}/profile`, { data: { password: MOTDEPASSE }, headers: autorisation })
+}
 
 test.describe('plafond de chargement', () => {
   test('un ticket que l’écran n’a pas chargé se trouve par la recherche', async ({
@@ -34,43 +76,13 @@ test.describe('plafond de chargement', () => {
     // ordinaire d'un parcours, sans rien dire de l'écran lui-même.
     test.setTimeout(240_000)
 
-    const marque = Date.now()
-    const compte = { email: `plafond-${marque}@test.local`, password: MOTDEPASSE }
-
-    const inscription = await request.post(`${API}/auth/register`, {
-      data: {
-        full_name: `Plafond ${marque}`,
-        email: compte.email,
-        password: MOTDEPASSE,
-        password_confirmation: MOTDEPASSE,
-        terms_accepted: true,
-      },
-    })
-    expect(inscription.status()).toBe(201)
-
-    const { access_token: jeton, organization } = (await inscription.json()).data
-    const autorisation = { Authorization: `Bearer ${jeton}` }
-
-    const creer = async (titre) => {
-      const reponse = await request.post(`${API}/tickets`, {
-        data: { title: titre },
-        headers: autorisation,
-      })
-      expect(reponse.status()).toBe(201)
-    }
+    const { compte, autorisation } = await compteNeuf(request, 'plafond-tickets')
 
     try {
-      await creer(CIBLE)
-
-      for (let debut = 2; debut <= NOMBRE; debut += PAR_LOT) {
-        const lot = []
-
-        for (let n = debut; n < debut + PAR_LOT && n <= NOMBRE; n += 1) {
-          lot.push(creer(`Ticket ordinaire ${n}`))
-        }
-
-        await Promise.all(lot)
-      }
+      await remplir(async (titre) => {
+        const reponse = await request.post(`${API}/tickets`, { data: { title: titre }, headers: autorisation })
+        expect(reponse.status()).toBe(201)
+      }, 505)
 
       await login(page, compte)
       await page.goto('/modules/tickets')
@@ -95,18 +107,50 @@ test.describe('plafond de chargement', () => {
       await page.keyboard.press('Escape')
       await expect(page.getByRole('option').filter({ hasText: CIBLE })).toHaveCount(0)
     } finally {
-      // Ménage. L'espace qui porte les 505 tickets ne peut être supprimé que
-      // s'il en reste un autre : on en ouvre un, on revient sur le premier, et
-      // on le supprime — ses tickets partent avec lui.
-      //
-      // L'espace de repli, lui, reste orphelin après la suppression du compte.
-      // C'est le défaut L1 du plan (station C1) : supprimer un compte ne gère
-      // pas encore les espaces qu'il laisse derrière lui. Le dire plutôt que
-      // le contourner ici.
-      await request.post(`${API}/organizations`, { data: { name: 'Repli' }, headers: autorisation })
-      await request.post(`${API}/organizations/${organization.id}/activate`, { headers: autorisation })
-      await request.delete(`${API}/organizations/${organization.id}`, { headers: autorisation })
-      await request.delete(`${API}/profile`, { data: { password: MOTDEPASSE }, headers: autorisation })
+      await supprimer(request, autorisation)
+    }
+  })
+
+  test('un déploiement que l’écran n’a pas chargé se trouve par la recherche', async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(240_000)
+
+    const { compte, autorisation } = await compteNeuf(request, 'plafond-deploiements')
+
+    try {
+      await remplir(async (message, rang) => {
+        const reponse = await request.post(`${API}/deployments`, {
+          data: {
+            branch: 'main',
+            // Une empreinte hexadécimale distincte par déploiement.
+            commit_sha: rang.toString(16).padStart(7, '0'),
+            commit_message: message,
+          },
+          headers: autorisation,
+        })
+        expect(reponse.status()).toBe(201)
+      }, 205)
+
+      await login(page, compte)
+      await page.goto('/modules/deploiement')
+
+      await expect(
+        page.getByRole('status').filter({ hasText: /déploiements ne sont pas affichés/ }),
+      ).toBeVisible()
+      await expect(page.getByRole('option').filter({ hasText: CIBLE })).toHaveCount(0)
+
+      await page.getByRole('searchbox').first().fill('plafond')
+
+      // Trouvé par le SERVEUR, au-delà des deux cents déploiements chargés.
+      await expect(page.getByRole('option').filter({ hasText: CIBLE })).toBeVisible()
+      await expect(page.getByRole('option')).toHaveCount(1)
+
+      await page.getByRole('searchbox').first().fill('')
+      await expect(page.getByRole('option').filter({ hasText: CIBLE })).toHaveCount(0)
+    } finally {
+      await supprimer(request, autorisation)
     }
   })
 })

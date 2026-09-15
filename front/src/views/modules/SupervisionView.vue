@@ -33,6 +33,7 @@ import { useWriteQueue } from '@/composables/useWriteQueue'
 import { useLoadMore } from '@/composables/useLoadMore'
 import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
+import { useServerFilters } from '@/composables/useServerFilters'
 import { useLiveRows } from '@/composables/useLiveRows'
 import { useUiStore } from '@/stores/ui'
 import { formatRelative } from '@/utils/format'
@@ -52,7 +53,8 @@ const total = ref(null)
 // une impasse (cf. composables/useLoadMore.js).
 const { loadingMore, loadMore } = useLoadMore({
   rows: groups,
-  fetch: async (offset) => (await errorsApi.list({ offset })).groups,
+  fetch: async (offset) =>
+    (await errorsApi.list({ ...(serveur.active.value ? filtresServeur() : {}), offset })).groups,
   onError: (message) => ui.notify(message, 'error'),
 })
 const daily = ref([])
@@ -133,6 +135,7 @@ async function load({ silent = false } = {}) {
     groups.value = rows
     stats.value = meta.stats
     total.value = meta.total ?? null
+    baseTronquee.value = (meta.total ?? 0) > rows.length
     daily.value = meta.daily
   } catch (error) {
     ui.notify(error.message, 'error')
@@ -140,6 +143,48 @@ async function load({ silent = false } = {}) {
     loading.value = false
   }
 }
+
+/**
+ * La liste de DÉPART déborde-t-elle du plafond ?
+ *
+ * Posé par le chargement de départ, et par lui seul : une réponse filtrée tient
+ * presque toujours sous le plafond, et s'y fier ferait sortir du mode serveur
+ * au premier résultat (cf. composables/useServerFilters.js).
+ */
+const baseTronquee = ref(false)
+
+/**
+ * Les filtres de l'écran au format de l'API — {} quand aucun n'est posé.
+ *
+ * Ce sont les MÊMES que ceux du filtrage local : le serveur cherche
+ * dans le titre et l'origine, comme l'écran (cf. ErrorRepository::search).
+ * Refiltrer ses réponses en local ne retire donc rien.
+ */
+function filtresServeur() {
+  const terme = search.value.trim()
+
+  return {
+    ...(terme ? { search: terme } : {}),
+    ...(statusFilter.value ? { status: statusFilter.value } : {}),
+  }
+}
+
+/**
+ * Au-delà du plafond, la recherche et les filtres interrogent le serveur, qui
+ * voit tout. En deçà, ils restent locaux et instantanés — la mécanique
+ * éprouvée sur Tickets.
+ */
+const serveur = useServerFilters({
+  enabled: () => baseTronquee.value,
+  params: filtresServeur,
+  fetch: (params, signal) => errorsApi.list(params, signal),
+  apply: ({ groups: rows, meta }) => {
+    groups.value = rows
+    total.value = meta.total ?? null
+  },
+  restore: () => load({ silent: true }),
+  onError: (message) => ui.notify(message, 'error'),
+})
 
 const filtered = computed(() => {
   const needle = search.value.trim().toLowerCase()
@@ -310,11 +355,11 @@ async function removeGroup(group) {
       } catch (error) {
         ui.notify(error.message, 'error')
       } finally {
-        load({ silent: true })
+        serveur.reload()
       }
     })
 
-    load({ silent: true })
+    serveur.reload()
   } catch (error) {
     groups.value.splice(index, 0, previous)
     ui.notify(error.message, 'error')
@@ -326,7 +371,7 @@ async function removeGroup(group) {
  * ailleurs. On relit SANS indicateur de chargement — remplacer l'écran par un
  * rond qui tourne au retour donnerait l'impression d'avoir tout perdu.
  */
-useRevalidate(() => load({ silent: true }))
+useRevalidate(() => serveur.reload())
 
 /**
  * Le flux : ce que les autres font, pendant qu'on regarde.
@@ -341,7 +386,7 @@ const { watchers } = useLiveRows({
   rows: groups,
   subject: () => openId.value,
   protege: () => openId.value,
-  recharger: () => load({ silent: true }),
+  recharger: () => serveur.reload(),
 })
 
 onMounted(load)
@@ -401,7 +446,7 @@ onMounted(load)
       :loaded="groups.length"
       :total="total"
       unit="groupes d'erreurs"
-      hint="Filtrez par statut de traitement, ou cherchez un message."
+      hint="La recherche et les filtres interrogent aussi le serveur : ils atteignent le reste."
     />
 
     <div v-if="loading" class="flex flex-1 items-center justify-center py-20">

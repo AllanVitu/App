@@ -31,6 +31,7 @@ import { useLoadMore } from '@/composables/useLoadMore'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useQuerySync } from '@/composables/useQuerySync'
 import { useRevalidate } from '@/composables/useRevalidate'
+import { useServerFilters } from '@/composables/useServerFilters'
 import { useLiveRows } from '@/composables/useLiveRows'
 import { useUiStore } from '@/stores/ui'
 import { formatRelative } from '@/utils/format'
@@ -48,7 +49,9 @@ const total = ref(null)
 // une impasse (cf. composables/useLoadMore.js).
 const { loadingMore, loadMore } = useLoadMore({
   rows: deployments,
-  fetch: async (offset) => (await deploymentsApi.list({ offset })).deployments,
+  fetch: async (offset) =>
+    (await deploymentsApi.list({ ...(serveur.active.value ? filtresServeur() : {}), offset }))
+      .deployments,
   onError: (message) => ui.notify(message, 'error'),
 })
 const branches = ref([])
@@ -106,6 +109,7 @@ async function load({ silent = false } = {}) {
     deployments.value = rows
     stats.value = meta.stats
     total.value = meta.total ?? null
+    baseTronquee.value = (meta.total ?? 0) > rows.length
     branches.value = meta.branches
   } catch (error) {
     ui.notify(error.message, 'error')
@@ -113,6 +117,49 @@ async function load({ silent = false } = {}) {
     loading.value = false
   }
 }
+
+/**
+ * La liste de DÉPART déborde-t-elle du plafond ?
+ *
+ * Posé par le chargement de départ, et par lui seul : une réponse filtrée tient
+ * presque toujours sous le plafond, et s'y fier ferait sortir du mode serveur
+ * au premier résultat (cf. composables/useServerFilters.js).
+ */
+const baseTronquee = ref(false)
+
+/**
+ * Les filtres de l'écran au format de l'API — {} quand aucun n'est posé.
+ *
+ * Ce sont les MÊMES que ceux du filtrage local : le serveur cherche
+ * dans la branche, l'empreinte et le message, comme l'écran (cf. DeploymentRepository::search).
+ * Refiltrer ses réponses en local ne retire donc rien.
+ */
+function filtresServeur() {
+  const terme = search.value.trim()
+
+  return {
+    ...(terme ? { search: terme } : {}),
+    ...(envFilter.value ? { environment: envFilter.value } : {}),
+    ...(statusFilter.value ? { status: statusFilter.value } : {}),
+  }
+}
+
+/**
+ * Au-delà du plafond, la recherche et les filtres interrogent le serveur, qui
+ * voit tout. En deçà, ils restent locaux et instantanés — la mécanique
+ * éprouvée sur Tickets.
+ */
+const serveur = useServerFilters({
+  enabled: () => baseTronquee.value,
+  params: filtresServeur,
+  fetch: (params, signal) => deploymentsApi.list(params, signal),
+  apply: ({ deployments: rows, meta }) => {
+    deployments.value = rows
+    total.value = meta.total ?? null
+  },
+  restore: () => load({ silent: true }),
+  onError: (message) => ui.notify(message, 'error'),
+})
 
 const filtered = computed(() => {
   const needle = search.value.trim().toLowerCase()
@@ -224,7 +271,7 @@ async function relaunch(row) {
 
     deployments.value[index] = updated
     play('success')
-    load({ silent: true })
+    serveur.reload()
   } catch (error) {
     ui.notify(error.message, 'error')
   } finally {
@@ -243,7 +290,7 @@ async function createDeployment() {
     composing.value = false
     draft.value = { branch: '', commit_sha: '', commit_message: '', environment: 'preview' }
     play('success')
-    load({ silent: true })
+    serveur.reload()
   } catch (error) {
     // Les erreurs de champ viennent du serveur : le front n'en duplique pas
     // les règles, il se contente de les placer sous les bons champs.
@@ -273,11 +320,11 @@ async function removeDeployment(row) {
       } catch (error) {
         ui.notify(error.message, 'error')
       } finally {
-        load({ silent: true })
+        serveur.reload()
       }
     })
 
-    load({ silent: true })
+    serveur.reload()
   } catch (error) {
     deployments.value.splice(index, 0, previous)
     ui.notify(error.message, 'error')
@@ -289,7 +336,7 @@ async function removeDeployment(row) {
  * ailleurs. On relit SANS indicateur de chargement — remplacer l'écran par un
  * rond qui tourne au retour donnerait l'impression d'avoir tout perdu.
  */
-useRevalidate(() => load({ silent: true }))
+useRevalidate(() => serveur.reload())
 
 /**
  * Le flux : ce que les autres font, pendant qu'on regarde.
@@ -304,7 +351,7 @@ const { watchers } = useLiveRows({
   rows: deployments,
   subject: () => openId.value,
   protege: () => openId.value,
-  recharger: () => load({ silent: true }),
+  recharger: () => serveur.reload(),
 })
 
 onMounted(load)
@@ -367,7 +414,7 @@ onMounted(load)
       :loaded="deployments.length"
       :total="total"
       unit="déploiements"
-      hint="Filtrez par environnement, par statut, ou cherchez une branche."
+      hint="La recherche et les filtres interrogent aussi le serveur : ils atteignent le reste."
     />
 
     <!-- Nouveau déploiement -->
