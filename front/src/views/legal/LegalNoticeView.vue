@@ -9,7 +9,7 @@
  * déclaration, pas une page terminée.
  */
 import LegalPage from '@/components/legal/LegalPage.vue'
-import { EDITEUR, HEBERGEUR } from '@/utils/legal'
+import { EDITEUR, EDITION_BUREAU, HEBERGEUR } from '@/utils/legal'
 
 const editeur = [
   { terme: 'Nom ou raison sociale', valeur: EDITEUR.nom },
@@ -27,9 +27,11 @@ const hebergeur = [
   { terme: 'Téléphone', valeur: HEBERGEUR.telephone },
 ]
 
+// Sur le poste, personne n'héberge rien : le bloc laisse place à une phrase
+// qui le dit, plutôt qu'à trois champs « à compléter » sans objet.
 const blocs = [
   { id: 'editeur', titre: 'Éditeur', lignes: editeur },
-  { id: 'hebergeur', titre: 'Hébergeur', lignes: hebergeur },
+  ...(EDITION_BUREAU ? [] : [{ id: 'hebergeur', titre: 'Hébergeur', lignes: hebergeur }]),
 ]
 </script>
 
@@ -46,6 +48,14 @@ const blocs = [
           </dd>
         </div>
       </dl>
+    </section>
+
+    <section v-if="EDITION_BUREAU" aria-labelledby="hebergement">
+      <h2 id="hebergement" class="text-[0.95rem] font-semibold text-ink">Hébergement</h2>
+      <p class="mt-1.5">
+        Aucun. Cette édition de Relais fonctionne entièrement sur votre ordinateur : l’application,
+        sa base de données et vos fichiers y restent, et rien n’est transmis à l’éditeur.
+      </p>
     </section>
 
     <section aria-labelledby="propriete">

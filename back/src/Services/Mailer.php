@@ -43,6 +43,14 @@ final class Mailer
             throw new RuntimeException('Adresse destinataire invalide.');
         }
 
+        $message = $this->buildMessage($fromAddress, $fromName, $toEmail, $toName, $subject, $html, $text);
+
+        if ($this->transport() === 'fichier') {
+            $this->deposit($message);
+
+            return;
+        }
+
         $this->connect();
 
         try {
@@ -50,11 +58,62 @@ final class Mailer
             $this->command('RCPT TO:<' . $toEmail . '>', [250, 251]);
             $this->command('DATA', [354]);
 
-            $this->write($this->buildMessage($fromAddress, $fromName, $toEmail, $toName, $subject, $html, $text));
+            $this->write($this->stuffDots($message));
             $this->command('.', [250]);
             $this->command('QUIT', [221]);
         } finally {
             $this->disconnect();
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Transport
+    // -----------------------------------------------------------------------
+
+    /**
+     * « smtp » par défaut ; « fichier » pour l'application de bureau, où il
+     * n'existe aucun serveur à qui confier un lien de confirmation.
+     */
+    private function transport(): string
+    {
+        $transport = strtolower(Env::get('MAIL_TRANSPORT', 'smtp') ?? 'smtp');
+
+        if (!in_array($transport, ['smtp', 'fichier'], true)) {
+            throw new RuntimeException("Transport d'e-mail inconnu : {$transport}");
+        }
+
+        return $transport;
+    }
+
+    /**
+     * Dépose le message, tel qu'il serait parti, dans la boîte d'envoi : un
+     * fichier .eml par message, que tout client de messagerie sait ouvrir et
+     * que l'application de bureau affiche elle-même.
+     *
+     * Le nom commence par l'heure UTC : l'ordre alphabétique est l'ordre
+     * d'envoi, et la partie aléatoire sépare deux messages de la même seconde.
+     * Le fichier est écrit à côté puis renommé — qui surveille le dossier ne
+     * lit jamais un message à moitié écrit.
+     */
+    private function deposit(string $message): void
+    {
+        $dossier = rtrim(Env::get('MAIL_OUTBOX_PATH', '') ?? '', '/\\');
+
+        if ($dossier === '') {
+            throw new RuntimeException('MAIL_OUTBOX_PATH est requis par le transport « fichier ».');
+        }
+
+        if (!is_dir($dossier) && !@mkdir($dossier, 0o700, true) && !is_dir($dossier)) {
+            throw new RuntimeException("Boîte d'envoi inaccessible.");
+        }
+
+        $nom        = gmdate('Ymd\THis\Z') . '-' . bin2hex(random_bytes(6)) . '.eml';
+        $temporaire = $dossier . '/.' . $nom . '.part';
+
+        if (@file_put_contents($temporaire, $message, LOCK_EX) === false || !@rename($temporaire, $dossier . '/' . $nom)) {
+            @unlink($temporaire);
+
+            throw new RuntimeException("Dépôt du message impossible dans la boîte d'envoi.");
         }
     }
 

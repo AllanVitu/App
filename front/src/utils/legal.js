@@ -11,6 +11,14 @@
  * └─────────────────────────────────────────────────────────────────────────┘
  */
 
+/**
+ * L'édition de bureau (desktop/) : l'application, sa base et ses fichiers
+ * restent sur le poste. Plusieurs affirmations des textes légaux en changent —
+ * aucun hébergeur, aucun prestataire d'envoi d'e-mails, pas de HTTPS sur une
+ * adresse de bouclage. Fixée à la compilation (VITE_EDITION=bureau).
+ */
+export const EDITION_BUREAU = import.meta.env.VITE_EDITION === 'bureau'
+
 /** Doit rester égale à App\Config\Terms::CURRENT_VERSION : c'est elle que l'API enregistre. */
 export const TERMS_VERSION = '1.1'
 export const TERMS_EFFECTIVE = '14 septembre 2026'

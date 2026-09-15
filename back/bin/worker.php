@@ -30,6 +30,7 @@ declare(strict_types=1);
  * ===========================================================================
  */
 
+use App\Config\Env;
 use App\Services\JobHandlers;
 use App\Services\Queue;
 
@@ -42,6 +43,11 @@ $sortie = static fn (string $ligne) => fwrite(
 
 $unique = in_array('--once', $argv, true);
 $arret  = false;
+
+// Sous Windows, aucun signal à intercepter : l'application de bureau demande
+// l'arrêt en déposant ce fichier. Même effet que SIGTERM — la tâche en cours
+// se termine, puis le worker sort.
+$fichierArret = Env::get('WORKER_FICHIER_ARRET');
 
 // pcntl n'est pas toujours compilé : sans lui, l'arrêt reste brutal, ce qui
 // est acceptable — la tâche interrompue sera reprise après réservation
@@ -66,6 +72,12 @@ $repos = 1_000_000;
 $dernierPlan = 0;
 
 while (!$arret) {
+    if ($fichierArret !== null && is_file($fichierArret)) {
+        $sortie('Arrêt demandé.');
+
+        break;
+    }
+
     // Le planificateur ne tourne qu'une fois par seconde au plus : c'est une
     // écriture, inutile de la répéter à chaque tour de boucle.
     if (time() - $dernierPlan >= 1) {

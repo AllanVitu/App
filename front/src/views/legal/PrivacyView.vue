@@ -9,7 +9,7 @@
  * serait pire qu'une phrase absente.
  */
 import LegalPage from '@/components/legal/LegalPage.vue'
-import { CONSERVATION, EDITEUR, HEBERGEUR, PRIVACY_UPDATED } from '@/utils/legal'
+import { CONSERVATION, EDITEUR, EDITION_BUREAU, HEBERGEUR, PRIVACY_UPDATED } from '@/utils/legal'
 </script>
 
 <template>
@@ -29,7 +29,12 @@ import { CONSERVATION, EDITEUR, HEBERGEUR, PRIVACY_UPDATED } from '@/utils/legal
         >
         <span v-else class="italic text-ochre">l’adresse de contact (à compléter)</span>.
       </p>
-      <p class="mt-2">
+      <p v-if="EDITION_BUREAU" class="mt-2">
+        Cette édition fonctionne sur votre ordinateur et n’envoie rien à l’éditeur, qui n’a accès à
+        aucune des données que vous y saisissez. Elles sont traitées par vous — ou par
+        l’organisation qui a installé Relais sur ce poste, qui en est alors responsable.
+      </p>
+      <p v-else class="mt-2">
         Quand votre équipe envoie à Relais ses propres données — les erreurs de son application, les
         lignes de ses tables Backend —, c’est elle qui en est responsable ; l’éditeur agit alors
         pour son compte, en sous-traitant (article 28 du RGPD).
@@ -60,6 +65,10 @@ import { CONSERVATION, EDITEUR, HEBERGEUR, PRIVACY_UPDATED } from '@/utils/legal
           <strong class="font-medium text-ink">Les e-mails de service</strong> — confirmation
           d’adresse, réinitialisation du mot de passe, invitations, alerte de changement de mot de
           passe —, pour faire fonctionner le compte. Aucun e-mail commercial n’est envoyé.
+          <template v-if="EDITION_BUREAU">
+            Sur le poste, ils ne partent pas : ils sont déposés dans la boîte d’envoi de
+            l’application, où vous les lisez.
+          </template>
         </li>
       </ul>
     </section>
@@ -90,7 +99,14 @@ import { CONSERVATION, EDITEUR, HEBERGEUR, PRIVACY_UPDATED } from '@/utils/legal
 
     <section aria-labelledby="destinataires">
       <h2 id="destinataires" class="text-[0.95rem] font-semibold text-ink">Qui y a accès</h2>
-      <p class="mt-1.5">
+      <p v-if="EDITION_BUREAU" class="mt-1.5">
+        Les membres de votre espace sur ce poste, selon leur rôle. Ni l’éditeur ni aucun prestataire
+        n’y a accès : la base de données et les fichiers restent sur cet ordinateur, et les e-mails
+        de service ne quittent pas l’application. Seules sortent du poste les requêtes que vous
+        configurez vous-même — les sondes de disponibilité, vers les adresses que vous choisissez de
+        surveiller. Aucune donnée n’est vendue, louée ni utilisée à des fins publicitaires.
+      </p>
+      <p v-else class="mt-1.5">
         Les membres de votre espace, selon leur rôle ; l’hébergeur
         <template v-if="HEBERGEUR.nom">({{ HEBERGEUR.nom }})</template>
         et le prestataire d’envoi des e-mails, qui n’agissent que sur instruction. Aucune donnée
@@ -107,6 +123,10 @@ import { CONSERVATION, EDITEUR, HEBERGEUR, PRIVACY_UPDATED } from '@/utils/legal
         nécessaire au service demandé et n’appelle donc pas de consentement (article 82 de la loi
         Informatique et Libertés). Le navigateur garde aussi vos préférences d’affichage — thème,
         son — dans son stockage local.
+        <template v-if="EDITION_BUREAU">
+          Sur le poste, un second cookie technique, tiré à chaque lancement, réserve le serveur
+          local à la fenêtre de Relais.
+        </template>
       </p>
       <p class="mt-2">
         Aucun traceur publicitaire, aucune mesure d’audience, aucune police ni aucun script chargé
@@ -118,12 +138,23 @@ import { CONSERVATION, EDITEUR, HEBERGEUR, PRIVACY_UPDATED } from '@/utils/legal
       <h2 id="securite" class="text-[0.95rem] font-semibold text-ink">Sécurité</h2>
       <p class="mt-1.5">
         Les mots de passe sont hachés (bcrypt) et jamais stockés en clair ; les liens et les jetons
-        de session ne sont gardés que sous forme d’empreinte. Les échanges sont chiffrés (HTTPS).
+        de session ne sont gardés que sous forme d’empreinte.
+        <template v-if="EDITION_BUREAU">
+          Les échanges ne quittent pas l’ordinateur : le serveur local n’écoute que la machine
+          elle-même, et ne répond qu’à la fenêtre de Relais.
+        </template>
+        <template v-else>Les échanges sont chiffrés (HTTPS).</template>
         Chaque espace est cloisonné : aucune requête ne lit les données d’un autre. Les fichiers
         téléversés sont vérifiés et débarrassés de leurs métadonnées. Un changement de mot de passe
         ferme toutes les sessions et vous est signalé par e-mail. La double authentification
         s’active depuis le profil : son secret est chiffré en base, et chaque connexion exige alors
         un code de votre application.
+      </p>
+      <p v-if="EDITION_BUREAU" class="mt-2">
+        Les données sont rangées dans votre profil Windows, dans un dossier réservé à votre compte.
+        Les secrets de l’installation — la clé de chiffrement, le mot de passe de la base — y sont
+        scellés par Windows et ne s’ouvrent qu’avec ce compte. Contre le vol de l’ordinateur,
+        activez le chiffrement du disque (BitLocker).
       </p>
     </section>
 
@@ -147,8 +178,15 @@ import { CONSERVATION, EDITEUR, HEBERGEUR, PRIVACY_UPDATED } from '@/utils/legal
           Compte supprimé ».
         </li>
         <li>
-          <strong class="font-medium text-ink">Limitation et opposition</strong> : sur demande, à
-          l’adresse de contact ci-dessus. Une réponse vous est apportée dans un délai d’un mois.
+          <strong class="font-medium text-ink">Limitation et opposition</strong> :
+          <template v-if="EDITION_BUREAU">
+            auprès de la personne ou de l’organisation responsable de ce poste, qui vous répond dans
+            un délai d’un mois.
+          </template>
+          <template v-else>
+            sur demande, à l’adresse de contact ci-dessus. Une réponse vous est apportée dans un
+            délai d’un mois.
+          </template>
         </li>
       </ul>
       <p class="mt-2">
