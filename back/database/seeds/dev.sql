@@ -51,9 +51,9 @@ VALUES (
     'Utilisateur Démo',
     'admin',
     NOW(),
-    -- Le compte de démonstration a « accepté » : sans cela, il serait
-    -- redirigé vers l'écran de consentement à chaque connexion, y compris
-    -- pendant les tests de bout en bout.
+    -- Le compte de démonstration a « accepté » : sans cela, le bandeau des
+    -- nouvelles conditions générales s'afficherait à chaque connexion, y
+    -- compris pendant les tests de bout en bout.
     NOW(),
     -- À tenir égal à App\Config\Terms::CURRENT_VERSION.
     '1.1'
