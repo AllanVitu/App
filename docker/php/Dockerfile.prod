@@ -1,0 +1,60 @@
+# ============================================================================
+#  Image PHP-FPM de DÉPLOIEMENT
+#
+#  Différences avec l'image de développement :
+#   - le code source est COPIÉ dans l'image (aucun bind mount) ;
+#   - configuration php.ini durcie (erreurs masquées, OPcache figé) ;
+#   - le conteneur tourne sans droits d'écriture sur le code.
+# ============================================================================
+FROM php:8.3-fpm-alpine
+
+RUN set -eux; \
+    apk add --no-cache postgresql-client icu-libs libzip; \
+    apk add --no-cache --virtual .build-deps $PHPIZE_DEPS postgresql-dev icu-dev libzip-dev; \
+    docker-php-ext-install -j"$(nproc)" pdo pdo_pgsql opcache intl zip; \
+    apk del .build-deps
+
+# Le contexte de build est la racine du projet (cf. docker-compose.prod.yml) :
+# les chemins sont donc relatifs à celle-ci, pas au dossier du Dockerfile.
+COPY docker/php/php.prod.ini /usr/local/etc/php/conf.d/99-app.ini
+
+WORKDIR /var/www/html
+
+# Seuls les répertoires nécessaires à l'exécution sont embarqués : ni les
+# scripts SQL d'initialisation, ni les jeux de données de démonstration.
+COPY --chown=www-data:www-data back/public ./public
+COPY --chown=www-data:www-data back/routes ./routes
+COPY --chown=www-data:www-data back/src ./src
+COPY --chown=www-data:www-data back/composer.json ./composer.json
+
+# Le lanceur de migrations et les fichiers qu'il joue. Sans eux dans l'image,
+# le conteneur démarrerait sur un schéma qu'il ne saurait pas mettre à jour —
+# c'est-à-dire exactement la situation que le migrateur existe pour corriger.
+#
+# « database/seeds » et « database/init » ne sont PAS copiés : les premiers
+# sont des jeux de démonstration, les seconds sont joués par PostgreSQL à la
+# création du volume et n'ont rien à faire dans l'image applicative.
+COPY --chown=www-data:www-data back/bin ./bin
+COPY --chown=www-data:www-data back/database/migrations ./database/migrations
+
+# Le code applicatif appartient à root et n'est accessible qu'en lecture au
+# processus PHP : une faille d'écriture de fichier ne peut pas se transformer
+# en exécution de code persistante.
+RUN chown -R root:root /var/www/html && chmod -R 0555 /var/www/html
+
+# Le SEUL dossier où PHP peut écrire : les fichiers téléversés, hors du code
+# et hors de la racine web. Un volume nommé en hérite le propriétaire au
+# premier montage.
+RUN mkdir -p /var/www/storage \
+    && chown www-data:www-data /var/www/storage \
+    && chmod 0750 /var/www/storage
+
+COPY docker/php/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+USER www-data
+
+EXPOSE 9000
+# Les migrations sont jouées avant php-fpm : cf. entrypoint.sh.
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["php-fpm", "-F"]

@@ -1,0 +1,546 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+use App\Core\Database;
+use PDO;
+
+/**
+ * Module « Supervision » : erreurs de production, groupées.
+ *
+ * Comme tous les dépôts, CHAQUE requête est filtrée sur organization_id — y compris
+ * pour les occurrences, dont la table porte une copie de organization_id pour que le
+ * cloisonnement ne dépende jamais d'une jointure correctement écrite.
+ *
+ * Le nombre d'occurrences et la date de dernière vue sont entretenus par
+ * trigger à l'insertion d'une occurrence : ils ne sont jamais écrits ici.
+ */
+final class ErrorRepository
+{
+    private const SORTABLE = ['last_seen_at', 'first_seen_at', 'occurrences', 'title'];
+
+    // Le ticket lié, s'il vit encore. « ticket_id » reste sans qualificatif
+    // dans la sous-requête : « tickets » n'a pas de colonne de ce nom, il se
+    // résout donc sur le groupe, avec ou sans alias de table.
+    private const COLUMNS = 'id, fingerprint, title, culprit, level, status, occurrences,
+                             first_seen_at, last_seen_at, created_at, updated_at, version,
+                             (SELECT jsonb_build_object(\'id\', t.id, \'number\', t.number, \'status\', t.status)
+                                FROM tickets t
+                               WHERE t.id = ticket_id AND t.deleted_at IS NULL) AS ticket';
+
+    /**
+     * @param array{status?: string|null, level?: string|null, search?: string|null,
+     *              sort?: string|null, direction?: string|null} $filters
+     * @return array{groups: list<array<string, mixed>>, total: int}
+     */
+    public function search(
+        string $organizationId,
+        array $filters,
+        int $limit = 200,
+        int $offset = 0,
+    ): array {
+        $conditions = ['organization_id = :organization_id', 'deleted_at IS NULL'];
+        $params     = ['organization_id' => $organizationId];
+
+        if (!empty($filters['status'])) {
+            $conditions[]     = 'status = :status::error_status';
+            $params['status'] = $filters['status'];
+        }
+
+        if (!empty($filters['level'])) {
+            $conditions[]    = 'level = :level::error_level';
+            $params['level'] = $filters['level'];
+        }
+
+        if (!empty($filters['search'])) {
+            $conditions[]     = '(title ILIKE :search OR culprit ILIKE :search)';
+            $params['search'] = '%' . $this->escapeLike($filters['search']) . '%';
+        }
+
+        $where = implode(' AND ', $conditions);
+
+        $countStatement = Database::connection()->prepare(
+            "SELECT COUNT(*) FROM error_groups WHERE {$where}",
+        );
+        $countStatement->execute($params);
+        $total = (int) $countStatement->fetchColumn();
+
+        $sort      = in_array($filters['sort'] ?? '', self::SORTABLE, true) ? $filters['sort'] : 'last_seen_at';
+        $direction = strtoupper($filters['direction'] ?? '') === 'ASC' ? 'ASC' : 'DESC';
+
+        $statement = Database::connection()->prepare(
+            'SELECT ' . self::COLUMNS . "
+               FROM error_groups
+              WHERE {$where}
+              ORDER BY {$sort} {$direction} NULLS LAST, last_seen_at DESC
+              LIMIT :limit OFFSET :offset",
+        );
+
+        foreach ($params as $key => $value) {
+            $statement->bindValue($key, $value);
+        }
+
+        $statement->bindValue('limit', $limit, PDO::PARAM_INT);
+        $statement->bindValue('offset', max(0, $offset), PDO::PARAM_INT);
+        $statement->execute();
+
+        return [
+            'groups' => array_map($this->hydrateGroup(...), $statement->fetchAll()),
+            'total'  => $total,
+        ];
+    }
+
+    /**
+     * Un groupe et ses dernières occurrences.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function find(string $id, string $organizationId, int $events = 20): ?array
+    {
+        $statement = Database::connection()->prepare(
+            'SELECT ' . self::COLUMNS . '
+               FROM error_groups
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL',
+        );
+
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
+        $row = $statement->fetch();
+
+        if ($row === false) {
+            return null;
+        }
+
+        $group = $this->hydrateGroup($row);
+        $group['events'] = $this->eventsForGroup($id, $organizationId, $events);
+
+        return $group;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function eventsForGroup(string $groupId, string $organizationId, int $limit = 20): array
+    {
+        $statement = Database::connection()->prepare(
+            'SELECT id, message, stack, context, occurred_at
+               FROM error_events
+              WHERE group_id = :group_id AND organization_id = :organization_id
+              ORDER BY occurred_at DESC
+              LIMIT :limit',
+        );
+
+        $statement->bindValue('group_id', $groupId);
+        $statement->bindValue('organization_id', $organizationId);
+        $statement->bindValue('limit', $limit, PDO::PARAM_INT);
+        $statement->execute();
+
+        return array_map(
+            static fn (array $row): array => [
+                'id'          => (string) $row['id'],
+                'message'     => (string) $row['message'],
+                'stack'       => $row['stack'] !== null ? (string) $row['stack'] : null,
+                'context'     => Database::toObject($row['context']),
+                'occurred_at' => Database::toIso($row['occurred_at']),
+            ],
+            $statement->fetchAll(),
+        );
+    }
+
+    /**
+     * Enregistre une occurrence, en créant le groupe s'il est nouveau.
+     *
+     * Tout se joue dans UNE transaction : le groupe et sa première occurrence
+     * apparaissent ensemble ou pas du tout. Un groupe créé sans occurrence
+     * afficherait « 0 occurrence » dans la liste, ce qui n'a aucun sens.
+     *
+     * « reopened » dit si cette occurrence a fait REVENIR le groupe : il était
+     * résolu, ou supprimé. C'est un fait qui mérite le fil, au même titre que
+     * la première occurrence — une panne qu'on croyait réglée et qui frappe
+     * de nouveau est exactement ce que l'équipe doit apprendre.
+     *
+     * @param  array<string, mixed> $attributes
+     * @return array<string, mixed>
+     */
+    public function record(string $organizationId, array $attributes): array
+    {
+        return Database::transaction(function () use ($organizationId, $attributes): array {
+            // ON CONFLICT sur (organization_id, fingerprint) : c'est l'empreinte qui
+            // regroupe. DO UPDATE plutôt que DO NOTHING, car il faut que
+            // RETURNING renvoie une ligne dans les deux cas — avec DO NOTHING,
+            // un conflit ne renvoie rien et il faudrait une seconde requête.
+            //
+            // ┌───────────────────────────────────────────────────────────────┐
+            // │  UNE ERREUR SUPPRIMÉE QUI REVENAIT RESTAIT INVISIBLE          │
+            // │                                                               │
+            // │  Le conflit réécrivait titre et niveau, jamais « deleted_at », │
+            // │  et la relecture écarte les groupes supprimés. L'occurrence   │
+            // │  était donc comptée dans un groupe qu'aucun écran ne montrait,│
+            // │  et l'ingestion répondait « data: null ». Une panne qui       │
+            // │  revient après qu'on l'a supprimée est pourtant celle qu'il   │
+            // │  faut voir en premier.                                        │
+            // └───────────────────────────────────────────────────────────────┘
+            //
+            // « avant » est lu dans le MÊME instantané que l'insertion : il voit
+            // le groupe tel qu'il était, statut et suppression compris. La
+            // réouverture du statut, elle, reste l'affaire du déclencheur
+            // d'occurrence (cf. bump_error_group).
+            $group = Database::connection()->prepare(
+                'WITH avant AS (
+                     SELECT status, deleted_at
+                       FROM error_groups
+                      WHERE organization_id = :organization_id AND fingerprint = :fingerprint
+                 )
+                 INSERT INTO error_groups (organization_id, fingerprint, title, culprit, level)
+                 VALUES (:organization_id, :fingerprint, :title, :culprit, :level::error_level)
+                 ON CONFLICT (organization_id, fingerprint) DO UPDATE
+                        SET title      = EXCLUDED.title,
+                            culprit    = EXCLUDED.culprit,
+                            level      = EXCLUDED.level,
+                            deleted_at = NULL
+                 RETURNING id,
+                           COALESCE(
+                               (SELECT status = \'resolved\' OR deleted_at IS NOT NULL FROM avant),
+                               FALSE
+                           ) AS reopened',
+            );
+
+            $group->execute([
+                'organization_id' => $organizationId,
+                'fingerprint'     => $attributes['fingerprint'],
+                'title'           => $attributes['title'],
+                'culprit'         => $attributes['culprit'],
+                'level'           => $attributes['level'],
+            ]);
+
+            /** @var array{id: string, reopened: mixed} $inserted */
+            $inserted = $group->fetch();
+            $groupId  = (string) $inserted['id'];
+
+            $event = Database::connection()->prepare(
+                'INSERT INTO error_events (group_id, organization_id, message, stack, context)
+                 VALUES (:group_id, :organization_id, :message, :stack, :context::jsonb)',
+            );
+
+            $event->execute([
+                'group_id'        => $groupId,
+                'organization_id' => $organizationId,
+                'message'         => $attributes['message'],
+                'stack'           => $attributes['stack'],
+                'context'         => json_encode($attributes['context'], JSON_UNESCAPED_UNICODE),
+            ]);
+
+            // Relu APRÈS l'occurrence : c'est le trigger qui a incrémenté le
+            // compteur et remonté last_seen_at, la ligne lue plus tôt serait
+            // déjà périmée.
+            /** @var array<string, mixed> $created */
+            $created = $this->find($groupId, $organizationId, 5);
+
+            return $created + ['reopened' => Database::toBool($inserted['reopened'])];
+        });
+    }
+
+    /**
+     * Occurrences DÉTAILLÉES d'une empreinte sur les dernières secondes.
+     *
+     * Sert à reconnaître une rafale (cf. SelfMonitor) : au-delà d'un seuil,
+     * l'occurrence est comptée sans être stockée.
+     */
+    public function recentEventCount(string $organizationId, string $fingerprint, int $seconds): int
+    {
+        $statement = Database::connection()->prepare(
+            'SELECT count(*)
+               FROM error_events e
+               JOIN error_groups g ON g.id = e.group_id
+              WHERE g.organization_id = :organization_id
+                AND g.fingerprint     = :fingerprint
+                AND e.organization_id = :organization_id
+                AND e.occurred_at     > NOW() - (:seconds || \' seconds\')::interval',
+        );
+
+        $statement->execute([
+            'organization_id' => $organizationId,
+            'fingerprint'     => $fingerprint,
+            'seconds'         => (string) $seconds,
+        ]);
+
+        return (int) $statement->fetchColumn();
+    }
+
+    /**
+     * Compte une occurrence SANS la détailler — le trop-plein d'une rafale.
+     *
+     * Même effet sur le groupe que le déclencheur d'insertion — compteur, date,
+     * réouverture — sans la ligne d'occurrence qui l'aurait déclenché. Aucune
+     * occurrence n'est perdue pour le compteur, seul son détail l'est.
+     */
+    public function countOccurrence(string $organizationId, string $fingerprint): void
+    {
+        Database::connection()->prepare(
+            'UPDATE error_groups
+                SET occurrences  = occurrences + 1,
+                    last_seen_at = NOW(),
+                    status       = CASE WHEN status = \'resolved\' THEN \'unresolved\' ELSE status END,
+                    deleted_at   = NULL
+              WHERE organization_id = :organization_id AND fingerprint = :fingerprint',
+        )->execute(['organization_id' => $organizationId, 'fingerprint' => $fingerprint]);
+    }
+
+    /**
+     * Seul le statut se modifie depuis l'interface : le reste décrit ce qui
+     * s'est produit et n'a pas à être réécrit à la main.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function updateStatus(string $id, string $organizationId, string $status): ?array
+    {
+        $statement = Database::connection()->prepare(
+            'UPDATE error_groups
+                SET status = :status::error_status
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL
+          RETURNING ' . self::COLUMNS,
+        );
+
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId, 'status' => $status]);
+
+        $row = $statement->fetch();
+
+        return $row === false ? null : $this->hydrateGroup($row);
+    }
+
+    /**
+     * Le groupe, verrouillé jusqu'à la fin de la transaction : deux clics
+     * simultanés sur « créer un ticket » s'attendent au lieu d'en ouvrir deux.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function lockForLink(string $id, string $organizationId): ?array
+    {
+        $statement = Database::connection()->prepare(
+            'SELECT ' . self::COLUMNS . '
+               FROM error_groups
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL
+                FOR UPDATE',
+        );
+
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
+
+        $row = $statement->fetch();
+
+        return $row === false ? null : $this->hydrateGroup($row);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function linkTicket(string $id, string $organizationId, string $ticketId): ?array
+    {
+        $statement = Database::connection()->prepare(
+            'UPDATE error_groups
+                SET ticket_id = :ticket_id
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL
+          RETURNING ' . self::COLUMNS,
+        );
+
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId, 'ticket_id' => $ticketId]);
+
+        $row = $statement->fetch();
+
+        return $row === false ? null : $this->hydrateGroup($row);
+    }
+
+    public function softDelete(string $id, string $organizationId): bool
+    {
+        $statement = Database::connection()->prepare(
+            'UPDATE error_groups
+                SET deleted_at = NOW()
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NULL',
+        );
+
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
+
+        return $statement->rowCount() > 0;
+    }
+
+    /**
+     * Restauration d'un groupe d'erreurs.
+     *
+     * Les occurrences ne sont pas supprimées avec le groupe — elles y sont
+     * rattachées par clé étrangère et restent en base. Le groupe restauré
+     * retrouve donc son compte exact, y compris les occurrences arrivées
+     * pendant qu'il était masqué.
+     */
+    public function restore(string $id, string $organizationId): bool
+    {
+        $statement = Database::connection()->prepare(
+            'UPDATE error_groups
+                SET deleted_at = NULL
+              WHERE id = :id AND organization_id = :organization_id AND deleted_at IS NOT NULL',
+        );
+
+        $statement->execute(['id' => $id, 'organization_id' => $organizationId]);
+
+        return $statement->rowCount() > 0;
+    }
+
+    /**
+     * Erreurs qui demandent une action — alimente le tableau de bord.
+     *
+     * Les groupes IGNORÉS sont exclus : ignorer est une décision explicite de
+     * ne plus vouloir en entendre parler, un tableau de bord qui les
+     * ressortirait la contredirait.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function needsAttention(string $organizationId, int $limit = 3): array
+    {
+        $statement = Database::connection()->prepare(
+            'SELECT ' . self::COLUMNS . "
+               FROM error_groups
+              WHERE organization_id = :organization_id
+                AND deleted_at IS NULL
+                AND status = 'unresolved'
+              -- Le niveau prime sur la fraîcheur : une erreur fatale d'hier
+              -- passe avant un avertissement de ce matin.
+              ORDER BY level DESC, last_seen_at DESC
+              LIMIT :limit",
+        );
+
+        $statement->bindValue('organization_id', $organizationId);
+        $statement->bindValue('limit', $limit, PDO::PARAM_INT);
+        $statement->execute();
+
+        return array_map($this->hydrateGroup(...), $statement->fetchAll());
+    }
+
+    /**
+     * Occurrences par jour sur la période, pour la courbe de la liste.
+     *
+     * generate_series produit TOUS les jours, y compris ceux sans erreur :
+     * sans cela, la courbe relierait deux pics en sautant les jours calmes
+     * et donnerait l'impression d'un problème continu.
+     *
+     * @return list<array{date: string, count: int}>
+     */
+    public function dailyCounts(string $organizationId, int $days = 14): array
+    {
+        $statement = Database::connection()->prepare(
+            "SELECT d.day::date AS date, COUNT(e.id) AS count
+               FROM generate_series(
+                        CURRENT_DATE - make_interval(days => :days - 1),
+                        CURRENT_DATE,
+                        INTERVAL '1 day'
+                    ) AS d(day)
+               LEFT JOIN error_events e
+                 ON e.organization_id = :organization_id
+                AND e.occurred_at >= d.day
+                AND e.occurred_at <  d.day + INTERVAL '1 day'
+              GROUP BY d.day
+              ORDER BY d.day",
+        );
+
+        $statement->bindValue('organization_id', $organizationId);
+        $statement->bindValue('days', $days, PDO::PARAM_INT);
+        $statement->execute();
+
+        return array_map(
+            static fn (array $row): array => [
+                'date'  => (string) $row['date'],
+                'count' => (int) $row['count'],
+            ],
+            $statement->fetchAll(),
+        );
+    }
+
+    /**
+     * @return array{groups: int, unresolved: int, resolved: int, ignored: int,
+     *               fatal: int, events: int, events_24h: int}
+     */
+    public function statsForOrganization(string $organizationId): array
+    {
+        $statement = Database::connection()->prepare(
+            "SELECT
+                 COUNT(*)                                                     AS groups,
+                 COUNT(*) FILTER (WHERE status = 'unresolved')                 AS unresolved,
+                 COUNT(*) FILTER (WHERE status = 'resolved')                   AS resolved,
+                 COUNT(*) FILTER (WHERE status = 'ignored')                    AS ignored,
+                 COUNT(*) FILTER (WHERE level = 'fatal' AND status = 'unresolved') AS fatal,
+                 COALESCE(SUM(occurrences), 0)                                 AS events
+               FROM error_groups
+              WHERE organization_id = :organization_id AND deleted_at IS NULL",
+        );
+
+        $statement->execute(['organization_id' => $organizationId]);
+        $row = $statement->fetch() ?: [];
+
+        $recent = Database::connection()->prepare(
+            "SELECT COUNT(*) FROM error_events
+              WHERE organization_id = :organization_id AND occurred_at > NOW() - INTERVAL '24 hours'",
+        );
+        $recent->execute(['organization_id' => $organizationId]);
+
+        return [
+            'groups'     => (int) ($row['groups'] ?? 0),
+            'unresolved' => (int) ($row['unresolved'] ?? 0),
+            'resolved'   => (int) ($row['resolved'] ?? 0),
+            'ignored'    => (int) ($row['ignored'] ?? 0),
+            'fatal'      => (int) ($row['fatal'] ?? 0),
+            'events'     => (int) ($row['events'] ?? 0),
+            'events_24h' => (int) $recent->fetchColumn(),
+        ];
+    }
+
+    private function escapeLike(string $value): string
+    {
+        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+    }
+
+    /**
+     * @param  array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function hydrateGroup(array $row): array
+    {
+        return [
+            'id'            => (string) $row['id'],
+            'fingerprint'   => (string) $row['fingerprint'],
+            'title'         => (string) $row['title'],
+            'culprit'       => $row['culprit'] !== null ? (string) $row['culprit'] : null,
+            'level'         => (string) $row['level'],
+            'status'        => (string) $row['status'],
+            'occurrences'   => (int) $row['occurrences'],
+            'first_seen_at' => Database::toIso($row['first_seen_at']),
+            'last_seen_at'  => Database::toIso($row['last_seen_at']),
+            'created_at'    => Database::toIso($row['created_at']),
+            'updated_at'    => Database::toIso($row['updated_at']),
+            // Jeton de concurrence, posé par un déclencheur et jamais par le
+            // client : il ne dit pas QUAND la ligne a changé, mais COMBIEN DE
+            // FOIS — la seule question qu'une écriture concurrente pose.
+            'version'       => (int) $row['version'],
+            // Un ticket à la corbeille ne s'occupe plus de rien : il n'est pas
+            // montré, et un nouveau clic en ouvre un autre.
+            'ticket'        => $this->ticketLie($row['ticket'] ?? null),
+        ];
+    }
+
+    /**
+     * Le ticket lié, lu depuis l'objet JSON de la sous-requête.
+     *
+     * @return array{id: string, number: int, status: string}|null
+     */
+    private function ticketLie(mixed $valeur): ?array
+    {
+        $ticket = is_string($valeur) ? json_decode($valeur, true) : null;
+
+        if (!is_array($ticket)) {
+            return null;
+        }
+
+        return [
+            'id'     => (string) $ticket['id'],
+            'number' => (int) $ticket['number'],
+            'status' => (string) $ticket['status'],
+        ];
+    }
+}

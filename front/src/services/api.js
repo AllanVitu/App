@@ -1,0 +1,422 @@
+import http from './http'
+
+/**
+ * Surface d'appel de l'API REST.
+ *
+ * Les composants n'écrivent jamais d'URL : un changement de contrat côté PHP
+ * se répercute ici seulement. Chaque fonction renvoie directement la charge
+ * utile (`data`), le format d'enveloppe { data, meta } restant interne.
+ */
+
+const unwrap = (response) => response.data.data
+
+/**
+ * Réglages d'un envoi de fichier.
+ *
+ * Le type multipart est posé EXPLICITEMENT : le client est configuré en JSON,
+ * et axios convertirait sinon le FormData en objet JSON — sans le fichier.
+ * Posé ainsi, il laisse le navigateur écrire la frontière du corps lui-même.
+ *
+ * Et deux minutes au lieu de quinze secondes : une maquette de dix
+ * mégaoctets sur une connexion lente n'est pas une panne.
+ */
+const ENVOI = { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120_000 }
+
+// --- Authentification -------------------------------------------------------
+
+export const authApi = {
+  login: (credentials) => http.post('/auth/login', credentials).then(unwrap),
+  /** La seconde étape : { challenge, code } ou { challenge, recovery_code }. */
+  loginTwoFactor: (payload) => http.post('/auth/login/two-factor', payload).then(unwrap),
+  register: (payload) => http.post('/auth/register', payload).then(unwrap),
+  refresh: () => http.post('/auth/refresh').then(unwrap),
+  logout: () => http.post('/auth/logout'),
+  me: () => http.get('/auth/me').then(unwrap),
+}
+
+// --- Vérification d'adresse et mot de passe oublié --------------------------
+
+export const accountApi = {
+  verifyEmail: (token) => http.post('/auth/email/verify', { token }).then(unwrap),
+  resendVerification: () => http.post('/auth/email/resend').then(unwrap),
+  forgotPassword: (email) => http.post('/auth/password/forgot', { email }).then(unwrap),
+  resetPassword: (payload) => http.post('/auth/password/reset', payload).then(unwrap),
+}
+
+// --- Espaces de travail -----------------------------------------------------
+
+export const organizationsApi = {
+  list: () => http.get('/organizations').then(unwrap),
+  create: (name) => http.post('/organizations', { name }).then(unwrap),
+  rename: (id, name) => http.put(`/organizations/${id}`, { name }).then(unwrap),
+  destroy: (id) => http.delete(`/organizations/${id}`),
+
+  /**
+   * Bascule d'espace. C'est le SEUL appel qui change ce que l'API renvoie
+   * ensuite : le cloisonnement est résolu côté serveur à chaque requête, le
+   * client ne l'envoie jamais.
+   */
+  activate: (id) => http.post(`/organizations/${id}/activate`).then(unwrap),
+
+  /**
+   * Renvoie { members, invitations, role } : la liste des membres, celle des
+   * invitations en attente — vide pour un simple membre, qui n'a pas à les
+   * voir — et son propre rôle, dont dépend l'affichage des commandes.
+   */
+  members: () =>
+    http.get('/organizations/members').then((response) => ({
+      members: response.data.data,
+      invitations: response.data.meta?.invitations ?? [],
+      role: response.data.meta?.role ?? 'member',
+    })),
+
+  updateMember: (id, role) => http.put(`/organizations/members/${id}`, { role }).then(unwrap),
+  removeMember: (id) => http.delete(`/organizations/members/${id}`),
+  leave: () => http.post('/organizations/leave'),
+
+  invite: (email, role) => http.post('/organizations/invitations', { email, role }).then(unwrap),
+  revokeInvitation: (id) => http.delete(`/organizations/invitations/${id}`),
+}
+
+// --- Invitations reçues ------------------------------------------------------
+
+export const invitationsApi = {
+  /** Publique : celui qui ouvre le lien n'a souvent pas encore de compte. */
+  show: (token) => http.get(`/invitations/${token}`).then(unwrap),
+  accept: (token) => http.post(`/invitations/${token}/accept`).then(unwrap),
+}
+
+// --- Le flux ----------------------------------------------------------------
+
+export const streamApi = {
+  /**
+   * Renvoie { events, cursor, distanced, presence }.
+   *
+   * « depuis » est OMIS au premier appel, jamais mis à zéro : un espace neuf a
+   * un curseur à 0, et confondre les deux ferait sauter son tout premier
+   * événement.
+   */
+  poll: ({ cursor, screen, subject }, signal) =>
+    http
+      .get('/stream', {
+        params: {
+          ...(cursor === null || cursor === undefined ? {} : { depuis: cursor }),
+          ecran: screen,
+          ...(subject ? { sujet: subject } : {}),
+        },
+        signal,
+      })
+      .then((response) => ({
+        events: response.data.data,
+        cursor: response.data.meta.cursor,
+        distanced: response.data.meta.distanced,
+        presence: response.data.meta.presence ?? [],
+      })),
+
+  /** Départ explicite, à la fermeture de l'onglet. */
+  leave: () => http.delete('/stream'),
+}
+
+// --- Tableau de bord --------------------------------------------------------
+
+export const dashboardApi = {
+  overview: () => http.get('/dashboard').then(unwrap),
+}
+
+// --- Supervision de l'instance -----------------------------------------------
+
+export const clientErrorsApi = {
+  /**
+   * Ce que les filets de main.js ont attrapé. La réponse n'apprend rien au
+   * client : l'appelant n'attend que l'envoi, et avale son échec (cf.
+   * services/errorReporter.js).
+   */
+  report: (rapport) => http.post('/client-errors', rapport),
+}
+
+// --- Recherche transverse ----------------------------------------------------
+
+export const searchApi = {
+  /**
+   * Renvoie { results, query }.
+   *
+   * Le TERME est renvoyé avec les résultats, et ce n'est pas décoratif : on
+   * tape plus vite que le réseau ne répond, et sans lui une réponse lente à
+   * « re » écraserait celle de « refresh » déjà affichée. L'appelant compare
+   * et jette ce qui est périmé.
+   */
+  query: (q, signal) =>
+    http.get('/search', { params: { q }, signal }).then((response) => ({
+      results: response.data.data,
+      query: response.data.meta?.query ?? q,
+    })),
+}
+
+// --- Modules ----------------------------------------------------------------
+
+export const modulesApi = {
+  list: () => http.get('/modules').then(unwrap),
+  find: (slug) => http.get(`/modules/${slug}`).then(unwrap),
+}
+
+// --- Éléments d'un module ---------------------------------------------------
+
+export const itemsApi = {
+  /**
+   * Renvoie { items, meta } : la pagination est nécessaire à l'affichage,
+   * c'est la seule ressource où l'enveloppe complète est exposée.
+   */
+  list: (slug, params = {}, signal) =>
+    http.get(`/modules/${slug}/items`, { params, signal }).then((response) => ({
+      items: response.data.data,
+      meta: response.data.meta,
+    })),
+
+  create: (slug, payload) => http.post(`/modules/${slug}/items`, payload).then(unwrap),
+  update: (id, payload) => http.put(`/items/${id}`, payload).then(unwrap),
+  remove: (id) => http.delete(`/items/${id}`),
+
+  /**
+   * Restauration après une suppression.
+   *
+   * Toutes les suppressions de l'application sont LOGIQUES : la ligne reste
+   * en base, marquée. C'est ce qui rend l'annulation possible — il ne
+   * manquait que ce chemin de retour.
+   */
+  restore: (id) => http.post(`/items/${id}/restore`).then(unwrap),
+}
+
+// --- Tickets ----------------------------------------------------------------
+
+export const ticketsApi = {
+  /**
+   * Renvoie { tickets, meta }. La méta porte les indicateurs, les projets et
+   * les étiquettes connus : tout l'écran se construit en un seul appel, ce
+   * qui est la condition d'une interface au clavier — un filtre ne doit
+   * jamais attendre le réseau.
+   */
+  list: (params = {}, signal) =>
+    http.get('/tickets', { params, signal }).then((response) => ({
+      tickets: response.data.data,
+      meta: response.data.meta,
+    })),
+
+  create: (payload) => http.post('/tickets', payload).then(unwrap),
+
+  /**
+   * Mise à jour PARTIELLE : n'envoyer que les champs modifiés. C'est ce qui
+   * permet à un raccourci clavier de changer une priorité sans renvoyer un
+   * ticket complet, potentiellement périmé.
+   */
+  update: (id, payload) => http.put(`/tickets/${id}`, payload).then(unwrap),
+
+  remove: (id) => http.delete(`/tickets/${id}`),
+  restore: (id) => http.post(`/tickets/${id}/restore`).then(unwrap),
+}
+
+// --- Backend : schémas de données et clés d'API -----------------------------
+
+export const backendApi = {
+  list: (params = {}, signal) =>
+    http.get('/backend/tables', { params, signal }).then((response) => ({
+      tables: response.data.data,
+      meta: response.data.meta,
+    })),
+
+  create: (payload) => http.post('/backend/tables', payload).then(unwrap),
+  update: (id, payload) => http.put(`/backend/tables/${id}`, payload).then(unwrap),
+  remove: (id) => http.delete(`/backend/tables/${id}`),
+
+  /**
+   * Renvoie { key, token, notice }. Le jeton en clair n'est transmis QU'ICI :
+   * la base n'en garde que l'empreinte, il n'est pas récupérable ensuite.
+   */
+  createKey: (payload) => http.post('/backend/keys', payload).then(unwrap),
+  revokeKey: (id) => http.delete(`/backend/keys/${id}`),
+}
+
+// --- Déploiement ------------------------------------------------------------
+
+export const deploymentsApi = {
+  list: (params = {}, signal) =>
+    http.get('/deployments', { params, signal }).then((response) => ({
+      deployments: response.data.data,
+      meta: response.data.meta,
+    })),
+
+  create: (payload) => http.post('/deployments', payload).then(unwrap),
+  update: (id, payload) => http.put(`/deployments/${id}`, payload).then(unwrap),
+  remove: (id) => http.delete(`/deployments/${id}`),
+  restore: (id) => http.post(`/deployments/${id}/restore`).then(unwrap),
+  /** Les erreurs apparues pendant que cette version était la dernière de son environnement. */
+  errors: (id) => http.get(`/deployments/${id}/errors`).then(unwrap),
+}
+
+// --- Discussion d'un ticket -------------------------------------------------
+
+export const ticketCommentsApi = {
+  list: (ticketId) => http.get(`/tickets/${ticketId}/comments`).then(unwrap),
+  create: (ticketId, payload) => http.post(`/tickets/${ticketId}/comments`, payload).then(unwrap),
+  remove: (ticketId, id) => http.delete(`/tickets/${ticketId}/comments/${id}`),
+}
+
+// --- Disponibilité ----------------------------------------------------------
+
+export const probesApi = {
+  list: (signal) =>
+    http.get('/probes', { signal }).then((response) => ({
+      probes: response.data.data,
+      meta: response.data.meta,
+    })),
+
+  find: (id) => http.get(`/probes/${id}`).then(unwrap),
+  create: (payload) => http.post('/probes', payload).then(unwrap),
+  update: (id, payload) => http.put(`/probes/${id}`, payload).then(unwrap),
+  remove: (id) => http.delete(`/probes/${id}`),
+  restore: (id) => http.post(`/probes/${id}/restore`).then(unwrap),
+  // Avance l’échéance : le worker appelle dans la minute (cf. ProbeController::check).
+  checkSoon: (id) => http.post(`/probes/${id}/check`),
+}
+
+export const docsApi = {
+  // L’arbre ne transporte que les titres et le début du texte, jamais les corps.
+  tree: (signal) => http.get('/docs', { signal }).then(unwrap),
+  search: (q, signal) => http.get('/docs', { params: { q }, signal }).then(unwrap),
+  find: (id) => http.get(`/docs/${id}`).then(unwrap),
+  create: (payload) => http.post('/docs', payload).then(unwrap),
+  update: (id, payload) => http.put(`/docs/${id}`, payload).then(unwrap),
+  remove: (id) => http.delete(`/docs/${id}`),
+  restore: (id) => http.post(`/docs/${id}/restore`).then(unwrap),
+}
+
+// --- Supervision ------------------------------------------------------------
+
+export const errorsApi = {
+  list: (params = {}, signal) =>
+    http.get('/errors', { params, signal }).then((response) => ({
+      groups: response.data.data,
+      meta: response.data.meta,
+    })),
+
+  find: (id) => http.get(`/errors/${id}`).then(unwrap),
+  /** Seul le statut se modifie : une erreur est reçue, pas saisie. */
+  setStatus: (id, status) => http.put(`/errors/${id}`, { status }).then(unwrap),
+  remove: (id) => http.delete(`/errors/${id}`),
+  restore: (id) => http.post(`/errors/${id}/restore`).then(unwrap),
+  /** Ouvre le ticket de cette erreur, ou rend celui qui existe : { group, ticket }. */
+  createTicket: (id) => http.post(`/errors/${id}/ticket`).then(unwrap),
+}
+
+// --- Design -----------------------------------------------------------------
+
+export const designApi = {
+  list: (params = {}, signal) =>
+    http.get('/design/files', { params, signal }).then((response) => ({
+      files: response.data.data,
+      meta: response.data.meta,
+    })),
+
+  find: (id) => http.get(`/design/files/${id}`).then(unwrap),
+  create: (payload) => http.post('/design/files', payload).then(unwrap),
+  update: (id, payload) => http.put(`/design/files/${id}`, payload).then(unwrap),
+  remove: (id) => http.delete(`/design/files/${id}`),
+  restore: (id) => http.post(`/design/files/${id}/restore`).then(unwrap),
+  /**
+   * Une version s'ajoute ; elle ne se modifie ni ne se supprime.
+   *
+   * Sans image, elle part en JSON comme le reste ; avec, en multipart, et
+   * `onProgress` reçoit la part envoyée, de 0 à 1.
+   */
+  addVersion: (id, { label = null, notes = null, file = null } = {}, onProgress) => {
+    if (!file) return http.post(`/design/files/${id}/versions`, { label, notes }).then(unwrap)
+
+    const formulaire = new FormData()
+
+    if (label) formulaire.append('label', label)
+    if (notes) formulaire.append('notes', notes)
+    formulaire.append('file', file)
+
+    return http
+      .post(`/design/files/${id}/versions`, formulaire, {
+        ...ENVOI,
+        onUploadProgress: (evenement) =>
+          onProgress?.(evenement.total ? evenement.loaded / evenement.total : 0),
+      })
+      .then(unwrap)
+  },
+}
+
+// --- Profil -----------------------------------------------------------------
+
+export const profileApi = {
+  show: () => http.get('/profile').then(unwrap),
+  update: (payload) => http.put('/profile', payload).then(unwrap),
+  updatePassword: (payload) => http.put('/profile/password', payload).then(unwrap),
+  destroy: (password) => http.delete('/profile', { data: { password } }),
+  /**
+   * Tout ce qui se rattache au compte (RGPD, art. 15 et 20) : une archive ZIP,
+   * données en JSON et fichiers déposés. Un Blob, pas du JSON — et un délai
+   * plus long que celui des autres appels : les fichiers d'un compte pèsent.
+   */
+  exportData: () =>
+    http
+      .get('/profile/export', { responseType: 'blob', timeout: 120_000 })
+      .then((response) => response.data),
+  /** Accepte la version EN VIGUEUR des conditions ; renvoie le compte. */
+  acceptTerms: () => http.post('/profile/terms', { accepted: true }).then(unwrap),
+
+  /** Double authentification : état, mise en place, activation, codes de secours, désactivation. */
+  twoFactor: () => http.get('/profile/two-factor').then(unwrap),
+  twoFactorSetup: (password) => http.post('/profile/two-factor/setup', { password }).then(unwrap),
+  twoFactorEnable: (code) => http.post('/profile/two-factor/enable', { code }).then(unwrap),
+  twoFactorRecoveryCodes: (code) =>
+    http.post('/profile/two-factor/recovery-codes', { code }).then(unwrap),
+  twoFactorDisable: (payload) => http.delete('/profile/two-factor', { data: payload }).then(unwrap),
+
+  /**
+   * La photo se TÉLÉVERSE, recadrée par le navigateur au préalable (cf.
+   * utils/images.js). Renvoie le compte, avec sa nouvelle adresse signée.
+   */
+  uploadAvatar: (image) => {
+    const formulaire = new FormData()
+    formulaire.append('avatar', image, image.type === 'image/png' ? 'photo.png' : 'photo.webp')
+
+    return http.post('/profile/avatar', formulaire, ENVOI).then(unwrap)
+  },
+  removeAvatar: () => http.delete('/profile/avatar').then(unwrap),
+
+  /**
+   * Sessions ouvertes — sous « /auth » alors que l'écran est le profil.
+   *
+   * Le cookie de rafraîchissement est déposé avec « path=/api/auth » : sur
+   * « /profile », le navigateur ne l'enverrait pas, et le serveur ne pourrait
+   * plus reconnaître la session courante ni l'épargner. Cf. SessionController.
+   */
+  sessions: () => http.get('/auth/sessions').then(unwrap),
+  revokeSession: (id) => http.delete(`/auth/sessions/${id}`),
+  revokeOtherSessions: () => http.delete('/auth/sessions').then(unwrap),
+}
+
+// --- Paramètres -------------------------------------------------------------
+
+export const settingsApi = {
+  show: () => http.get('/settings').then(unwrap),
+  update: (payload) => http.put('/settings', payload).then(unwrap),
+}
+
+// --- Historique -------------------------------------------------------------
+
+export const activityApi = {
+  /**
+   * Renvoie { events, next, actors }.
+   *
+   * « next » est le curseur de la page suivante, ou null quand il n'y en a
+   * pas : le client n'a rien à calculer, ni à deviner quand s'arrêter.
+   */
+  list: (params = {}, signal) =>
+    http.get('/activity', { params, signal }).then((response) => ({
+      events: response.data.data,
+      next: response.data.meta?.next ?? null,
+      actors: response.data.meta?.actors ?? [],
+    })),
+}

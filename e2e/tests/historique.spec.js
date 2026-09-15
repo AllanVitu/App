@@ -1,0 +1,170 @@
+import { DEMO, expect, login, test } from './support.js'
+
+const API = process.env.E2E_API_URL ?? 'http://localhost:8080/api'
+
+/**
+ * L'historique, et le flux hors des tickets.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │  UN MODULE SUR CINQ ÉTAIT LE PIRE DES ÉTATS                             │
+ * │                                                                         │
+ * │  Le tableau des tickets bougeait tout seul quand un coéquipier          │
+ * │  travaillait ; l'écran des déploiements restait figé. Rien à l'écran    │
+ * │  n'expliquait la différence.                                            │
+ * │                                                                         │
+ * │  Les tests d'API vérifient que les cinq modules CONSIGNENT. Ce fichier  │
+ * │  vérifie que ça se VOIT — deux fenêtres, un module qui n'est pas celui  │
+ * │  des tickets, et un écran qui répond enfin à « qui a fait ça ? ».       │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
+
+/** Le flux bat toutes les trois secondes ; on lui laisse deux battements. */
+const PROPAGATION = 8000
+
+test.describe('historique', () => {
+  test("le fil répond à « qui a fait ça », et pas seulement « qu'est-ce qui existe »", async ({
+    page,
+  }) => {
+    const titre = `Tracé ${Date.now()}`
+
+    await login(page)
+
+    // Un ticket créé PUIS modifié : c'est la modification qui compte ici.
+    // L'ancien fil, assemblé par UNION sur les tables métier, ne pouvait
+    // montrer que des créations — une table de données ne garde aucune trace
+    // de ce qui l'a modifiée, ni de qui.
+    await page.goto('/modules/tickets')
+    await expect(page.getByRole('heading', { name: 'tickets' })).toBeVisible()
+
+    await page.keyboard.press('c')
+    await page.getByPlaceholder(/Entrée pour créer/i).fill(titre)
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Escape')
+
+    await expect(page.getByRole('option').filter({ hasText: titre })).toBeVisible()
+
+    // La priorité part par la file d'écritures (cf. useWriteQueue), pas au
+    // moment de la touche. Naviguer aussitôt pouvait devancer la requête :
+    // le 14 septembre 2026, le journal d'un échec ne contenait que la
+    // création, et rejoué neuf fois le test passait neuf fois. On attend donc
+    // la RÉPONSE du serveur — c'est elle qui fait le fait, pas la touche.
+    const ecriture = page.waitForResponse(
+      (reponse) =>
+        reponse.request().method() === 'PUT' &&
+        /\/api\/tickets\/[0-9a-f-]{36}$/.test(new URL(reponse.url()).pathname),
+    )
+    await page.keyboard.press('1')
+    expect((await ecriture).ok()).toBe(true)
+
+    await page.goto('/historique')
+    await expect(page.getByRole('heading', { name: 'historique' })).toBeVisible()
+
+    const premiere = page.getByRole('listitem').first()
+
+    await expect(premiere).toContainText('Utilisateur Démo')
+    await expect(premiere).toContainText('a modifié')
+    await expect(premiere).toContainText('priorité')
+
+    // Ménage.
+    await page.goto('/modules/tickets')
+    await page.getByRole('option').filter({ hasText: titre }).click()
+    await page.keyboard.press('Backspace')
+  })
+
+  test('le filtre par module vit dans l’adresse', async ({ page }) => {
+    await login(page)
+    await page.goto('/historique')
+    await expect(page.getByRole('heading', { name: 'historique' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'déploiement', exact: true }).click()
+    await expect(page).toHaveURL(/module=deploiement/)
+
+    // Rechargé — ou envoyé à quelqu'un — le lien rouvre le même écran filtré.
+    await page.reload()
+    await expect(page.getByRole('button', { name: 'déploiement', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    // Et ce qui reste appartient bien au module demandé : le filtre n'est pas
+    // qu'une pastille allumée.
+    const lignes = page.getByRole('listitem')
+
+    if (await lignes.count()) {
+      await expect(lignes.first()).not.toContainText('TICK-')
+    }
+  })
+
+  test('un déploiement créé ailleurs apparaît sans rechargement', async ({
+    page,
+    browser,
+    request,
+  }) => {
+    const marque = `flux-${Date.now()}`
+
+    await login(page)
+
+    const contexte = await browser.newContext()
+
+    try {
+      await contexte.addInitScript(() => {
+        try {
+          window.localStorage.setItem('sound', 'off')
+        } catch {
+          /* stockage indisponible : l'écran s'affichera, le test le dira */
+        }
+      })
+
+      const autre = await contexte.newPage()
+
+      await login(autre)
+      await autre.goto('/modules/deploiement')
+      await expect(autre.getByRole('heading', { name: 'déploiement' })).toBeVisible()
+
+      // La première fenêtre déclenche un déploiement.
+      await page.goto('/modules/deploiement')
+      await expect(page.getByRole('heading', { name: 'déploiement' })).toBeVisible()
+
+      await page.getByRole('button', { name: 'déployer', exact: true }).click()
+      await page.getByLabel('branche', { exact: true }).fill(marque)
+      await page.getByLabel(/empreinte du commit/i).fill('abc1234')
+      await page.getByRole('button', { name: 'lancer', exact: true }).click()
+
+      await expect(page.getByText(marque).first()).toBeVisible()
+
+      // CE QUI CHANGE : la seconde fenêtre le voit arriver, seule. Avant ce
+      // jalon, seul le tableau des tickets se comportait ainsi.
+      await expect(autre.getByText(marque).first()).toBeVisible({ timeout: PROPAGATION })
+    } finally {
+      await contexte.close()
+
+      // Ménage, même en cas d'échec. Sans lui, chaque exécution laissait une
+      // branche « flux-… » de plus dans le compte de démonstration : dix-huit
+      // exécutions plus tard, le panneau « état par branche » avait mangé
+      // l'écran des déploiements, et deux AUTRES parcours échouaient sans
+      // rapport avec ce qu'ils vérifient.
+      await supprimerDeploiements(request, marque)
+    }
+  })
+})
+
+/**
+ * Supprime les déploiements d'une branche, par l'API.
+ *
+ * Par l'API plutôt que par l'écran : le ménage n'est pas ce que le parcours
+ * vérifie, et il doit aboutir même quand l'écran vient d'échouer.
+ */
+async function supprimerDeploiements(request, branche) {
+  const connexion = await request.post(`${API}/auth/login`, { data: DEMO })
+  const { access_token: jeton } = (await connexion.json()).data
+  const entetes = { Authorization: `Bearer ${jeton}` }
+
+  const liste = await request.get(`${API}/deployments`, {
+    params: { search: branche },
+    headers: entetes,
+  })
+
+  for (const deploiement of (await liste.json()).data) {
+    await request.delete(`${API}/deployments/${deploiement.id}`, { headers: entetes })
+  }
+}

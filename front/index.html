@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Relais — tickets, déploiements, erreurs et documentation au même endroit." />
+    <title>Relais</title>
+
+    <!-- Sans icône déclarée, le navigateur réclame /favicon.ico : 404 en
+         développement, et en déploiement le repli SPA lui renvoie index.html,
+         donc du HTML là où une image est attendue. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#0b0d11" />
+
+    <!-- Aucune police n'est demandée à un tiers : Archivo et Geist Mono sont
+         servies par l'application (cf. src/main.js). Chargées depuis Google,
+         elles lui transmettaient l'adresse IP de chaque visiteur dès la page
+         de connexion, avant tout consentement. -->
+
+    <!-- Bloquant, volontairement : le thème doit être posé avant le premier
+         rendu. Un fichier et non un script en ligne, que la politique de
+         sécurité du contenu refuse (cf. public/theme-boot.js). -->
+    <script src="/theme-boot.js"></script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

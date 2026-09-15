@@ -1,0 +1,526 @@
+<script setup>
+/**
+ * Page Profil : informations du compte, changement de mot de passe et
+ * suppression définitive.
+ */
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
+
+import AppIcon from '@/components/AppIcon.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
+import BaseInput from '@/components/ui/BaseInput.vue'
+import BaseSpinner from '@/components/ui/BaseSpinner.vue'
+import UserAvatar from '@/components/ui/UserAvatar.vue'
+import TwoFactorSection from '@/components/profile/TwoFactorSection.vue'
+import { profileApi } from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
+import { formatDateTime } from '@/utils/format'
+import { cropToSquare } from '@/utils/images'
+import { PASSWORD_HINT } from '@/utils/password'
+
+const router = useRouter()
+const auth = useAuthStore()
+const ui = useUiStore()
+
+// --- Photo -------------------------------------------------------------------
+/**
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │  L'AVATAR ÉTAIT UNE URL TAPÉE À LA MAIN                                 │
+ * │                                                                         │
+ * │  Et chaque affichage envoyait l'adresse IP de toute l'équipe au site    │
+ * │  qui hébergeait l'image. La photo se téléverse désormais, recadrée ici  │
+ * │  puis débarrassée de ses métadonnées par le serveur.                    │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
+const choixPhoto = ref(null)
+const photo = reactive({ busy: false, error: '' })
+
+/** Avant recadrage. Au-delà, le décodage seul ferait attendre sans raison. */
+const PHOTO_MAX = 20 * 1024 * 1024
+
+async function changerPhoto(evenement) {
+  const fichier = evenement.target.files?.[0]
+
+  // Vidé tout de suite : choisir deux fois le même fichier doit relancer l'envoi.
+  evenement.target.value = ''
+
+  if (!fichier) return
+
+  photo.busy = true
+  photo.error = ''
+
+  try {
+    if (fichier.size > PHOTO_MAX) {
+      throw new Error('Cette image dépasse 20 Mo : choisissez-en une plus légère.')
+    }
+
+    auth.setUser(await profileApi.uploadAvatar(await cropToSquare(fichier)))
+    ui.notify('Photo mise à jour.')
+  } catch (error) {
+    photo.error = error.errors?.avatar ?? error.message
+  } finally {
+    photo.busy = false
+  }
+}
+
+async function retirerPhoto() {
+  photo.busy = true
+  photo.error = ''
+
+  try {
+    auth.setUser(await profileApi.removeAvatar())
+    ui.notify('Photo retirée.')
+  } catch (error) {
+    photo.error = error.message
+  } finally {
+    photo.busy = false
+  }
+}
+
+// --- Informations ----------------------------------------------------------
+const profileForm = reactive({
+  full_name: auth.user?.full_name ?? '',
+})
+
+const profileErrors = ref({})
+const savingProfile = ref(false)
+
+async function saveProfile() {
+  savingProfile.value = true
+  profileErrors.value = {}
+
+  try {
+    const updated = await profileApi.update({ full_name: profileForm.full_name })
+
+    auth.setUser(updated)
+    ui.notify('Profil mis à jour.')
+  } catch (error) {
+    profileErrors.value = error.errors ?? {}
+
+    if (!Object.keys(profileErrors.value).length) {
+      ui.notify(error.message, 'error')
+    }
+  } finally {
+    savingProfile.value = false
+  }
+}
+
+// --- Mot de passe ----------------------------------------------------------
+const passwordForm = reactive({
+  current_password: '',
+  new_password: '',
+  new_password_confirmation: '',
+})
+
+const passwordErrors = ref({})
+const savingPassword = ref(false)
+
+async function savePassword() {
+  savingPassword.value = true
+  passwordErrors.value = {}
+
+  try {
+    await profileApi.updatePassword({ ...passwordForm })
+
+    // L'API révoque toutes les sessions : une reconnexion est obligatoire.
+    ui.notify('Mot de passe modifié. Reconnectez-vous.', 'info')
+    await auth.logout()
+    await router.push({ name: 'login' })
+  } catch (error) {
+    passwordErrors.value = error.errors ?? {}
+
+    if (!Object.keys(passwordErrors.value).length) {
+      ui.notify(error.message, 'error')
+    }
+  } finally {
+    savingPassword.value = false
+  }
+}
+
+// --- Suppression du compte -------------------------------------------------
+const confirmOpen = ref(false)
+const deletePassword = ref('')
+const deleting = ref(false)
+
+async function deleteAccount() {
+  deleting.value = true
+
+  try {
+    await profileApi.destroy(deletePassword.value)
+    ui.notify('Votre compte a été supprimé.', 'info')
+    await auth.logout()
+    await router.push({ name: 'login' })
+  } catch (error) {
+    ui.notify(error.errors?.password ?? error.message, 'error')
+  } finally {
+    deleting.value = false
+  }
+}
+
+// --- Vos données --------------------------------------------------------------
+
+const exporting = ref(false)
+
+/**
+ * L'archive arrive par la session, comme n'importe quelle réponse : aucune
+ * adresse de téléchargement à signer, et rien qui reste en cache (no-store).
+ */
+async function downloadData() {
+  exporting.value = true
+
+  try {
+    const archive = await profileApi.exportData()
+    const adresse = URL.createObjectURL(archive)
+    const lien = document.createElement('a')
+
+    lien.href = adresse
+    lien.download = `relais-mes-donnees-${new Date().toISOString().slice(0, 10)}.zip`
+    lien.click()
+
+    // Révoquée après coup : la révoquer tout de suite peut interrompre le
+    // téléchargement dans certains navigateurs.
+    setTimeout(() => URL.revokeObjectURL(adresse), 10_000)
+  } catch (error) {
+    // Une réponse attendue en binaire ne transporte pas le message du
+    // serveur : le seul refus prévisible est dit ici, en clair.
+    ui.notify(
+      error.status === 429
+        ? 'Vous avez déjà téléchargé vos données plusieurs fois cette heure-ci : réessayez un peu plus tard.'
+        : error.message,
+      'error',
+    )
+  } finally {
+    exporting.value = false
+  }
+}
+
+const memberSince = computed(() => formatDateTime(auth.user?.created_at))
+const lastLogin = computed(() => formatDateTime(auth.user?.last_login_at))
+
+// --- Sessions ouvertes ------------------------------------------------------
+/**
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │  LA BASE ENREGISTRAIT DÉJÀ TOUT CELA, ET PERSONNE NE POUVAIT LE VOIR    │
+ * │                                                                         │
+ * │  Appareil, adresse IP et date sont conservés à chaque ouverture de      │
+ * │  session depuis le premier jour. Sans écran pour les montrer,           │
+ * │  l'utilisateur ne pouvait ni savoir où sa session restait ouverte, ni   │
+ * │  la fermer à distance — le geste qu'on cherche justement quand on se    │
+ * │  souvient d'un ordinateur laissé connecté ailleurs.                     │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
+const sessions = ref([])
+const sessionsLoading = ref(true)
+const closing = ref(null)
+const closingOthers = ref(false)
+
+/** Combien d'appareils AUTRES que celui-ci — ce que le bouton propose de fermer. */
+const otherSessions = computed(() => sessions.value.filter((session) => !session.current).length)
+
+async function loadSessions() {
+  try {
+    sessions.value = await profileApi.sessions()
+  } catch (error) {
+    ui.notify(error.message, 'error')
+  } finally {
+    sessionsLoading.value = false
+  }
+}
+
+async function closeSession(session) {
+  closing.value = session.id
+
+  try {
+    await profileApi.revokeSession(session.id)
+
+    // Retirée de la liste plutôt que rechargée : le serveur vient de dire
+    // qu'elle est fermée, un aller-retour n'apprendrait rien de plus.
+    sessions.value = sessions.value.filter((entry) => entry.id !== session.id)
+    ui.notify('Session fermée.')
+  } catch (error) {
+    ui.notify(error.message, 'error')
+  } finally {
+    closing.value = null
+  }
+}
+
+async function closeOtherSessions() {
+  closingOthers.value = true
+
+  try {
+    const { closed } = await profileApi.revokeOtherSessions()
+
+    sessions.value = sessions.value.filter((session) => session.current)
+    ui.notify(closed > 1 ? `${closed} sessions fermées.` : 'Session fermée.')
+  } catch (error) {
+    ui.notify(error.message, 'error')
+  } finally {
+    closingOthers.value = false
+  }
+}
+
+onMounted(loadSessions)
+</script>
+
+<template>
+  <div class="mx-auto max-w-3xl space-y-6">
+    <!-- Identité -->
+    <section class="card p-6">
+      <div class="flex flex-wrap items-center gap-5">
+        <UserAvatar :name="auth.user?.full_name ?? ''" :src="auth.user?.avatar_url" size="lg" />
+
+        <div class="min-w-0 flex-1">
+          <h2 class="truncate text-lg font-semibold">{{ auth.user?.full_name }}</h2>
+          <p class="truncate text-sm text-ink-2">{{ auth.user?.email }}</p>
+          <span
+            v-if="auth.user?.role === 'admin'"
+            class="mt-1.5 inline-flex items-center gap-1 rounded-full bg-raised px-2 py-0.5 text-xs font-medium text-ink"
+          >
+            <AppIcon name="shield" :size="12" />
+            Administrateur
+          </span>
+        </div>
+
+        <!-- La photo se change à côté de là où elle se voit. Le champ de
+             fichier reste accessible au clavier et aux lecteurs d'écran : le
+             bouton ne fait que l'ouvrir. -->
+        <div class="flex flex-wrap items-center gap-2">
+          <input
+            id="photo-profil"
+            ref="choixPhoto"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            aria-label="Photo de profil"
+            class="sr-only"
+            @change="changerPhoto"
+          />
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            :loading="photo.busy"
+            @click="choixPhoto?.click()"
+          >
+            {{ auth.user?.avatar_url ? 'Changer la photo' : 'Ajouter une photo' }}
+          </BaseButton>
+          <BaseButton
+            v-if="auth.user?.avatar_url"
+            variant="ghost"
+            size="sm"
+            :disabled="photo.busy"
+            @click="retirerPhoto"
+          >
+            Retirer la photo
+          </BaseButton>
+        </div>
+      </div>
+
+      <p v-if="photo.error" class="mt-3 text-sm text-brick" aria-live="polite">{{ photo.error }}</p>
+      <p v-else class="mt-3 text-[0.72rem] text-ink-3">
+        Recadrée au carré avant l’envoi. Position, date et appareil sont retirés de l’image.
+      </p>
+
+      <dl class="mt-6 grid gap-4 border-t border-line pt-5 sm:grid-cols-2">
+        <div>
+          <dt class="text-xs font-medium uppercase tracking-wide text-ink-3">Membre depuis</dt>
+          <dd class="mt-1 text-sm">{{ memberSince }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-medium uppercase tracking-wide text-ink-3">Dernière connexion</dt>
+          <dd class="mt-1 text-sm">{{ lastLogin }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <!-- Informations personnelles -->
+    <section class="card p-6">
+      <h3 class="text-base font-semibold">Informations personnelles</h3>
+      <p class="mt-1 text-sm text-ink-2">
+        L'adresse e-mail sert d'identifiant de connexion et n'est pas modifiable.
+      </p>
+
+      <form class="mt-5 space-y-4" novalidate @submit.prevent="saveProfile">
+        <BaseInput
+          v-model="profileForm.full_name"
+          label="Nom complet"
+          required
+          autocomplete="name"
+          :error="profileErrors.full_name"
+        />
+
+        <BaseInput :model-value="auth.user?.email" label="Adresse e-mail" type="email" disabled />
+
+        <div class="flex justify-end">
+          <BaseButton type="submit" :loading="savingProfile">Enregistrer</BaseButton>
+        </div>
+      </form>
+    </section>
+
+    <!-- Sécurité -->
+    <section class="card p-6">
+      <h3 class="text-base font-semibold">Mot de passe</h3>
+      <p class="mt-1 text-sm text-ink-2">
+        Le changement déconnecte toutes vos sessions, y compris celle-ci.
+      </p>
+
+      <form class="mt-5 space-y-4" novalidate @submit.prevent="savePassword">
+        <BaseInput
+          v-model="passwordForm.current_password"
+          label="Mot de passe actuel"
+          type="password"
+          autocomplete="current-password"
+          required
+          :error="passwordErrors.current_password"
+        />
+
+        <BaseInput
+          v-model="passwordForm.new_password"
+          label="Nouveau mot de passe"
+          type="password"
+          autocomplete="new-password"
+          required
+          :hint="PASSWORD_HINT"
+          :error="passwordErrors.new_password"
+        />
+
+        <BaseInput
+          v-model="passwordForm.new_password_confirmation"
+          label="Confirmer le nouveau mot de passe"
+          type="password"
+          autocomplete="new-password"
+          required
+          :error="passwordErrors.new_password_confirmation"
+        />
+
+        <div class="flex justify-end">
+          <BaseButton type="submit" variant="secondary" :loading="savingPassword">
+            Modifier le mot de passe
+          </BaseButton>
+        </div>
+      </form>
+    </section>
+
+    <!-- Double authentification -->
+    <TwoFactorSection />
+
+    <!-- Sessions ouvertes -->
+    <section class="card p-6">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 class="text-base font-semibold">Sessions ouvertes</h3>
+          <p class="mt-1 text-sm text-ink-2">
+            Les appareils où votre compte est connecté. Fermer une session en déconnecte l'appareil
+            immédiatement.
+          </p>
+        </div>
+
+        <BaseButton
+          v-if="otherSessions"
+          variant="secondary"
+          :loading="closingOthers"
+          @click="closeOtherSessions"
+        >
+          Fermer les autres ({{ otherSessions }})
+        </BaseButton>
+      </div>
+
+      <div v-if="sessionsLoading" class="mt-5 flex justify-center py-6">
+        <BaseSpinner class="size-6 text-ink" />
+      </div>
+
+      <ul v-else class="mt-5 divide-y divide-line border-y border-line">
+        <li
+          v-for="session in sessions"
+          :key="session.id"
+          class="flex flex-wrap items-center gap-x-4 gap-y-1 py-3"
+        >
+          <div class="min-w-0 flex-1">
+            <p class="flex items-center gap-2 text-[0.86rem] font-medium">
+              {{ session.label }}
+
+              <!-- « Cet appareil » se dit en toutes lettres et non par une
+                   couleur seule : c'est l'information qui empêche de se
+                   déconnecter soi-même par mégarde. -->
+              <span v-if="session.current" class="chip border-moss bg-moss-bg text-moss">
+                cet appareil
+              </span>
+            </p>
+
+            <p class="mt-0.5 truncate font-mono text-[0.7rem] text-ink-3">
+              {{ session.ip_address ?? 'adresse inconnue' }} · ouverte le
+              {{ formatDateTime(session.created_at) }}
+            </p>
+          </div>
+
+          <button
+            v-if="!session.current"
+            type="button"
+            class="shrink-0 text-[0.76rem] text-ink-2 underline-offset-4 transition-colors hover:text-brick hover:underline disabled:opacity-50"
+            :disabled="closing === session.id"
+            @click="closeSession(session)"
+          >
+            {{ closing === session.id ? 'Fermeture…' : 'Fermer' }}
+          </button>
+        </li>
+      </ul>
+
+      <p class="mt-3 flex items-start gap-2 text-[0.78rem] text-ink-3">
+        <AppIcon name="info" :size="14" class="mt-0.5 shrink-0" />
+        Changer de mot de passe ferme toutes les sessions, y compris celle-ci.
+      </p>
+    </section>
+
+    <!-- Vos données -->
+    <section class="card p-6">
+      <h3 class="text-base font-semibold">Vos données</h3>
+      <p class="mt-1 text-sm text-ink-2">
+        Une archive ZIP : tout ce qui se rattache à votre compte — profil, espaces, sessions,
+        contenus, historique — en JSON, lisible par une autre application, et les fichiers que vous
+        avez déposés.
+      </p>
+
+      <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <BaseButton variant="secondary" :loading="exporting" @click="downloadData">
+          Télécharger mes données
+        </BaseButton>
+        <RouterLink
+          :to="{ name: 'privacy' }"
+          class="text-[0.8rem] text-ink-2 underline-offset-4 transition-colors hover:text-ink hover:underline"
+        >
+          Politique de confidentialité
+        </RouterLink>
+      </div>
+    </section>
+
+    <!-- Zone sensible -->
+    <section class="border border-brick bg-brick-bg p-6">
+      <h3 class="text-base font-semibold text-brick">Supprimer le compte</h3>
+      <p class="mt-1 text-sm text-brick">
+        Toutes vos données seront définitivement effacées. Cette action est irréversible.
+      </p>
+
+      <BaseButton variant="danger" class="mt-4" @click="confirmOpen = true">
+        <AppIcon name="trash" :size="16" />
+        Supprimer mon compte
+      </BaseButton>
+    </section>
+
+    <ConfirmDialog
+      :open="confirmOpen"
+      title="Supprimer définitivement le compte"
+      message="Saisissez votre mot de passe pour confirmer la suppression."
+      confirm-label="Supprimer définitivement"
+      :loading="deleting"
+      @confirm="deleteAccount"
+      @close="confirmOpen = false"
+    >
+      <BaseInput
+        v-model="deletePassword"
+        type="password"
+        placeholder="Votre mot de passe"
+        autocomplete="current-password"
+      />
+    </ConfirmDialog>
+  </div>
+</template>

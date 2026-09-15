@@ -1,0 +1,427 @@
+@import 'tailwindcss';
+
+/* ===========================================================================
+   Direction visuelle : SIGNALÉTIQUE
+   ---------------------------------------------------------------------------
+   La langue des plans de transport. Elle n'a pas été inventée pour être jolie
+   mais pour qu'on trouve son chemin dans une information dense, vite, sans
+   tout lire — ce que cinq modules d'exploitation demandent exactement.
+
+   Elle tient en quatre dispositifs, tous empruntés à la même source.
+
+   1. UNE COULEUR PAR LIGNE. Chaque module reçoit sa teinte, comme une ligne
+      de métro : le menu, l'en-tête de l'écran et le fil d'ariane la portent.
+      Elle ne dit pas ce qui va bien ou mal — elle dit OÙ ON EST.
+
+   2. DES BLOCS FRANCS. Aplats pleins, arêtes nettes, aucun dégradé. Un
+      panneau émaillé n'a pas de profondeur : il est peint. L'échelle
+      d'élévation de la direction précédente disparaît, sauf pour ce qui
+      passe réellement PAR-DESSUS le reste.
+
+   3. UN GROTESQUE SERRÉ. Archivo, à graisse et à CHASSE variables. La
+      signalétique se compose serré et gras ; les libellés se condensent, les
+      titres s'épaississent. La hiérarchie ne coûte pas un point de corps.
+
+   4. DES PICTOGRAMMES QUI PORTENT. L'icône n'accompagne pas le mot, elle le
+      devance : c'est elle qu'on voit d'abord.
+
+   ---------------------------------------------------------------------------
+   LA RÈGLE QUI EMPÊCHE LES DEUX VOCABULAIRES DE SE MARCHER DESSUS
+
+   Une signalétique introduit cinq couleurs de plus dans une interface qui en
+   avait déjà trois pour dire l'état. Sans règle, « violet » et « rouge »
+   deviennent deux mots de la même phrase et on ne sait plus lequel parle.
+
+   La règle est une règle de FORME, pas de teinte :
+
+       LA COULEUR DE LIGNE N'EXISTE QU'EN BLOC PLEIN.
+       Une barre, un pavé, un bandeau. JAMAIS du texte, jamais un point.
+
+       LA COULEUR D'ÉTAT N'EXISTE QU'EN TEXTE ET EN POINTS.
+       JAMAIS un aplat, jamais une barre.
+
+   Deux formes qui ne se rencontrent pas peuvent porter la même teinte sans
+   jamais se confondre. Et cette règle a un effet de bord heureux : une
+   couleur de ligne n'ayant jamais à porter de texte, elle n'a plus besoin de
+   tenir 4,5:1 — 3:1 de composant non textuel suffit, ce qui libère assez de
+   saturation pour qu'elle ressemble enfin à une couleur de ligne.
+
+   Les cinq teintes restent malgré tout cantonnées à l'arc froid, du cyan au
+   rose : aucune ne s'approche du vert, de l'ambre ni du rouge. La discipline
+   de forme est une ceinture ; l'arc froid en est les bretelles.
+
+   ---------------------------------------------------------------------------
+   L'ANNEAU DE FOCUS N'A PAS DE TEINTE
+
+   Dans une interface où chaque couleur désigne une ligne ou un état, un
+   anneau coloré prétendrait dire quelque chose. Il prend donc l'encre :
+   contraste maximal, présent partout, signifiant nulle part.
+
+   ---------------------------------------------------------------------------
+   TROIS RÔLES DE COULEUR, à ne jamais confondre.
+
+   1. SURFACES ET ENCRES (--c-paper, --c-panel, --c-ink…) : neutres.
+
+   2. SÉMANTIQUE (--c-moss, --c-ochre, --c-brick) : réussi, en attente, en
+      échec. Les noms sont HISTORIQUES — ils venaient d'une direction pastel
+      et ne décrivent plus les teintes. Ce sont des RÔLES ; les renommer
+      coûterait 141 remplacements dans vingt fichiers pour ne rien changer à
+      l'écran. Lisez-les « ok », « attente », « danger ».
+
+   3. LIGNES DE MODULE (--c-mod-*) : l'identité, jamais l'état.
+
+   Et à part, les MARQUES DE GRAPHIQUE (--c-chart-*), qui obéissent à des
+   règles à elles : un graphique ne se lit pas, il se compare.
+
+   ---------------------------------------------------------------------------
+   TOUT CECI EST VÉRIFIÉ PAR « npm run check:contrast » : rapports de
+   luminance sur chaque fond réel, chroma OKLCH, écart ΔE sous les trois
+   dichromatismes, et séparation mutuelle des cinq lignes.
+
+   Le sombre reste porté par « :root » et le clair par « .light ».
+=========================================================================== */
+
+/* --- Sombre : le panneau éclairé de nuit ---------------------------------- */
+:root {
+  --c-paper: #0a0a0c;
+  --c-panel: #131316;
+  --c-raised: #1d1d21;
+
+  --c-ink: #f2f2f4;
+  --c-ink-2: #b4b4bd;
+  --c-ink-3: #97979f;
+
+  --c-line: #26262b;
+  --c-line-2: #3a3a41;
+
+  /* Sémantique — en TEXTE et en points, donc 4,5:1 exigés. */
+  --c-moss: #2fd18a;
+  --c-moss-bg: #0b2419;
+  --c-ochre: #ffbe2e;
+  --c-ochre-bg: #2b2005;
+  --c-brick: #ff5f52;
+  --c-brick-bg: #2e1210;
+
+  /* LES LIGNES DE MODULE — en BLOC uniquement, donc 3:1 suffisent.
+     Un arc froid, du cyan au rose : aucune ne longe le vert, l'ambre ou le
+     rouge de la sémantique. */
+  --c-mod-backend: #00c4cc;
+  --c-mod-deploiement: #3d8bff;
+  --c-mod-tickets: #8b5cf6;
+  --c-mod-supervision: #d946ef;
+  --c-mod-design: #f43f7f;
+  --c-mod-disponibilite: #7dd3fc;
+  --c-mod-documentation: #a5b4fc;
+
+  /* Bleu contre orange : le seul couple qui reste franc sous les trois
+     dichromatismes. Le rouge contre vert, qui vient spontanément à l'esprit,
+     s'effondre pour un homme sur douze. */
+  --c-chart-1: #38a3ff;
+  --c-chart-2: #ff8a3d;
+  --c-chart-alert: #ff5f52;
+
+  /* Des panneaux peints : presque aucun rayon. La gélule reste ronde. */
+  --r-pill: 999px;
+  --r-card: 3px;
+  --r-field: 3px;
+
+  /* Une seule ombre, et elle est DURE — un panneau accroché devant un autre,
+     pas un nuage. Les plaques posées à plat n'en ont aucune. */
+  --e-over: 0 10px 0 -6px rgb(0 0 0 / 0.55), 0 24px 48px -20px rgb(0 0 0 / 0.8);
+}
+
+/* --- Clair : le même panneau, de jour ------------------------------------- */
+.light {
+  --c-paper: #f0f0f2;
+  --c-panel: #ffffff;
+  --c-raised: #e9e9ec;
+
+  --c-ink: #0d0d0f;
+  --c-ink-2: #4a4a52;
+  --c-ink-3: #5f5f68;
+
+  --c-line: #dcdce0;
+  --c-line-2: #c2c2c8;
+
+  /* En clair, un signal se fait entendre en s'ASSOMBRISSANT. */
+  --c-moss: #04713f;
+  --c-moss-bg: #d9f2e4;
+  --c-ochre: #8a5200;
+  --c-ochre-bg: #fbeacb;
+  --c-brick: #c2160c;
+  --c-brick-bg: #fde0dd;
+
+  --c-mod-backend: #007d8a;
+  --c-mod-deploiement: #1d5fd8;
+  --c-mod-tickets: #6d28d9;
+  --c-mod-supervision: #a21caf;
+  --c-mod-design: #c81e5b;
+  --c-mod-disponibilite: #0c4a6e;
+  --c-mod-documentation: #312e81;
+
+  --c-chart-1: #0a63c9;
+  --c-chart-2: #c9490e;
+  --c-chart-alert: #c2160c;
+
+  --e-over: 0 10px 0 -6px rgb(13 13 15 / 0.06), 0 24px 48px -20px rgb(13 13 15 / 0.25);
+}
+
+@theme {
+  --color-paper: var(--c-paper);
+  --color-panel: var(--c-panel);
+  --color-raised: var(--c-raised);
+  --color-ink: var(--c-ink);
+  --color-ink-2: var(--c-ink-2);
+  --color-ink-3: var(--c-ink-3);
+  --color-line: var(--c-line);
+  --color-line-2: var(--c-line-2);
+
+  --color-moss: var(--c-moss);
+  --color-moss-bg: var(--c-moss-bg);
+  --color-ochre: var(--c-ochre);
+  --color-ochre-bg: var(--c-ochre-bg);
+  --color-brick: var(--c-brick);
+  --color-brick-bg: var(--c-brick-bg);
+
+  --color-mod-backend: var(--c-mod-backend);
+  --color-mod-deploiement: var(--c-mod-deploiement);
+  --color-mod-tickets: var(--c-mod-tickets);
+  --color-mod-supervision: var(--c-mod-supervision);
+  --color-mod-design: var(--c-mod-design);
+  --color-mod-disponibilite: var(--c-mod-disponibilite);
+  --color-mod-documentation: var(--c-mod-documentation);
+
+  --color-chart-1: var(--c-chart-1);
+  --color-chart-2: var(--c-chart-2);
+  --color-chart-alert: var(--c-chart-alert);
+
+  --radius-pill: var(--r-pill);
+  --radius-card: var(--r-card);
+  --radius-field: var(--r-field);
+
+  --shadow-over: var(--e-over);
+
+  /* Archivo : un grotesque à graisse ET À CHASSE variables. La chasse sert
+     aux libellés en capitales, qui se condensent au lieu de s'allonger — la
+     solution qu'emploie toute signalétique quand le mot ne tient pas.
+     Geist Mono reste pour ce qui s'aligne en colonne : empreintes, durées,
+     compteurs, journaux. */
+  --font-sans: 'Archivo Variable', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'Cascadia Code', Consolas, monospace;
+}
+
+/* ---------------------------------------------------------------------------
+   Base
+--------------------------------------------------------------------------- */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background: var(--c-paper);
+    color: var(--c-ink);
+    font-family: 'Archivo Variable', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /**
+   * DENSITÉ — un réglage qui agit réellement.
+   *
+   * Un seul point d'action : la taille de base, dont dépendent toutes les
+   * mesures en « rem ». Changer chaque marge une par une aurait produit un
+   * réglage à moitié appliqué, et une liste de règles à tenir à jour à chaque
+   * nouvel écran.
+   *
+   * Les mesures en pixels — filets, barres de ligne, épaisseurs — ne bougent
+   * PAS, et c'est voulu : un filet d'un pixel reste un filet d'un pixel.
+   */
+  :root[data-densite='compact'] body {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  /**
+   * MOUVEMENT RÉDUIT, choisi dans l'application.
+   *
+   * Le réglage système reste respecté (cf. animations/motion.js) ; celui-ci
+   * s'y ajoute. On peut vouloir couper les animations d'UNE application sans
+   * les couper partout — et beaucoup de gens ignorent que le réglage système
+   * existe.
+   *
+   * Les transitions CSS sont coupées ici ; les animations JavaScript le sont
+   * dans « prefersReducedMotion() », qui lit le même attribut.
+   */
+  :root[data-mouvement='reduit'] *,
+  :root[data-mouvement='reduit'] *::before,
+  :root[data-mouvement='reduit'] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* La signalétique se compose SERRÉ et GRAS. L'interlettrage se resserre à
+     mesure que la graisse monte — sans quoi un titre lourd paraît lâche. */
+  h1,
+  h2,
+  h3 {
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+
+  h1 {
+    font-weight: 800;
+    letter-spacing: -0.038em;
+  }
+
+  /* Les chiffres qui s'empilent doivent s'aligner : sans cela, « 11 » est
+     plus étroit que « 88 » et la colonne ondule. */
+  th,
+  td,
+  time,
+  output,
+  [data-nombre] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Sans teinte : voir l'en-tête. L'anneau est franc et carré comme le reste. */
+  :focus-visible {
+    outline: 2px solid var(--c-ink);
+    outline-offset: 2px;
+    border-radius: var(--r-field);
+  }
+
+  ::selection {
+    background: var(--c-ink);
+    color: var(--c-paper);
+  }
+
+  select,
+  input,
+  textarea,
+  button {
+    font-family: inherit;
+    font-size: inherit;
+  }
+
+  /* Le sélecteur de date natif est illisible sur fond sombre. */
+  :root:not(.light) input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(1) opacity(0.55);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Composants
+--------------------------------------------------------------------------- */
+@layer components {
+  /* LE PANNEAU. Peint, pas posé : un filet le délimite, rien ne l'ombre. */
+  .panel {
+    @apply rounded-card border border-line bg-panel;
+  }
+
+  .card {
+    @apply rounded-card border border-line bg-panel;
+  }
+
+  /* CE QUI PASSE PAR-DESSUS. Fenêtres, palette, menus : eux seuls portent
+     l'ombre dure, et c'est ce qui les fait lire comme un panneau accroché
+     devant les autres plutôt que comme un panneau de plus. */
+  .floating {
+    @apply rounded-card border border-line-2 bg-panel shadow-over;
+  }
+
+  /* Le libellé en capitales SE CONDENSE au lieu de s'allonger : c'est ce que
+     fait toute signalétique quand le mot est plus long que la place. */
+  .label-caps {
+    @apply text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-ink-3;
+    font-stretch: 88%;
+  }
+
+  .label-field {
+    @apply mb-1.5 block text-[0.74rem] font-semibold tracking-wide text-ink-2;
+  }
+
+  .input-field {
+    @apply w-full rounded-field border border-line bg-raised px-3 py-2 text-[0.9rem] text-ink
+           transition-colors placeholder:text-ink-3
+           hover:border-line-2
+           focus:border-ink focus:outline-none
+           disabled:cursor-not-allowed disabled:bg-panel disabled:text-ink-3;
+  }
+
+  /* LA GÉLULE reste ronde quand tout s'est équarri : sa forme la distingue
+     des panneaux et annonce qu'elle bascule au clic. */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-0.5 text-[0.72rem] font-semibold;
+  }
+
+  /* LA BARRE DE LIGNE — le dispositif central de cette direction.
+     Un bloc plein, jamais du texte. Son épaisseur est la même partout, du
+     menu à l'en-tête d'écran : c'est cette constance qui la rend lisible
+     comme un repère plutôt que comme une décoration. */
+  .ligne {
+    @apply block w-1 shrink-0 rounded-pill;
+  }
+
+  /* Deux classes vivaient ici : « caret », un curseur clignotant, et
+     « marquee », un bandeau défilant. La première imitait un terminal sur un
+     écran où rien ne se tape ; la seconde n'était utilisée NULLE PART. */
+
+  /* LES DEUX DÉCORS QUI VIVAIENT DANS UN ATTRIBUT « style ».
+     Écrits dans le gabarit, ils finissaient — selon le nombre de nœuds
+     voisins — insérés par innerHTML, et la politique de sécurité du contenu
+     (« style-src 'self' ») les refusait : l'écran de connexion perdait sa
+     grille, sans erreur ailleurs que dans la console. Une classe est servie
+     dans la feuille de style, et passe. */
+
+  /* La grille de mesure du panneau de connexion (cf. AuthLayout). */
+  .grille-mesure {
+    background-image:
+      linear-gradient(to right, var(--c-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--c-line) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(80% 65% at 22% 18%, #000 0%, transparent 100%);
+  }
+
+  /* La pastille de l'écran de choix du son (cf. SoundGate). */
+  .pastille-son {
+    background: radial-gradient(
+      circle at 34% 30%,
+      #d6ffe8 0%,
+      #7ee2a8 26%,
+      #2f9d7a 55%,
+      #0d2b22 100%
+    );
+    box-shadow: 0 0 60px -18px #7ee2a8;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Transitions de vue (router)
+--------------------------------------------------------------------------- */
+.fade-enter-active,
+.fade-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.fade-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-enter-active,
+  .fade-leave-active {
+    transition: none;
+  }
+}

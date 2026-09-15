@@ -1,0 +1,324 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services;
+
+use App\Config\Env;
+use App\Core\Request;
+use App\Models\OrganizationRepository;
+use Throwable;
+
+/**
+ * Messages transactionnels liés au compte.
+ *
+ * Deux principes :
+ *  - le corps HTML est intégralement échappé (htmlspecialchars) : un nom
+ *    d'utilisateur ne peut pas injecter de balises dans le message ;
+ *  - un échec d'envoi ne fait JAMAIS échouer l'action métier. Une inscription
+ *    réussie ne doit pas être annulée parce que le SMTP est indisponible.
+ *
+ * Cette classe COMPOSE les messages ; elle ne les remet plus. Le corps est
+ * déposé en file et un worker s'occupe du serveur SMTP, avec trois essais.
+ * C'est ce qui a sorti l'envoi du chemin de la requête HTTP — voir deliver().
+ */
+final class AccountMailer
+{
+    public function __construct(
+        private readonly UserTokenService $tokens = new UserTokenService(),
+    ) {
+    }
+
+    /**
+     * Émet un jeton de confirmation et envoie le lien correspondant.
+     * Mutualisé entre l'inscription et le renvoi manuel.
+     *
+     * @param array<string, mixed> $user
+     */
+    public function sendVerificationLink(array $user, Request $request): bool
+    {
+        $token = $this->tokens->issue(
+            (string) $user['id'],
+            UserTokenService::TYPE_EMAIL_VERIFICATION,
+            $request,
+        );
+
+        return $this->sendEmailVerification(
+            (string) $user['email'],
+            (string) $user['full_name'],
+            $token,
+        );
+    }
+
+    /**
+     * Émet un jeton de réinitialisation et envoie le lien correspondant.
+     *
+     * @param array<string, mixed> $user
+     */
+    public function sendResetLink(array $user, Request $request): bool
+    {
+        $token = $this->tokens->issue(
+            (string) $user['id'],
+            UserTokenService::TYPE_PASSWORD_RESET,
+            $request,
+        );
+
+        return $this->sendPasswordReset(
+            (string) $user['email'],
+            (string) $user['full_name'],
+            $token,
+        );
+    }
+
+    /**
+     * Lien de confirmation d'adresse e-mail.
+     */
+    public function sendEmailVerification(string $email, string $name, string $token): bool
+    {
+        $link = $this->frontendUrl('/verification-email', $token);
+
+        return $this->deliver(
+            $email,
+            $name,
+            'Confirmez votre adresse e-mail',
+            $this->layout(
+                'Confirmez votre adresse',
+                $name,
+                'Bienvenue ! Il ne reste qu\'une étape : confirmer cette adresse e-mail pour sécuriser votre compte.',
+                'Confirmer mon adresse',
+                $link,
+                'Ce lien est valable 24 heures. Si vous n\'êtes pas à l\'origine de cette inscription, ignorez ce message.',
+            ),
+            "Bonjour {$name},\n\nConfirmez votre adresse e-mail en ouvrant ce lien :\n{$link}\n\n"
+            . "Ce lien est valable 24 heures.\n",
+        );
+    }
+
+    /**
+     * Lien de réinitialisation de mot de passe.
+     */
+    public function sendPasswordReset(string $email, string $name, string $token): bool
+    {
+        $link = $this->frontendUrl('/reinitialisation', $token);
+
+        return $this->deliver(
+            $email,
+            $name,
+            'Réinitialisation de votre mot de passe',
+            $this->layout(
+                'Réinitialisation du mot de passe',
+                $name,
+                'Vous avez demandé à réinitialiser votre mot de passe. Ce lien vous permet d\'en choisir un nouveau.',
+                'Choisir un nouveau mot de passe',
+                $link,
+                'Ce lien expire dans 1 heure et ne peut servir qu\'une fois. '
+                . 'Si vous n\'êtes pas à l\'origine de cette demande, aucune action n\'est nécessaire : '
+                . 'votre mot de passe actuel reste valable.',
+            ),
+            "Bonjour {$name},\n\nRéinitialisez votre mot de passe avec ce lien :\n{$link}\n\n"
+            . "Ce lien expire dans 1 heure. Si vous n'êtes pas à l'origine de la demande, ignorez ce message.\n",
+        );
+    }
+
+    /**
+     * Invitation à rejoindre un espace de travail.
+     *
+     * LE DESTINATAIRE N'A SOUVENT PAS DE COMPTE — c'est même le cas le plus
+     * courant. Le message ne suppose donc rien : il nomme l'espace, nomme qui
+     * invite, et laisse le lien mener soit à la connexion, soit à
+     * l'inscription. C'est l'écran d'accueil du lien qui tranche.
+     */
+    public function sendInvitation(
+        string $email,
+        string $organizationName,
+        string $inviterName,
+        string $token,
+    ): bool {
+        $link = $this->frontendUrl('/invitation', $token);
+
+        return $this->deliver(
+            $email,
+            // Aucun nom à afficher : on ne connaît que l'adresse. La partie
+            // locale vaut mieux que « Bonjour , » — ou qu'un « cher
+            // utilisateur » qui sonne faux.
+            $this->nameFromEmail($email),
+            "{$inviterName} vous invite à rejoindre {$organizationName}",
+            $this->layout(
+                'Une invitation vous attend',
+                $this->nameFromEmail($email),
+                "{$inviterName} vous invite à rejoindre l'espace de travail « {$organizationName} ». "
+                . 'En acceptant, vous partagerez ses tickets, ses déploiements et ses données.',
+                'Rejoindre ' . $organizationName,
+                $link,
+                'Cette invitation est valable ' . OrganizationRepository::INVITATION_TTL_DAYS
+                . ' jours. Si vous ne connaissez pas son auteur, ignorez ce message : '
+                . 'aucun compte ne sera créé sans votre intervention.',
+            ),
+            "Bonjour,\n\n{$inviterName} vous invite à rejoindre l'espace « {$organizationName} ».\n"
+            . "Ouvrez ce lien pour accepter :\n{$link}\n\n"
+            . 'Cette invitation est valable ' . OrganizationRepository::INVITATION_TTL_DAYS . " jours.\n",
+        );
+    }
+
+    /**
+     * Avis hors bande pour la double authentification : activée, désactivée,
+     * codes de secours régénérés, ou code de secours utilisé. Chaque fois, c'est
+     * le seul signal dont dispose la personne si le geste ne vient pas d'elle.
+     */
+    public function sendTwoFactorNotice(string $email, string $name, string $evenement, ?int $restants = null): bool
+    {
+        [$sujet, $message] = match ($evenement) {
+            'activation'    => ['Double authentification activée', 'La double authentification vient d\'être activée sur votre compte : un code de votre application sera demandé à chaque connexion. Les autres sessions ont été fermées.'],
+            'desactivation' => ['Double authentification désactivée', 'La double authentification vient d\'être désactivée sur votre compte : le mot de passe suffit de nouveau à se connecter.'],
+            'codes'         => ['Nouveaux codes de secours', 'De nouveaux codes de secours viennent d\'être générés pour votre compte ; les précédents ne fonctionnent plus.'],
+            'secours'       => ['Connexion avec un code de secours', sprintf('Un code de secours vient de servir à ouvrir une session sur votre compte. Il vous en reste %d.', $restants ?? 0)],
+            default         => throw new \InvalidArgumentException("Avis de double authentification inconnu : « {$evenement} »."),
+        };
+
+        $conseil = 'Si vous n\'êtes pas à l\'origine de ce geste, changez immédiatement votre mot de passe et contactez le support.';
+
+        return $this->deliver(
+            $email,
+            $name,
+            $sujet,
+            $this->layout($sujet, $name, $message, null, null, $conseil),
+            "Bonjour {$name},\n\n{$message}\n{$conseil}\n",
+        );
+    }
+
+    /**
+     * Avertissement après un changement de mot de passe réussi.
+     * C'est le signal qui permet à un utilisateur de réagir si le changement
+     * ne vient pas de lui.
+     */
+    public function sendPasswordChangedNotice(string $email, string $name): bool
+    {
+        return $this->deliver(
+            $email,
+            $name,
+            'Votre mot de passe a été modifié',
+            $this->layout(
+                'Mot de passe modifié',
+                $name,
+                'Le mot de passe de votre compte vient d\'être modifié et toutes vos sessions ont été déconnectées.',
+                null,
+                null,
+                'Si vous n\'êtes pas à l\'origine de ce changement, réinitialisez immédiatement votre mot de passe '
+                . 'et contactez le support.',
+            ),
+            "Bonjour {$name},\n\nLe mot de passe de votre compte vient d'être modifié.\n"
+            . "Si vous n'êtes pas à l'origine de ce changement, réinitialisez-le immédiatement.\n",
+        );
+    }
+
+    /**
+     * ┌─────────────────────────────────────────────────────────────────────┐
+     * │  L'ENVOI A QUITTÉ LA REQUÊTE HTTP                                   │
+     * │                                                                     │
+     * │  Le message était remis au serveur SMTP PENDANT la requête. Une     │
+     * │  inscription attendait donc le serveur de messagerie : lent, elle   │
+     * │  était lente ; muet, elle expirait. Et un envoi échoué était perdu, │
+     * │  sans relance — l'utilisateur n'avait plus qu'à redemander l'e-mail.│
+     * │                                                                     │
+     * │  Le message est désormais DÉPOSÉ EN FILE, et un worker le remet au  │
+     * │  serveur avec trois essais et un recul croissant. La réponse HTTP   │
+     * │  n'attend plus que la base.                                         │
+     * └─────────────────────────────────────────────────────────────────────┘
+     *
+     * La valeur de retour change donc de sens : elle ne dit plus « remis au
+     * serveur » mais « pris en charge ». C'est le seul contrat qu'un envoi
+     * différé peut tenir, et le seul dont les appelants avaient besoin — ils
+     * s'en servent pour dire « e-mail envoyé », jamais pour attendre une
+     * confirmation de remise.
+     */
+    private function deliver(string $email, string $name, string $subject, string $html, string $text): bool
+    {
+        try {
+            Queue::push('mail.send', [
+                'to'      => $email,
+                'name'    => $name,
+                'subject' => $subject,
+                'html'    => $html,
+                'text'    => $text,
+            ]);
+
+            return true;
+        } catch (Throwable $e) {
+            // La file est en base : si elle est injoignable, l'action métier
+            // qui appelle ici l'est aussi. On journalise et on ne casse rien —
+            // une inscription réussie ne doit pas être annulée parce qu'un
+            // e-mail n'a pas pu être mis en file.
+            error_log('[Mailer] Mise en file impossible pour ' . $email . ' : ' . $e->getMessage());
+
+            return false;
+        }
+    }
+
+    /**
+     * Faute de nom, la partie locale de l'adresse — capitalisée, et débarrassée
+     * des séparateurs. « marie.dupont@… » donne « Marie Dupont ».
+     */
+    private function nameFromEmail(string $email): string
+    {
+        $local = str_replace(['.', '_', '-', '+'], ' ', strstr($email, '@', true) ?: $email);
+
+        return ucwords(trim($local)) ?: $email;
+    }
+
+    private function frontendUrl(string $path, string $token): string
+    {
+        $base = rtrim(Env::get('APP_FRONTEND_URL', 'http://localhost:5173') ?? '', '/');
+
+        return $base . $path . '?token=' . urlencode($token);
+    }
+
+    /**
+     * Gabarit HTML commun. Tout le contenu variable passe par
+     * htmlspecialchars() : ni le nom, ni le lien ne peuvent casser le balisage.
+     */
+    private function layout(
+        string $title,
+        string $name,
+        string $intro,
+        ?string $buttonLabel,
+        ?string $buttonUrl,
+        string $footer,
+    ): string {
+        $e = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        $button = '';
+
+        if ($buttonLabel !== null && $buttonUrl !== null) {
+            $button = '
+              <p style="margin:32px 0;text-align:center">
+                <a href="' . $e($buttonUrl) . '"
+                   style="background:#243dec;color:#ffffff;text-decoration:none;padding:12px 24px;
+                          border-radius:8px;display:inline-block;font-weight:600">'
+                . $e($buttonLabel) . '</a>
+              </p>
+              <p style="font-size:13px;color:#64748b;word-break:break-all">
+                Si le bouton ne fonctionne pas, copiez ce lien :<br>' . $e($buttonUrl) . '
+              </p>';
+        }
+
+        return '<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:24px;background:#f1f5f9;font-family:system-ui,-apple-system,Segoe UI,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr><td align="center">
+      <table role="presentation" width="100%" style="max-width:540px;background:#ffffff;border-radius:12px;padding:32px">
+        <tr><td>
+          <p style="margin:0 0 24px;font-weight:700;font-size:18px;color:#0d0d0f">Relais</p>
+          <h1 style="margin:0 0 16px;font-size:20px;color:#0f172a">' . $e($title) . '</h1>
+          <p style="margin:0 0 8px;color:#334155">Bonjour ' . $e($name) . ',</p>
+          <p style="margin:0;color:#334155;line-height:1.6">' . $e($intro) . '</p>
+          ' . $button . '
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0">
+          <p style="margin:0;font-size:13px;color:#64748b;line-height:1.6">' . $e($footer) . '</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>';
+    }
+}
