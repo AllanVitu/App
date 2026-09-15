@@ -791,6 +791,85 @@ docker logs relais_tunnel 2>&1 | grep trycloudflare.com   # l'adresse publique
   dans l'Union européenne, identité de l'éditeur et de l'hébergeur renseignées
   (cf. « Données personnelles »).
 
+## Application de bureau
+
+`desktop/` fait de Relais une application Windows installable : la même API,
+le même client, une base PostgreSQL sur le poste. Aucun serveur, et aucune
+donnée qui quitte l'ordinateur.
+
+```bash
+cd desktop
+npm install            # Electron, electron-builder, binaires PostgreSQL 16 pour Windows
+npm run preparer       # PHP 8.3 (empreinte SHA-256 vérifiée) et PostgreSQL → runtime/
+npm test               # FastCGI, serveur, garde, coffre, boîte d'envoi, icône
+npm run verifier       # la pile complète, sans fenêtre : base, API, parcours, verrous
+npm run construire     # client en édition de bureau, tests, dist/Relais-Installation-<version>.exe
+npm run demarrer       # l'application depuis le dépôt (client déjà compilé)
+```
+
+### Ce qui remplace quoi
+
+| Docker | Poste |
+| --- | --- |
+| Nginx | `src/services/serveur.js` : mêmes en-têtes de sécurité (un test compare les deux), même repli sur `index.html`, même limite de 20 Mo |
+| PHP-FPM | une réserve de 2 à 4 `php-cgi` en FastCGI — sous Windows, php-cgi ne se duplique pas |
+| worker | `php bin/worker.php`, arrêté proprement par un fichier : Windows n'a pas de SIGTERM |
+| PostgreSQL 16 | PostgreSQL 16 sur `127.0.0.1`, tri et casse du français (ICU `fr-FR`) |
+| Mailpit / SMTP | `MAIL_TRANSPORT=fichier` : un `.eml` par message, lu dans l'application (Fichier › Boîte d'envoi) |
+
+Au premier lancement, la base est construite — `database/init/*.sql` puis les
+migrations — sous un **nom provisoire**, renommée seulement une fois complète :
+une installation interrompue reprend de zéro au lancement suivant. Ensuite,
+chaque lancement applique les migrations en attente, comme le conteneur PHP.
+
+### Le coffre, et les verrous du poste
+
+Tout vit dans `%LOCALAPPDATA%\Relais` — base, fichiers, boîte d'envoi,
+journaux — dont l'héritage des droits est coupé : ni les administrateurs ni les
+autres comptes du poste n'y lisent quoi que ce soit.
+
+- **Secrets** (`APP_KEY`, `JWT_SECRET`, mot de passe PostgreSQL) : tirés au
+  premier lancement, scellés par Windows (DPAPI, via `safeStorage`), illisibles
+  depuis un autre compte ou une autre machine. Un coffre qui ne s'ouvre pas
+  arrête le démarrage ; il n'est jamais remplacé par un neuf, qui rendrait la
+  base illisible.
+- **Serveur local** : écoute `127.0.0.1` seulement, exige l'en-tête `Host`
+  exact (contre le rattachement DNS) et un cookie tiré à chaque lancement,
+  remis à la seule fenêtre de Relais. Un navigateur, un autre programme ou un
+  autre compte Windows qui joint le port reçoit 403.
+- **php-cgi** : écouter sur `127.0.0.1` ne cloisonne rien, et en FastCGI c'est
+  le client qui désigne le script. La garde (`desktop/php/garde.php`, en
+  `auto_prepend_file`) exige le jeton de la session et le seul point d'entrée
+  de l'API ; `.user.ini` est désactivé. Un script déposé ailleurs, une requête
+  forgée : 403 — `npm run verifier` le tente.
+- **PostgreSQL** : `127.0.0.1`, `scram-sha-256`.
+- **Fenêtres** : sandbox, `contextIsolation`, sans Node ; navigation limitée à
+  l'origine locale, liens externes ouverts dans le navigateur ; aucune requête
+  hors de l'origine ; aucune permission hormis le presse-papiers ; correcteur
+  orthographique coupé — il télécharge ses dictionnaires chez Google.
+- **Exécutable** : fusibles Electron — ni `ELECTRON_RUN_AS_NODE`, ni
+  `--inspect`, ni `NODE_OPTIONS` ; `app.asar` vérifié au lancement ; cookies
+  chiffrés sur disque.
+- **Textes légaux** : compilés avec `VITE_EDITION=bureau`. Pas d'hébergeur, pas
+  de prestataire d'e-mails, pas de HTTPS sur une adresse de bouclage : les
+  mentions légales et la politique de confidentialité le disent, au lieu
+  d'affirmer le contraire.
+
+⚠ Aucune sauvegarde automatique sur le poste. Copiez `%LOCALAPPDATA%\Relais`
+application fermée, et sachez qu'une copie ne se rouvre que sous le même compte
+Windows : c'est le prix du coffre. Contre le vol de la machine, activez
+BitLocker.
+
+### L'icône
+
+`desktop/icone/relais.svg` dessine les tailles de 64 px et plus : relief,
+liseré, et un grain à peine visible qui fond les bandes d'un dégradé aussi
+sombre. En dessous, chaque taille est **redessinée sur la grille des pixels**
+(`scripts/icones.mjs`) — réduite, une barre tombe à un pixel et demi et devient
+floue sur ses deux bords. `npm run icones` produit `build/icon.ico` (16 à
+256 px), `build/icon.png`, le favicon du client, et une planche d'aperçu ; un
+test vérifie que chaque barre tombe sur un pixel entier.
+
 ## Tests et qualité
 
 Trois portes, exécutables en local exactement comme en intégration continue.

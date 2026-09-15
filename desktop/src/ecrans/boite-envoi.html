@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'"
+    />
+    <title>Boîte d’envoi — Relais</title>
+    <link rel="stylesheet" href="ecrans.css" />
+  </head>
+  <body class="boite">
+    <aside aria-labelledby="titre-liste">
+      <header>
+        <h1 id="titre-liste">Boîte d’envoi</h1>
+        <p class="aide">
+          Sur ce poste, les e-mails de Relais ne partent pas : ils arrivent ici.
+        </p>
+      </header>
+      <ul id="liste" role="listbox" aria-labelledby="titre-liste"></ul>
+      <p id="vide" class="vide" hidden>
+        Aucun e-mail pour l’instant. Les confirmations d’adresse, les réinitialisations de mot de
+        passe et les invitations s’afficheront ici.
+      </p>
+    </aside>
+
+    <main id="lecture" aria-live="polite">
+      <p class="vide">Choisissez un e-mail.</p>
+    </main>
+
+    <script src="boite-envoi.js"></script>
+  </body>
+</html>

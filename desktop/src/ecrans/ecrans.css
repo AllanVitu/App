@@ -1,0 +1,302 @@
+/*
+ * Les deux écrans propres à l'application de bureau : le démarrage et la boîte
+ * d'envoi. Mêmes valeurs que les jetons du client (front/src/assets/css/main.css) :
+ * ils doivent se lire comme une partie de Relais, pas comme une fenêtre système.
+ */
+:root {
+  --papier: #f0f0f2;
+  --surface: #f7f7f9;
+  --encre: #0d0d0f;
+  --encre-3: #5f5f68;
+  --ligne: #dcdce0;
+  --selection: #e4e4e8;
+  color-scheme: light dark;
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --papier: #0a0a0c;
+    --surface: #111114;
+    --encre: #f2f2f4;
+    --encre-3: #97979f;
+    --ligne: #26262b;
+    --selection: #1c1c21;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--papier);
+  color: var(--encre);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* --- Démarrage ----------------------------------------------------------- */
+
+/* Toujours sombre : l'écran prolonge l'icône, qui l'est. */
+.demarrage {
+  --papier: #0a0a0c;
+  --encre: #f2f2f4;
+  --encre-3: #97979f;
+  --ligne: #26262b;
+  -webkit-app-region: drag;
+  user-select: none;
+  display: grid;
+  place-items: center;
+}
+
+.demarrage main {
+  width: 100%;
+  padding: 0 44px;
+}
+
+.demarrage .marque {
+  display: block;
+}
+
+.demarrage h1 {
+  margin: 18px 0 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.demarrage #etape {
+  margin: 26px 0 10px;
+  color: var(--encre-3);
+  font-size: 0.86rem;
+  min-height: 1.3em;
+}
+
+.barre {
+  position: relative;
+  height: 2px;
+  overflow: hidden;
+  background: var(--ligne);
+  border-radius: 2px;
+}
+
+.barre span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 32%;
+  background: var(--encre);
+  border-radius: 2px;
+  animation: aller-retour 1.5s cubic-bezier(0.65, 0, 0.35, 1) infinite alternate;
+}
+
+@keyframes aller-retour {
+  from {
+    transform: translateX(-10%);
+  }
+  to {
+    transform: translateX(222%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barre span {
+    animation: none;
+    width: 100%;
+    opacity: 0.35;
+  }
+}
+
+.demarrage #erreur h2 {
+  margin: 22px 0 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.demarrage #erreur p {
+  margin: 0;
+  color: var(--encre-3);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.actions button {
+  -webkit-app-region: no-drag;
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--ligne);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.actions button.principal {
+  background: var(--encre);
+  border-color: var(--encre);
+  color: var(--papier);
+  font-weight: 500;
+}
+
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--encre);
+  outline-offset: 2px;
+}
+
+/* --- Boîte d'envoi ------------------------------------------------------- */
+
+.boite {
+  display: grid;
+  grid-template-columns: minmax(260px, 34%) 1fr;
+}
+
+.boite aside {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--ligne);
+  background: var(--surface);
+}
+
+.boite aside header {
+  padding: 18px 18px 12px;
+  border-bottom: 1px solid var(--ligne);
+}
+
+.boite h1 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.aide {
+  margin: 4px 0 0;
+  color: var(--encre-3);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+#liste {
+  flex: 1;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+#liste li {
+  display: grid;
+  gap: 2px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#liste li:hover,
+#liste li[aria-selected='true'] {
+  background: var(--selection);
+}
+
+#liste .sujet {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#liste .meta {
+  overflow: hidden;
+  color: var(--encre-3);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vide {
+  margin: 0;
+  padding: 18px;
+  color: var(--encre-3);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+#lecture {
+  min-width: 0;
+  overflow-y: auto;
+  padding: 26px 32px 40px;
+}
+
+#lecture > .vide {
+  padding: 0;
+}
+
+#lecture h2 {
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+#lecture dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 3px 14px;
+  margin: 0 0 22px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--ligne);
+  font-size: 0.82rem;
+}
+
+#lecture dt {
+  color: var(--encre-3);
+}
+
+#lecture dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.corps {
+  max-width: 68ch;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.lien {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--encre-3);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.lien:hover {
+  text-decoration-color: var(--encre);
+}

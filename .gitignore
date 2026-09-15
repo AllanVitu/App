@@ -43,3 +43,11 @@ Thumbs.db
 # rapport avec le projet. Les ignorer évite de les committer par mégarde.
 /package.json
 /package-lock.json
+
+# --- Application de bureau -------------------------------------------------
+# PHP et PostgreSQL sont téléchargés par « npm run preparer » (empreintes
+# vérifiées), l'installateur est produit par « npm run construire » : ni l'un
+# ni l'autre n'a sa place dans le dépôt. L'aperçu de l'icône se régénère.
+desktop/runtime/
+desktop/dist/
+desktop/build/apercu-icone.png

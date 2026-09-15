@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'"
+    />
+    <title>Relais</title>
+    <link rel="stylesheet" href="ecrans.css" />
+  </head>
+  <body class="demarrage">
+    <main>
+      <img class="marque" src="marque.svg" alt="" width="40" height="40" />
+      <h1>Relais</h1>
+
+      <div id="progression">
+        <p id="etape" role="status" aria-live="polite">Démarrage…</p>
+        <div class="barre" aria-hidden="true"><span></span></div>
+      </div>
+
+      <section id="erreur" hidden aria-labelledby="erreur-titre">
+        <h2 id="erreur-titre"></h2>
+        <p id="erreur-detail"></p>
+        <div class="actions">
+          <button id="journal" type="button">Ouvrir le journal</button>
+          <button id="quitter" type="button" class="principal">Quitter</button>
+        </div>
+      </section>
+    </main>
+    <script src="demarrage.js"></script>
+  </body>
+</html>

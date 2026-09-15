@@ -1,0 +1,83 @@
+# Installateur Windows de Relais.
+#
+# Le code Electron voyage dans l'archive asar ; tout ce qu'un AUTRE programme
+# doit lire — PHP, PostgreSQL, le code de l'API, le client compilé — voyage à
+# côté (extraResources) : php.exe ne sait pas ouvrir une archive asar.
+
+appId: fr.relais.bureau
+productName: Relais
+copyright: Relais
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - src/**/*
+  - package.json
+
+extraResources:
+  - from: runtime/php
+    to: runtime/php
+  - from: runtime/postgres
+    to: runtime/postgres
+  - from: runtime/versions.json
+    to: runtime/versions.json
+  - from: php
+    to: app/bureau
+  - from: ../back/public
+    to: app/back/public
+  - from: ../back/routes
+    to: app/back/routes
+  - from: ../back/src
+    to: app/back/src
+  - from: ../back/bin
+    to: app/back/bin
+  - from: ../back/database/init
+    to: app/back/database/init
+    filter:
+      - "*.sql"
+  - from: ../back/database/migrations
+    to: app/back/database/migrations
+  - from: ../front/dist
+    to: app/front
+    filter:
+      - "**/*"
+      - "!.edition"
+
+# Verrous du binaire Electron lui-même, posés à la construction :
+#   - l'exécutable ne peut pas servir de Node.js déguisé (ELECTRON_RUN_AS_NODE,
+#     --inspect, NODE_OPTIONS) : un programme malveillant ne peut pas lancer
+#     Relais.exe pour exécuter son propre code sous son nom ;
+#   - le code n'est chargé que depuis l'archive app.asar, dont l'intégrité est
+#     vérifiée au lancement ;
+#   - les cookies de la fenêtre (dont la session) sont chiffrés sur disque.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  enableCookieEncryption: true
+  grantFileProtocolExtraPrivileges: false
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Relais
+  artifactName: Relais-Installation-${version}.exe
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  # Désinstaller l'application ne supprime pas les données : elles restent dans
+  # %LOCALAPPDATA%\Relais, et une réinstallation les retrouve.
+  deleteAppDataOnUninstall: false
