@@ -80,6 +80,11 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-no-reply@saas.local}
+      # --- Invitations : la suite navigateur en envoie à chaque exécution, sur
+      #     l'espace de démonstration partagé. Les plafonds de production (20 par
+      #     heure, 50 par jour) la feraient échouer après quelques relances. ---
+      INVITATIONS_PER_HOUR: ${INVITATIONS_PER_HOUR:-500}
+      INVITATIONS_PER_DAY: ${INVITATIONS_PER_DAY:-5000}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-SaaS App}
       # --- Fichiers téléversés : hors du code monté, hors de la racine web ---
       STORAGE_PATH: /var/www/storage
@@ -207,7 +212,8 @@ services:
   # boîtes pendant les tests. Interface web pour les consulter.
   # --------------------------------------------------------------------------
   mailer:
-    image: axllent/mailpit:latest
+    # Version épinglée : « latest » changerait sans prévenir au prochain démarrage.
+    image: axllent/mailpit:v1.31.1
     container_name: saas_mailer
     restart: unless-stopped
     environment:
@@ -224,7 +230,8 @@ services:
   # Démarrage explicite : docker compose --profile tools up -d
   # --------------------------------------------------------------------------
   adminer:
-    image: adminer:latest
+    # Version épinglée : « latest » changerait sans prévenir au prochain démarrage.
+    image: adminer:6.0.1
     container_name: saas_adminer
     restart: unless-stopped
     profiles: ["tools"]

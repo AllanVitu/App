@@ -9,7 +9,8 @@
 
 services:
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    # Version épinglée : « latest » changerait sans prévenir au prochain démarrage.
+    image: cloudflare/cloudflared:2026.9.1
     container_name: relais_tunnel
     restart: unless-stopped
     command: ["tunnel", "--no-autoupdate", "--url", "http://web:80"]
@@ -19,7 +20,8 @@ services:
       - saas_net
 
   mailpit:
-    image: axllent/mailpit:latest
+    # Version épinglée : « latest » changerait sans prévenir au prochain démarrage.
+    image: axllent/mailpit:v1.31.1
     container_name: relais_mailpit
     restart: unless-stopped
     ports:

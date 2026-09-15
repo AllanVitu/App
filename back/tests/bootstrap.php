@@ -45,6 +45,11 @@ putenv('MAIL_PORT=1');
 putenv('MAIL_FROM_ADDRESS=no-reply@test.local');
 putenv('MAIL_FROM_NAME=Tests');
 
+// Plafonds d'invitations abaissés (20 par heure et 50 par jour en production) :
+// le même comportement, vérifié sans cinquante requêtes par test.
+putenv('INVITATIONS_PER_HOUR=3');
+putenv('INVITATIONS_PER_DAY=5');
+
 // Les fichiers téléversés vont dans un dossier jetable, vidé à chaque
 // exécution : un test n'hérite pas des fichiers d'un autre, et rien n'est
 // jamais écrit dans le volume de développement.

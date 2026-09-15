@@ -541,8 +541,9 @@ tout, puisque le client n'est pas une barrière.
 
 Les octets vivent dans le volume `storage_data`, hors de la racine web ; la base
 garde ce qui se requête (`stored_files`). Chaque espace dispose de
-`STORAGE_QUOTA_BYTES` octets, un gigaoctet par défaut. **Sauvegardez le volume
-avec la base** : l'une décrit les fichiers, l'autre les contient.
+`STORAGE_QUOTA_BYTES` octets, un gigaoctet par défaut. Le service `backup`
+sauvegarde le volume **avec** la base : l'une décrit les fichiers, l'autre les
+contient (cf. « Sauvegardes »).
 
 ## Données personnelles (RGPD)
 
@@ -644,6 +645,11 @@ avec la base** : l'une décrit les fichiers, l'autre les contient.
   ou un chemin de l'application. `<script>` écrit dans une page s'affiche
   `<script>`, et `e2e/tests/documentation.spec.js` le vérifie dans un vrai
   navigateur.
+- **Invitations plafonnées** : 20 par personne par heure, 50 par espace par
+  jour (`INVITATIONS_PER_HOUR`, `INVITATIONS_PER_DAY`), comptées après
+  validation. Chaque invitation fait partir un e-mail vers une adresse choisie
+  par l'invitant : sans plafond, un compte ou un jeton volé ferait de Relais un
+  relais de spam, et le domaine d'envoi finirait sur liste noire.
 - **Notification hors bande** à chaque changement de mot de passe.
 
 ### Jeu de données de démonstration
@@ -700,8 +706,8 @@ Différences avec la stack de développement :
 - un **worker** tourne sur la même image que l'API. Il manquait jusqu'ici :
   aucun e-mail ne partait en production, et ni les jetons ni les fichiers
   supprimés n'étaient purgés ;
-- les fichiers téléversés vivent dans le volume `saas_storage_data_prod`, à
-  sauvegarder avec la base ;
+- les fichiers téléversés vivent dans le volume `saas_storage_data_prod`,
+  sauvegardé avec la base par le service `backup` (cf. « Sauvegardes ») ;
 - `display_errors=Off`, OPcache figé, en-têtes CSP ;
 - les variables sensibles sont **obligatoires** : la stack refuse de démarrer
   si elles manquent.
@@ -714,6 +720,41 @@ Sans elle, l'API voit tous les visiteurs arriver de la même adresse : vingt
 mots de passe erronés, de qui que ce soit, fermeraient la connexion à tout le
 monde pour un quart d'heure.
 
+
+### Sauvegardes
+
+Le service `backup` sauvegarde **la base et les fichiers ensemble**, au
+démarrage puis toutes les 24 heures (`BACKUP_INTERVAL_SECONDS`), dans le volume
+`saas_backups_prod`, et garde 14 jours d'archives (`BACKUP_RETENTION_DAYS`) :
+
+- `relais-<horodatage>-base.dump` : `pg_dump` au format personnalisé, tous
+  schémas compris — les tables Backend des espaces aussi ;
+- `relais-<horodatage>-fichiers.tar.gz` : les fichiers téléversés, pris APRÈS
+  la base, pour que chaque fichier décrit par la base soit dans l'archive.
+
+Chaque archive est écrite sous un nom provisoire, **relue** (`pg_restore
+--list`, `tar -t`), puis renommée : une sauvegarde interrompue ou illisible ne
+se fait jamais passer pour complète. Le conteneur se déclare `unhealthy` si
+aucune sauvegarde n'a réussi depuis deux intervalles.
+
+**Restaurer** — cela ÉCRASE la base et les fichiers actuels :
+
+```bash
+C="docker compose -f docker-compose.prod.yml --env-file .env.production"
+$C exec backup restaurer.sh                  # liste les horodatages disponibles
+$C stop php worker
+$C run --rm -e CONFIRMER=oui -v saas_storage_data_prod:/restauration \
+  backup restaurer.sh 20260915T030000Z
+$C start php worker
+```
+
+Sans `CONFIRMER=oui`, le script refuse : une restauration lancée par mégarde
+effacerait tout ce qui a été fait depuis la sauvegarde.
+
+⚠ Ces archives contiennent toutes les données personnelles de l'instance et
+vivent sur la même machine que la base : elles protègent d'une erreur ou
+d'une corruption, pas de la perte du serveur. **Copiez-les régulièrement hors
+de la machine**, sur un stockage chiffré situé dans l'Union européenne.
 
 ### Déploiement de test : un lien public depuis un poste
 

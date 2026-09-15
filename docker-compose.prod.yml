@@ -97,6 +97,8 @@ services:
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       # Octets par espace de travail ; 1 Go par défaut.
       STORAGE_QUOTA_BYTES: ${STORAGE_QUOTA_BYTES:-1073741824}
+      INVITATIONS_PER_HOUR: ${INVITATIONS_PER_HOUR:-20}
+      INVITATIONS_PER_DAY: ${INVITATIONS_PER_DAY:-50}
     volumes:
       - storage_data:/var/www/storage
     depends_on:
@@ -151,12 +153,47 @@ services:
     networks:
       - saas_net
 
+  # --------------------------------------------------------------------------
+  # Sauvegardes — la base ET les fichiers, ensemble, chaque jour (docker/backup).
+  # Relues avant d'être gardées ; « unhealthy » si aucune n'a réussi depuis
+  # deux intervalles. Restauration : cf. README, « Sauvegardes ».
+  # --------------------------------------------------------------------------
+  backup:
+    build:
+      context: .
+      dockerfile: docker/backup/Dockerfile
+    image: saas-backup-prod
+    container_name: saas_backup_prod
+    restart: always
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      # En lecture seule : sauvegarder ne doit jamais pouvoir modifier ce qui est sauvegardé.
+      - storage_data:/stockage:ro
+      - backups:/sauvegardes
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - saas_net
+
 volumes:
   db_data:
     name: saas_db_data_prod
-  # À sauvegarder AVEC la base : l'une décrit les fichiers, l'autre les contient.
+  # Sauvegardé AVEC la base par le service « backup » : l'une décrit les fichiers,
+  # l'autre les contient.
   storage_data:
     name: saas_storage_data_prod
+  # Les archives du service « backup » : toutes les données personnelles de
+  # l'instance. À copier régulièrement hors de la machine.
+  backups:
+    name: saas_backups_prod
 
 networks:
   saas_net:

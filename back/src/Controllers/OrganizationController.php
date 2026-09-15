@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Config\Env;
 use App\Core\HttpException;
 use App\Core\Request;
 use App\Core\Response;
@@ -11,6 +12,7 @@ use App\Core\Validator;
 use App\Models\OrganizationRepository;
 use App\Models\UserRepository;
 use App\Services\AccountMailer;
+use App\Services\RateLimiter;
 
 /**
  * Espaces de travail : membres, rôles et invitations.
@@ -298,6 +300,16 @@ final class OrganizationController
         ) {
             throw HttpException::conflict('Cette personne fait déjà partie de l\'espace.');
         }
+
+        // Chaque invitation fait partir un e-mail vers une adresse que la
+        // personne choisit : sans plafond, un compte — ou un jeton volé — ferait
+        // de Relais un relais de spam, et le domaine d'envoi finirait sur liste
+        // noire. Comptées ici, APRÈS la validation : une faute de frappe ne
+        // consomme rien. Par personne, et par espace : plusieurs administrateurs
+        // ne multiplient pas l'envoi.
+        $limiteur = new RateLimiter();
+        $limiteur->hit('invitations', $request->userId(), Env::int('INVITATIONS_PER_HOUR', 20), 3600);
+        $limiteur->hit('invitations-espace', $request->organizationId(), Env::int('INVITATIONS_PER_DAY', 50), 86400);
 
         $invitation = $this->organizations->invite(
             $request->organizationId(),
