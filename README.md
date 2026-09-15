@@ -646,6 +646,14 @@ contient (cf. « Sauvegardes »).
   ou un chemin de l'application. `<script>` écrit dans une page s'affiche
   `<script>`, et `e2e/tests/documentation.spec.js` le vérifie dans un vrai
   navigateur.
+- **Double authentification** (TOTP, RFC 6238), depuis le profil. Le secret est
+  **chiffré** en base (libsodium, clé dérivée de `APP_KEY`, à défaut de
+  `JWT_SECRET` — ne plus en changer une fois des comptes protégés) ; un code ne
+  sert qu'une fois (dernier pas de temps réservé atomiquement) ; le mot de passe
+  n'ouvre qu'un défi de cinq minutes et cinq essais ; dix codes de secours,
+  affichés une fois et gardés en empreinte. Activer, régénérer et désactiver
+  redemandent une preuve, ferment les autres sessions (activation) et sont
+  signalés par e-mail.
 - **Invitations plafonnées** : 20 par personne par heure, 50 par espace par
   jour (`INVITATIONS_PER_HOUR`, `INVITATIONS_PER_DAY`), comptées après
   validation. Chaque invitation fait partir un e-mail vers une adresse choisie

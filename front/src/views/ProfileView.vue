@@ -12,6 +12,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
+import TwoFactorSection from '@/components/profile/TwoFactorSection.vue'
 import { profileApi } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -399,6 +400,9 @@ onMounted(loadSessions)
         </div>
       </form>
     </section>
+
+    <!-- Double authentification -->
+    <TwoFactorSection />
 
     <!-- Sessions ouvertes -->
     <section class="card p-6">

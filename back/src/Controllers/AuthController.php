@@ -17,6 +17,7 @@ use App\Services\Jwt;
 use App\Services\RateLimiter;
 use App\Services\RefreshTokenService;
 use App\Services\ThrottleService;
+use App\Services\TwoFactor;
 
 /**
  * Inscription, connexion, rafraîchissement et déconnexion.
@@ -41,6 +42,12 @@ final class AuthController
      * réponse révèle si un compte existe.
      */
     private const DUMMY_HASH = '$2y$12$vIfUhl/ZUpMLeYTB9rx4LOPCsg..Wea5IgRAFCRxkKwLzXEhTKgMe';
+
+    /** Cinq minutes pour saisir le code : de quoi sortir son téléphone, pas davantage. */
+    private const DEFI_SECONDES = 300;
+
+    /** Au cinquième code erroné, le défi se ferme : on repart du mot de passe. */
+    private const DEFI_ESSAIS = 5;
 
     private UserRepository $users;
     private RefreshTokenService $refreshTokens;
@@ -193,9 +200,87 @@ final class AuthController
         }
 
         $this->throttle->record($email, $ip, true);
-        $this->users->touchLastLogin($user['id']);
 
         unset($user['password_hash']);
+
+        // Double authentification : le mot de passe correct n'ouvre qu'un DÉFI,
+        // à usage unique et bref. La session ne s'ouvre qu'avec le code (cf.
+        // loginTwoFactor) — un mot de passe volé ne suffit plus.
+        if ($user['two_factor_enabled']) {
+            Response::json([
+                'two_factor_required' => true,
+                'challenge'           => (new TwoFactor())->openChallenge((string) $user['id'], self::DEFI_SECONDES),
+                'expires_in'          => self::DEFI_SECONDES,
+            ]);
+
+            return;
+        }
+
+        $this->users->touchLastLogin($user['id']);
+
+        Response::json($this->authPayload($user, $request));
+    }
+
+    /**
+     * POST /api/auth/login/two-factor
+     *
+     * La seconde étape : le défi ouvert par le mot de passe, et un code de
+     * l'application — ou un code de secours. Un défi inconnu ou expiré répond
+     * comme un défi fermé : on repart du mot de passe.
+     */
+    public function loginTwoFactor(Request $request): void
+    {
+        $validator = new Validator($request->all());
+        $jeton     = (string) $validator->string('challenge', min: 64, max: 64, label: 'étape de connexion');
+        $code      = trim((string) $request->string('code', ''));
+        $secours   = trim((string) $request->string('recovery_code', ''));
+
+        if ($code === '' && $secours === '') {
+            $validator->addError('code', 'Saisissez le code de votre application, ou un code de secours.');
+        }
+
+        $validator->check();
+
+        $deuxFacteurs = new TwoFactor();
+        $defi         = $deuxFacteurs->findChallenge($jeton);
+        $user         = $defi !== null ? $this->users->findById($defi['user_id']) : null;
+
+        if ($defi === null || $user === null || !$user['is_active'] || !$user['two_factor_enabled']) {
+            throw HttpException::unauthorized('Cette étape de connexion a expiré : saisissez de nouveau votre mot de passe.');
+        }
+
+        $email  = (string) $user['email'];
+        $ip     = $request->ip();
+        $userId = (string) $user['id'];
+
+        $this->throttle->ensureNotLocked($email, $ip, ThrottleService::ACTION_TWO_FACTOR);
+
+        $parSecours = $code === '';
+        $valide     = $parSecours ? $deuxFacteurs->useRecoveryCode($userId, $secours) : $deuxFacteurs->verify($userId, $code);
+
+        if (!$valide) {
+            $this->throttle->record($email, $ip, false, ThrottleService::ACTION_TWO_FACTOR);
+
+            if ($deuxFacteurs->failChallenge($defi['id']) >= self::DEFI_ESSAIS) {
+                $deuxFacteurs->closeChallenge($defi['id']);
+
+                throw HttpException::unauthorized('Trop de codes erronés : saisissez de nouveau votre mot de passe.');
+            }
+
+            throw HttpException::validation($parSecours
+                ? ['recovery_code' => 'Ce code de secours n\'est pas valable, ou a déjà servi.']
+                : ['code' => 'Ce code n\'est pas valable : vérifiez l\'heure de votre téléphone, ou attendez le code suivant.']);
+        }
+
+        $deuxFacteurs->closeChallenge($defi['id']);
+        $this->throttle->record($email, $ip, true, ThrottleService::ACTION_TWO_FACTOR);
+        $this->users->touchLastLogin($userId);
+
+        if ($parSecours) {
+            // Un code de secours sert quand le téléphone manque — ou quand un
+            // tiers en a trouvé un : le dire hors bande.
+            (new AccountMailer())->sendTwoFactorNotice($email, (string) $user['full_name'], 'secours', $deuxFacteurs->remainingRecoveryCodes($userId));
+        }
 
         Response::json($this->authPayload($user, $request));
     }

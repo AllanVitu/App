@@ -23,6 +23,7 @@ final class ThrottleService
     public const ACTION_LOGIN              = 'login';
     public const ACTION_PASSWORD_RESET     = 'password_reset';
     public const ACTION_EMAIL_VERIFICATION = 'email_verification';
+    public const ACTION_TWO_FACTOR         = 'two_factor';
 
     /**
      * Quotas par action : [max par e-mail, max par IP, fenêtre en minutes].
@@ -37,6 +38,7 @@ final class ThrottleService
         self::ACTION_LOGIN              => [5, 20, 15],
         self::ACTION_PASSWORD_RESET     => [3, 10, 15],
         self::ACTION_EMAIL_VERIFICATION => [3, 10, 15],
+        self::ACTION_TWO_FACTOR         => [5, 20, 15],
     ];
 
     /**

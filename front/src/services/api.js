@@ -26,6 +26,8 @@ const ENVOI = { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120
 
 export const authApi = {
   login: (credentials) => http.post('/auth/login', credentials).then(unwrap),
+  /** La seconde étape : { challenge, code } ou { challenge, recovery_code }. */
+  loginTwoFactor: (payload) => http.post('/auth/login/two-factor', payload).then(unwrap),
   register: (payload) => http.post('/auth/register', payload).then(unwrap),
   refresh: () => http.post('/auth/refresh').then(unwrap),
   logout: () => http.post('/auth/logout'),
@@ -362,6 +364,14 @@ export const profileApi = {
       .then((response) => response.data),
   /** Accepte la version EN VIGUEUR des conditions ; renvoie le compte. */
   acceptTerms: () => http.post('/profile/terms', { accepted: true }).then(unwrap),
+
+  /** Double authentification : état, mise en place, activation, codes de secours, désactivation. */
+  twoFactor: () => http.get('/profile/two-factor').then(unwrap),
+  twoFactorSetup: (password) => http.post('/profile/two-factor/setup', { password }).then(unwrap),
+  twoFactorEnable: (code) => http.post('/profile/two-factor/enable', { code }).then(unwrap),
+  twoFactorRecoveryCodes: (code) =>
+    http.post('/profile/two-factor/recovery-codes', { code }).then(unwrap),
+  twoFactorDisable: (payload) => http.delete('/profile/two-factor', { data: payload }).then(unwrap),
 
   /**
    * La photo se TÉLÉVERSE, recadrée par le navigateur au préalable (cf.

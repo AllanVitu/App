@@ -121,7 +121,9 @@ import { CONSERVATION, EDITEUR, HEBERGEUR, PRIVACY_UPDATED } from '@/utils/legal
         de session ne sont gardés que sous forme d’empreinte. Les échanges sont chiffrés (HTTPS).
         Chaque espace est cloisonné : aucune requête ne lit les données d’un autre. Les fichiers
         téléversés sont vérifiés et débarrassés de leurs métadonnées. Un changement de mot de passe
-        ferme toutes les sessions et vous est signalé par e-mail.
+        ferme toutes les sessions et vous est signalé par e-mail. La double authentification
+        s’active depuis le profil : son secret est chiffré en base, et chaque connexion exige alors
+        un code de votre application.
       </p>
     </section>
 

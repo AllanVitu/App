@@ -22,10 +22,19 @@ const auth = useAuthStore()
 const ui = useUiStore()
 
 const form = reactive({ email: '', password: '' })
+
+/**
+ * Double authentification : le jeton du défi ouvert par le mot de passe. Tant
+ * qu'il est posé, l'écran demande le code — ou, à défaut, un code de secours.
+ */
+const defi = ref(null)
+const secours = ref(false)
+const second = reactive({ code: '', recovery: '' })
 const errors = ref({})
 const globalError = ref('')
 const loading = ref(false)
 const formEl = ref(null)
+const formDefiEl = ref(null)
 
 /**
  * Arrivée du formulaire : titre puis champs, en cascade.
@@ -57,7 +66,15 @@ async function submit() {
   globalError.value = ''
 
   try {
-    await auth.login({ email: form.email, password: form.password })
+    const resultat = await auth.login({ email: form.email, password: form.password })
+
+    // Un code est encore exigé : la session ne s'ouvrira qu'à la seconde étape.
+    if (resultat.twoFactor) {
+      defi.value = resultat.challenge
+      form.password = ''
+      return
+    }
+
     ui.notify(`Bienvenue, ${auth.user.full_name} !`)
 
     // Retour à la page initialement demandée, sinon tableau de bord.
@@ -78,6 +95,55 @@ async function submit() {
   }
 }
 
+async function submitDefi() {
+  loading.value = true
+  errors.value = {}
+  globalError.value = ''
+
+  try {
+    await auth.completeTwoFactor(
+      defi.value,
+      secours.value ? { recoveryCode: second.recovery } : { code: second.code },
+    )
+    ui.notify(`Bienvenue, ${auth.user.full_name} !`)
+
+    await router.push(route.query.redirect || { name: 'dashboard' })
+  } catch (error) {
+    // Le défi a expiré, ou épuisé ses essais : on repart du mot de passe, avec
+    // le message qui dit pourquoi.
+    if (error.status === 401) {
+      annulerDefi()
+      globalError.value = error.message
+      return
+    }
+
+    errors.value = error.errors ?? {}
+
+    if (!Object.keys(errors.value).length) {
+      globalError.value = error.message
+    }
+
+    shake(formDefiEl.value)
+  } finally {
+    loading.value = false
+  }
+}
+
+function basculerSecours() {
+  secours.value = !secours.value
+  second.code = ''
+  second.recovery = ''
+  errors.value = {}
+}
+
+function annulerDefi() {
+  defi.value = null
+  secours.value = false
+  second.code = ''
+  second.recovery = ''
+  errors.value = {}
+}
+
 /** Pré-remplit le compte de démonstration créé par le seed SQL. */
 /**
  * Le raccourci vers le compte de démonstration n'existe qu'en développement :
@@ -95,7 +161,7 @@ function fillDemo() {
 <template>
   <div ref="root">
     <h1 data-anim="head">
-      <span class="label-caps block">Connexion</span>
+      <span class="label-caps block">{{ defi ? 'Double authentification' : 'Connexion' }}</span>
       <span
         class="mt-2.5 block text-[1.875rem] font-bold leading-[1.1] tracking-[-0.015em] [font-stretch:85%] [text-wrap:balance]"
       >
@@ -103,7 +169,7 @@ function fillDemo() {
       </span>
     </h1>
 
-    <form ref="formEl" class="mt-8 space-y-4.5" novalidate @submit.prevent="submit">
+    <form v-if="!defi" ref="formEl" class="mt-8 space-y-4.5" novalidate @submit.prevent="submit">
       <div
         v-if="globalError"
         class="flex items-start gap-2.5 rounded-field border border-brick/40 bg-brick-bg px-3.5 py-2.5 text-[0.8rem] text-ink"
@@ -158,8 +224,66 @@ function fillDemo() {
       </BaseButton>
     </form>
 
+    <!-- La seconde étape : le code de l'application, ou un code de secours. -->
+    <form v-else ref="formDefiEl" class="mt-8 space-y-4.5" novalidate @submit.prevent="submitDefi">
+      <div
+        v-if="globalError"
+        class="flex items-start gap-2.5 rounded-field border border-brick/40 bg-brick-bg px-3.5 py-2.5 text-[0.8rem] text-ink"
+        role="alert"
+      >
+        <AppIcon name="alert" :size="18" class="mt-0.5 shrink-0" />
+        <span>{{ globalError }}</span>
+      </div>
+
+      <p class="text-sm text-ink-2">
+        {{
+          secours
+            ? 'Saisissez l’un des codes de secours remis à l’activation. Chacun ne sert qu’une fois.'
+            : 'Saisissez le code à six chiffres affiché par votre application d’authentification.'
+        }}
+      </p>
+
+      <BaseInput
+        v-if="!secours"
+        v-model="second.code"
+        label="Code de vérification"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        placeholder="123 456"
+        required
+        :error="errors.code"
+      />
+      <BaseInput
+        v-else
+        v-model="second.recovery"
+        label="Code de secours"
+        placeholder="abcd-efgh"
+        required
+        :error="errors.recovery_code"
+      />
+
+      <BaseButton type="submit" :loading="loading" block size="lg">Vérifier</BaseButton>
+
+      <div class="flex flex-wrap justify-between gap-2 text-[0.8rem]">
+        <button
+          type="button"
+          class="text-ink-2 underline decoration-line-2 underline-offset-[3px] transition-colors hover:text-ink hover:decoration-ink"
+          @click="basculerSecours"
+        >
+          {{ secours ? 'Utiliser le code de l’application' : 'Utiliser un code de secours' }}
+        </button>
+        <button
+          type="button"
+          class="text-ink-2 underline decoration-line-2 underline-offset-[3px] transition-colors hover:text-ink hover:decoration-ink"
+          @click="annulerDefi"
+        >
+          Revenir au mot de passe
+        </button>
+      </div>
+    </form>
+
     <button
-      v-if="demo"
+      v-if="demo && !defi"
       type="button"
       class="mt-4 w-full rounded-card border border-dashed border-line-2 px-3 py-2.5 text-xs text-ink-2 transition-colors hover:border-ink hover:text-ink"
       @click="fillDemo"

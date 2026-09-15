@@ -48,6 +48,7 @@ final class JobHandlers
             'user_tokens.purge'    => (new Retention())->userTokens(self::entier($payload, 'retention_days', 7)),
             'presence.purge'       => (new Retention())->presence(),
             'trash.purge'          => (new Retention())->trash(self::entier($payload, 'retention_days', 30)),
+            'two_factor_challenges.purge' => (new Retention())->twoFactorChallenges(),
             default             => throw new \RuntimeException("Type de tâche inconnu : « {$type} »."),
         };
     }

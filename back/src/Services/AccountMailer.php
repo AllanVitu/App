@@ -161,6 +161,32 @@ final class AccountMailer
     }
 
     /**
+     * Avis hors bande pour la double authentification : activée, désactivée,
+     * codes de secours régénérés, ou code de secours utilisé. Chaque fois, c'est
+     * le seul signal dont dispose la personne si le geste ne vient pas d'elle.
+     */
+    public function sendTwoFactorNotice(string $email, string $name, string $evenement, ?int $restants = null): bool
+    {
+        [$sujet, $message] = match ($evenement) {
+            'activation'    => ['Double authentification activée', 'La double authentification vient d\'être activée sur votre compte : un code de votre application sera demandé à chaque connexion. Les autres sessions ont été fermées.'],
+            'desactivation' => ['Double authentification désactivée', 'La double authentification vient d\'être désactivée sur votre compte : le mot de passe suffit de nouveau à se connecter.'],
+            'codes'         => ['Nouveaux codes de secours', 'De nouveaux codes de secours viennent d\'être générés pour votre compte ; les précédents ne fonctionnent plus.'],
+            'secours'       => ['Connexion avec un code de secours', sprintf('Un code de secours vient de servir à ouvrir une session sur votre compte. Il vous en reste %d.', $restants ?? 0)],
+            default         => throw new \InvalidArgumentException("Avis de double authentification inconnu : « {$evenement} »."),
+        };
+
+        $conseil = 'Si vous n\'êtes pas à l\'origine de ce geste, changez immédiatement votre mot de passe et contactez le support.';
+
+        return $this->deliver(
+            $email,
+            $name,
+            $sujet,
+            $this->layout($sujet, $name, $message, null, null, $conseil),
+            "Bonjour {$name},\n\n{$message}\n{$conseil}\n",
+        );
+    }
+
+    /**
      * Avertissement après un changement de mot de passe réussi.
      * C'est le signal qui permet à un utilisateur de réagir si le changement
      * ne vient pas de lui.

@@ -112,8 +112,24 @@ export const useAuthStore = defineStore('auth', () => {
     marquerSession(false)
   }
 
+  /**
+   * Renvoie { twoFactor: false } quand la session est ouverte, ou
+   * { twoFactor: true, challenge } quand un code est encore exigé : la session
+   * ne s'ouvre alors qu'à la seconde étape (completeTwoFactor).
+   */
   async function login(credentials) {
-    applySession(await authApi.login(credentials))
+    const reponse = await authApi.login(credentials)
+
+    if (reponse.two_factor_required) return { twoFactor: true, challenge: reponse.challenge }
+
+    applySession(reponse)
+    await loadProfile()
+
+    return { twoFactor: false }
+  }
+
+  async function completeTwoFactor(challenge, { code, recoveryCode } = {}) {
+    applySession(await authApi.loginTwoFactor({ challenge, code, recovery_code: recoveryCode }))
     await loadProfile()
   }
 
@@ -236,6 +252,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     initials,
     login,
+    completeTwoFactor,
     register,
     logout,
     refresh,

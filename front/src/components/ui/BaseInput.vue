@@ -20,6 +20,8 @@ const props = defineProps({
   autocomplete: { type: String, default: 'off' },
   textarea: { type: Boolean, default: false },
   rows: { type: Number, default: 3 },
+  /** « numeric » pour un code : le clavier chiffré sur téléphone. */
+  inputmode: { type: String, default: undefined },
 })
 
 defineEmits(['update:modelValue'])
@@ -49,6 +51,7 @@ const describedBy = computed(() => {
       :required="required"
       :disabled="disabled"
       :autocomplete="autocomplete"
+      :inputmode="inputmode"
       :aria-invalid="Boolean(error)"
       :aria-describedby="describedBy"
       class="input-field"

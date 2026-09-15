@@ -34,6 +34,7 @@ use App\Controllers\SettingsController;
 use App\Controllers\StreamController;
 use App\Controllers\TicketCommentController;
 use App\Controllers\TicketController;
+use App\Controllers\TwoFactorController;
 use App\Core\Router;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\IngestMiddleware;
@@ -60,6 +61,7 @@ $router->get('/api/health', [HealthController::class, 'index']);
 
 $router->post('/api/auth/register', [AuthController::class, 'register']);
 $router->post('/api/auth/login', [AuthController::class, 'login']);
+$router->post('/api/auth/login/two-factor', [AuthController::class, 'loginTwoFactor']);
 $router->post('/api/auth/refresh', [AuthController::class, 'refresh']);
 $router->post('/api/auth/logout', [AuthController::class, 'logout']);
 
@@ -158,6 +160,12 @@ $router->delete('/api/profile', [ProfileController::class, 'destroy'], $auth);
 // nouvelle version des conditions générales.
 $router->get('/api/profile/export', [ProfileController::class, 'export'], $auth);
 $router->post('/api/profile/terms', [ProfileController::class, 'acceptTerms'], $auth);
+// Double authentification : chaque changement redemande une preuve (cf. TwoFactorController).
+$router->get('/api/profile/two-factor', [TwoFactorController::class, 'show'], $auth);
+$router->post('/api/profile/two-factor/setup', [TwoFactorController::class, 'setup'], $auth);
+$router->post('/api/profile/two-factor/enable', [TwoFactorController::class, 'enable'], $auth);
+$router->post('/api/profile/two-factor/recovery-codes', [TwoFactorController::class, 'regenerate'], $auth);
+$router->delete('/api/profile/two-factor', [TwoFactorController::class, 'disable'], $auth);
 
 // La photo se TÉLÉVERSE. POST et non PUT : PHP ne lit un envoi multipart que
 // sur POST.

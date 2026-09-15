@@ -21,7 +21,7 @@ final class UserRepository
      * Colonnes exposables au client — jamais password_hash.
      */
     private const PUBLIC_COLUMNS =
-        'id, email, full_name, avatar_file_id, role, is_active, email_verified_at, last_login_at, created_at, terms_accepted_at, terms_accepted_version, active_organization_id';
+        'id, email, full_name, avatar_file_id, role, is_active, email_verified_at, last_login_at, created_at, terms_accepted_at, terms_accepted_version, active_organization_id, two_factor_enabled_at';
 
     /**
      * @return array<string, mixed>|null
@@ -311,6 +311,9 @@ final class UserRepository
             'last_login_at'     => Database::toIso($row['last_login_at']),
             'created_at'        => Database::toIso($row['created_at']),
             'terms_accepted_at' => Database::toIso($row['terms_accepted_at']),
+            // Vrai quand un code est exigé à la connexion. Le secret, lui, ne
+            // quitte jamais le serveur.
+            'two_factor_enabled' => ($row['two_factor_enabled_at'] ?? null) !== null,
             'terms_version'     => $row['terms_accepted_version'] !== null
                 ? (string) $row['terms_accepted_version']
                 : null,

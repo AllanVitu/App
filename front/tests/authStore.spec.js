@@ -28,6 +28,7 @@ import { setTimeZone } from '@/utils/format'
 vi.mock('@/services/api', () => ({
   authApi: {
     login: vi.fn(),
+    loginTwoFactor: vi.fn(),
     register: vi.fn(),
     refresh: vi.fn(),
     logout: vi.fn(),
@@ -223,6 +224,39 @@ describe('store auth', () => {
     // La garde de navigation l'appelle à chaque route : sans ce court-circuit,
     // chaque changement d'écran paierait un aller-retour de rafraîchissement.
     expect(authApi.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  // ──────────────────────────────────────────────── la double authentification
+
+  it('n’ouvre aucune session tant que le second facteur n’est pas donné', async () => {
+    const auth = useAuthStore()
+
+    authApi.login.mockResolvedValue({ two_factor_required: true, challenge: 'defi-1' })
+
+    await expect(auth.login({ email: 'camille@exemple.fr', password: 'secret' })).resolves.toEqual({
+      twoFactor: true,
+      challenge: 'defi-1',
+    })
+
+    expect(auth.isAuthenticated).toBe(false)
+    expect(setAccessToken).not.toHaveBeenCalled()
+    expect(authApi.me).not.toHaveBeenCalled()
+  })
+
+  it('ouvre la session à la seconde étape', async () => {
+    const auth = useAuthStore()
+
+    authApi.loginTwoFactor.mockResolvedValue(SESSION)
+    authApi.me.mockResolvedValue(PROFIL)
+
+    await auth.completeTwoFactor('defi-1', { code: '123456' })
+
+    expect(authApi.loginTwoFactor).toHaveBeenCalledWith({
+      challenge: 'defi-1',
+      code: '123456',
+      recovery_code: undefined,
+    })
+    expect(auth.isAuthenticated).toBe(true)
   })
 
   // ─────────────────────────────────────────────────────────── les initiales

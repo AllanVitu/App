@@ -44,7 +44,7 @@ final class DataExport
 
             'compte' => $this->premiere(
                 'SELECT id, email, full_name, role, email_verified_at, last_login_at, created_at, updated_at,
-                        terms_accepted_at, terms_accepted_version
+                        terms_accepted_at, terms_accepted_version, two_factor_enabled_at
                    FROM users WHERE id = :id',
                 $userId,
             ),

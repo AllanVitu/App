@@ -152,6 +152,15 @@ final class Retention
         return (int) $total;
     }
 
+    /** Un défi de connexion expiré ne sert plus à rien. */
+    public function twoFactorChallenges(): int
+    {
+        $statement = Database::connection()->prepare('DELETE FROM two_factor_challenges WHERE expires_at < NOW()');
+        $statement->execute();
+
+        return $statement->rowCount();
+    }
+
     private function effacer(string $sql, int $days): int
     {
         $statement = Database::connection()->prepare($sql);
