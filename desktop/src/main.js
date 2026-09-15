@@ -317,9 +317,9 @@ ipcMain.handle('boite:ouvrir', (evenement, url) => {
     return
   }
 
-  // Un lien de l'application (confirmer une adresse, choisir un nouveau mot
-  // de passe) s'ouvre dans la fenêtre de Relais : ailleurs, le cookie du
-  // poste manque, et le serveur local refuserait.
+  // Un lien de l'application (choisir un nouveau mot de passe, rejoindre un
+  // espace) s'ouvre dans la fenêtre de Relais : ailleurs, le cookie du poste
+  // manque, et le serveur local refuserait.
   if (estLocale(url)) {
     fenetre?.loadURL(url)
     fenetre?.show()

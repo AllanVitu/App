@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Integration;
 
+use App\Config\Env;
 use App\Core\Database;
 use App\Core\Request;
 use App\Services\UserTokenService;
 use PHPUnit\Framework\Attributes\Test;
+use ReflectionProperty;
 use Tests\Support\ApiTestCase;
 
 /**
@@ -28,6 +30,25 @@ final class AccountTest extends ApiTestCase
             1,
             $this->pendingTokenCount($session['id'], UserTokenService::TYPE_EMAIL_VERIFICATION),
         );
+        $this->assertSame(1, $this->queuedMailCount('jean@test.local'));
+    }
+
+    #[Test]
+    public function sur_le_poste_l_inscription_ne_demande_aucune_confirmation(): void
+    {
+        self::env('APP_EDITION', 'bureau');
+
+        try {
+            $session = $this->register('jean@test.local');
+        } finally {
+            self::env('APP_EDITION', null);
+        }
+
+        $this->assertSame(
+            0,
+            $this->pendingTokenCount($session['id'], UserTokenService::TYPE_EMAIL_VERIFICATION),
+        );
+        $this->assertSame(0, $this->queuedMailCount('jean@test.local'));
     }
 
     #[Test]
@@ -215,6 +236,30 @@ final class AccountTest extends ApiTestCase
     private function issueToken(string $userId, string $type): string
     {
         return (new UserTokenService())->issue($userId, $type, Request::create('POST', '/api/test'));
+    }
+
+    private function queuedMailCount(string $email): int
+    {
+        $statement = Database::connection()->prepare(
+            "SELECT count(*) FROM jobs WHERE type = 'mail.send' AND payload->>'to' = :email",
+        );
+        $statement->execute(['email' => $email]);
+
+        return (int) $statement->fetchColumn();
+    }
+
+    /**
+     * Env met ses lectures en cache pour toute la durée du processus : la
+     * valeur posée ici doit remplacer celle qu'un test précédent aurait lue.
+     */
+    private static function env(string $cle, ?string $valeur): void
+    {
+        putenv($valeur === null ? $cle : "{$cle}={$valeur}");
+
+        $cache   = new ReflectionProperty(Env::class, 'cache');
+        $valeurs = (array) $cache->getValue();
+        unset($valeurs[$cle]);
+        $cache->setValue(null, $valeurs);
     }
 
     private function countTokens(string $type): int

@@ -5,6 +5,9 @@
  * Affiché tant que `email_verified_at` est nul. Volontairement non
  * bloquant : l'utilisateur peut travailler, mais le rappel reste visible et
  * l'envoi d'un nouveau lien est à portée de clic.
+ *
+ * Jamais dans l'édition de bureau : l'adresse n'y est pas confirmée, l'API
+ * n'envoie aucun lien.
  */
 import { ref } from 'vue'
 
@@ -12,6 +15,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import { accountApi } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import { EDITION_BUREAU } from '@/utils/legal'
 
 const auth = useAuthStore()
 const ui = useUiStore()
@@ -40,7 +44,7 @@ async function resend() {
 
 <template>
   <div
-    v-if="auth.user && !auth.user.email_verified_at"
+    v-if="!EDITION_BUREAU && auth.user && !auth.user.email_verified_at"
     class="mb-6 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-field border border-ochre/35 bg-ochre-bg px-4 py-2.5 text-[0.8rem] text-ink"
     role="status"
   >

@@ -62,9 +62,10 @@ import { CONSERVATION, EDITEUR, EDITION_BUREAU, HEBERGEUR, PRIVACY_UPDATED } fro
           sache qui a fait quoi : intérêt légitime, limité à douze mois.
         </li>
         <li>
-          <strong class="font-medium text-ink">Les e-mails de service</strong> — confirmation
-          d’adresse, réinitialisation du mot de passe, invitations, alerte de changement de mot de
-          passe —, pour faire fonctionner le compte. Aucun e-mail commercial n’est envoyé.
+          <strong class="font-medium text-ink">Les e-mails de service</strong> —
+          <template v-if="!EDITION_BUREAU">confirmation d’adresse, </template>réinitialisation du
+          mot de passe, invitations, alerte de changement de mot de passe —, pour faire fonctionner
+          le compte. Aucun e-mail commercial n’est envoyé.
           <template v-if="EDITION_BUREAU">
             Sur le poste, ils ne partent pas : ils sont déposés dans la boîte d’envoi de
             l’application, où vous les lisez.

@@ -2,8 +2,8 @@
 //
 // Sur le poste, le transport « fichier » de l'API (MAIL_TRANSPORT) les dépose
 // dans un dossier, un .eml par message. L'application les lit ici pour les
-// afficher : un lien de confirmation d'adresse ou de réinitialisation du mot
-// de passe doit pouvoir être suivi, sans serveur de messagerie.
+// afficher : un lien de réinitialisation du mot de passe ou d'invitation doit
+// pouvoir être suivi, sans serveur de messagerie.
 //
 // Seul le texte brut est lu. La partie HTML existe dans le fichier, mais
 // l'afficher reviendrait à exécuter, dans l'application, un balisage construit

@@ -817,6 +817,11 @@ npm run demarrer       # l'application depuis le dépôt (client déjà compilé
 | PostgreSQL 16 | PostgreSQL 16 sur `127.0.0.1`, tri et casse du français (ICU `fr-FR`) |
 | Mailpit / SMTP | `MAIL_TRANSPORT=fichier` : un `.eml` par message, lu dans l'application (Fichier › Boîte d'envoi) |
 
+Pas de confirmation d'adresse sur le poste (`APP_EDITION=bureau` pour l'API,
+`VITE_EDITION=bureau` pour le client) : l'adresse n'y sert qu'à se connecter.
+La boîte d'envoi ne reçoit que les réinitialisations de mot de passe et les
+invitations.
+
 Au premier lancement, la base est construite — `database/init/*.sql` puis les
 migrations — sous un **nom provisoire**, renommée seulement une fois complète :
 une installation interrompue reprend de zéro au lancement suivant. Ensuite,

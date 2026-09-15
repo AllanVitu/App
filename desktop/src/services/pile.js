@@ -261,6 +261,8 @@ export async function demarrerPile({
       ...environnementDeBase({ chemins: [programmes.php], temporaire: d.temporaire }),
       APP_ENV: 'production',
       APP_DEBUG: 'false',
+      // Pendant de VITE_EDITION=bureau : pas de confirmation d'adresse sur le poste.
+      APP_EDITION: 'bureau',
       APP_KEY: secrets.appKey,
       JWT_SECRET: secrets.jwtSecret,
       JWT_ISSUER: 'relais-bureau',

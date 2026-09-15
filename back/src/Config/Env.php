@@ -74,4 +74,13 @@ final class Env
     {
         return self::get('APP_ENV', 'development') === 'production';
     }
+
+    /**
+     * L'application de bureau (desktop/) : tout reste sur le poste. Pendant de
+     * VITE_EDITION=bureau côté client.
+     */
+    public static function isEditionBureau(): bool
+    {
+        return self::get('APP_EDITION') === 'bureau';
+    }
 }

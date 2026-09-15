@@ -289,30 +289,26 @@ await verifier('inscription : compte créé, cookie de session HttpOnly et SameS
   assert.match(cookie, /path=\/api\/auth/i)
 })
 
-let lienConfirmation = null
+await verifier('inscription sans e-mail de confirmation ; la réinitialisation arrive dans la boîte d’envoi', async () => {
+  // L'API met ses e-mails en file : une boîte encore vide juste après
+  // l'inscription ne prouverait rien. La file est servie dans l'ordre
+  // d'arrivée, et l'e-mail demandé ici passerait derrière celui de
+  // l'inscription s'il existait : il doit arriver seul.
+  const oubli = await requete(pile, { methode: 'POST', chemin: '/api/auth/password/forgot', json: { email: compte.email } })
+  assert.equal(oubli.statut, 200, oubli.texte)
 
-await verifier('l’e-mail de confirmation arrive dans la boîte d’envoi', async () => {
   const boite = pile.dossiers.boiteEnvoi
-  const [premier] = await attendre(() => listerMessages(boite).length > 0 && listerMessages(boite))
-  const message = lireMessage(boite, premier.id)
+  const messages = await attendre(() => listerMessages(boite).length > 0 && listerMessages(boite))
+  assert.equal(messages.length, 1, messages.map((m) => m.sujet).join(' | '))
 
+  const message = lireMessage(boite, messages[0].id)
   assert.match(message.a, new RegExp(compte.email.replaceAll('.', '\\.')))
-  lienConfirmation = message.liens.find((lien) => lien.startsWith(`${pile.origine}/`))
-  assert.ok(lienConfirmation, `aucun lien vers ${pile.origine} : ${message.liens.join(', ')}`)
+  assert.ok(
+    message.liens.some((lien) => lien.startsWith(`${pile.origine}/reinitialisation`)),
+    `${message.sujet} : ${message.liens.join(', ')}`,
+  )
 
   return message.sujet
-})
-
-await verifier('le lien confirme l’adresse', async () => {
-  const token = new URL(lienConfirmation).searchParams.get('token')
-  assert.ok(token, lienConfirmation)
-
-  const r = await requete(pile, { methode: 'POST', chemin: '/api/auth/email/verify', json: { token }, jeton })
-  assert.ok(r.statut < 300, `${r.statut} ${r.texte}`)
-
-  const moi = await requete(pile, { chemin: '/api/auth/me', jeton })
-  assert.equal(moi.statut, 200, moi.texte)
-  assert.match(moi.texte, /"email_verified_at":"\d{4}-/)
 })
 
 await verifier('connexion, et refus d’un mauvais mot de passe', async () => {

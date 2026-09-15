@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Config\Env;
 use App\Config\Terms;
 use App\Core\HttpException;
 use App\Core\Request;
@@ -147,7 +148,12 @@ final class AuthController
         // toute erreur SMTP : une panne du serveur de mail ne doit pas
         // annuler une inscription valide, l'utilisateur pourra redemander
         // le lien depuis son espace.
-        (new AccountMailer())->sendVerificationLink($user, $request);
+        //
+        // Sur le poste, aucun lien : l'adresse n'y sert qu'à se connecter, et
+        // le message n'irait que dans la boîte d'envoi de l'application.
+        if (!Env::isEditionBureau()) {
+            (new AccountMailer())->sendVerificationLink($user, $request);
+        }
 
         Response::json($this->authPayload($user, $request), 201);
     }

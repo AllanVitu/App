@@ -68,7 +68,9 @@ export const CONSERVATION = [
     duree: '30 jours',
   },
   {
-    donnees: 'Liens de confirmation d’adresse et de réinitialisation',
+    donnees: EDITION_BUREAU
+      ? 'Liens de réinitialisation du mot de passe'
+      : 'Liens de confirmation d’adresse et de réinitialisation',
     duree: '7 jours après leur usage ou leur expiration',
   },
   {
