@@ -351,8 +351,15 @@ export const profileApi = {
   update: (payload) => http.put('/profile', payload).then(unwrap),
   updatePassword: (payload) => http.put('/profile/password', payload).then(unwrap),
   destroy: (password) => http.delete('/profile', { data: { password } }),
-  /** Tout ce qui se rattache au compte, en JSON (RGPD, art. 15 et 20). */
-  exportData: () => http.get('/profile/export').then(unwrap),
+  /**
+   * Tout ce qui se rattache au compte (RGPD, art. 15 et 20) : une archive ZIP,
+   * données en JSON et fichiers déposés. Un Blob, pas du JSON — et un délai
+   * plus long que celui des autres appels : les fichiers d'un compte pèsent.
+   */
+  exportData: () =>
+    http
+      .get('/profile/export', { responseType: 'blob', timeout: 120_000 })
+      .then((response) => response.data),
   /** Accepte la version EN VIGUEUR des conditions ; renvoie le compte. */
   acceptTerms: () => http.post('/profile/terms', { accepted: true }).then(unwrap),
 

@@ -1,6 +1,6 @@
 # ============================================================================
 #  Image PHP-FPM 8.3 pour l'API SaaS
-#  Extensions : pdo_pgsql (PostgreSQL), opcache, intl
+#  Extensions : pdo_pgsql (PostgreSQL), opcache, intl, zip (export des données)
 # ============================================================================
 FROM php:8.3-fpm-alpine
 
@@ -9,18 +9,21 @@ RUN set -eux; \
     apk add --no-cache \
         postgresql-client \
         icu-libs \
+        libzip \
         git \
         unzip \
         bash; \
     apk add --no-cache --virtual .build-deps \
         $PHPIZE_DEPS \
         postgresql-dev \
-        icu-dev; \
+        icu-dev \
+        libzip-dev; \
     docker-php-ext-install -j"$(nproc)" \
         pdo \
         pdo_pgsql \
         opcache \
-        intl; \
+        intl \
+        zip; \
     apk del .build-deps
 
 # --- Composer (gestion des dépendances PHP) ---

@@ -200,19 +200,31 @@ final class ProfileController
      * GET /api/profile/export
      *
      * Droits d'accès et de portabilité (RGPD, art. 15 et 20) : tout ce qui se
-     * rattache au compte, en JSON (cf. DataExport). Dix par heure : un export
+     * rattache au compte, en archive ZIP (cf. DataExport). Dix par heure : un export
      * pèse, et personne n'en a besoin de onze.
      */
     public function export(Request $request): void
     {
         (new RateLimiter())->hit('data-export', $request->userId(), 10, 3600);
 
-        if (!headers_sent()) {
-            header('Content-Disposition: attachment; filename="relais-mes-donnees-' . gmdate('Y-m-d') . '.json"');
-            header('Cache-Control: no-store');
-        }
+        $archive = (new DataExport())->archive($request->userId());
 
-        Response::json((new DataExport())->forUser($request->userId()));
+        try {
+            if (!headers_sent()) {
+                http_response_code(200);
+                header('Content-Type: application/zip');
+                header('Content-Length: ' . (string) filesize($archive));
+                header('Content-Disposition: attachment; filename="relais-mes-donnees-' . gmdate('Y-m-d') . '.zip"');
+                header('Cache-Control: no-store');
+                header('X-Content-Type-Options: nosniff');
+            }
+
+            readfile($archive);
+        } finally {
+            // L'archive contient toutes les données du compte : elle ne reste
+            // pas dans le dossier temporaire une fois envoyée.
+            @unlink($archive);
+        }
     }
 
     /**

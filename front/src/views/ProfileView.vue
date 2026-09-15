@@ -163,27 +163,33 @@ async function deleteAccount() {
 const exporting = ref(false)
 
 /**
- * Le fichier est assemblé dans le navigateur à partir de la réponse : aucune
- * adresse de téléchargement à signer, rien qui reste en cache côté serveur.
+ * L'archive arrive par la session, comme n'importe quelle réponse : aucune
+ * adresse de téléchargement à signer, et rien qui reste en cache (no-store).
  */
 async function downloadData() {
   exporting.value = true
 
   try {
-    const donnees = await profileApi.exportData()
-    const fichier = new Blob([JSON.stringify(donnees, null, 2)], { type: 'application/json' })
-    const adresse = URL.createObjectURL(fichier)
+    const archive = await profileApi.exportData()
+    const adresse = URL.createObjectURL(archive)
     const lien = document.createElement('a')
 
     lien.href = adresse
-    lien.download = `relais-mes-donnees-${new Date().toISOString().slice(0, 10)}.json`
+    lien.download = `relais-mes-donnees-${new Date().toISOString().slice(0, 10)}.zip`
     lien.click()
 
     // Révoquée après coup : la révoquer tout de suite peut interrompre le
     // téléchargement dans certains navigateurs.
     setTimeout(() => URL.revokeObjectURL(adresse), 10_000)
   } catch (error) {
-    ui.notify(error.message, 'error')
+    // Une réponse attendue en binaire ne transporte pas le message du
+    // serveur : le seul refus prévisible est dit ici, en clair.
+    ui.notify(
+      error.status === 429
+        ? 'Vous avez déjà téléchargé vos données plusieurs fois cette heure-ci : réessayez un peu plus tard.'
+        : error.message,
+      'error',
+    )
   } finally {
     exporting.value = false
   }
@@ -465,8 +471,9 @@ onMounted(loadSessions)
     <section class="card p-6">
       <h3 class="text-base font-semibold">Vos données</h3>
       <p class="mt-1 text-sm text-ink-2">
-        Tout ce qui se rattache à votre compte — profil, espaces, sessions, contenus, historique —
-        dans un fichier JSON, lisible par une autre application.
+        Une archive ZIP : tout ce qui se rattache à votre compte — profil, espaces, sessions,
+        contenus, historique — en JSON, lisible par une autre application, et les fichiers que vous
+        avez déposés.
       </p>
 
       <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">

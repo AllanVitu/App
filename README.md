@@ -558,8 +558,9 @@ contient (cf. « Sauvegardes »).
   expiration, liens de confirmation 7 jours, invitations 30 jours, historique
   12 mois, erreurs reçues 90 jours, relevés de sondes 30 jours, e-mails en
   échec 30 jours, corbeille 30 jours.
-- **Droits** : export JSON de tout ce qui se rattache au compte
-  (`GET /api/profile/export`, sans aucune empreinte de secret), rectification
+- **Droits** : export de tout ce qui se rattache au compte en archive ZIP —
+  données en JSON et fichiers déposés (`GET /api/profile/export`, sans aucune
+  empreinte de secret) —, rectification
   depuis le profil, suppression immédiate. Un espace dont le compte était le
   seul membre part avec lui, schéma Backend compris ; un espace partagé reste
   à l'équipe, trouve un nouveau propriétaire, et l'historique n'affiche plus

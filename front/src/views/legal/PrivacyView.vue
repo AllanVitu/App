@@ -130,8 +130,8 @@ import { CONSERVATION, EDITEUR, HEBERGEUR, PRIVACY_UPDATED } from '@/utils/legal
       <ul class="mt-1.5 list-disc space-y-1.5 pl-5">
         <li>
           <strong class="font-medium text-ink">Accès et portabilité</strong> : le bouton «
-          Télécharger mes données » de la page Profil remet un fichier lisible par une machine
-          (JSON).
+          Télécharger mes données » de la page Profil remet une archive ZIP — vos données en JSON,
+          lisibles par une machine, et les fichiers que vous avez déposés.
         </li>
         <li>
           <strong class="font-medium text-ink">Rectification</strong> : votre nom et votre photo se

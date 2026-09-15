@@ -6,8 +6,8 @@ import { expect, login, test } from './support.js'
  * Conformité : ce que la loi demande à l'écran, vérifié dans un navigateur.
  *
  * Les textes légaux se lisent sans compte et se répondent ; une nouvelle
- * version des conditions s'accepte ; le profil remet un fichier qui contient
- * le compte, et aucune empreinte de secret.
+ * version des conditions s'accepte ; le profil remet une archive de ses
+ * données, dont le contenu détaillé est vérifié côté serveur.
  */
 test.describe('conformité', () => {
   test('les textes légaux se lisent sans compte, et mènent les uns aux autres', async ({ page }) => {
@@ -47,34 +47,14 @@ test.describe('conformité', () => {
       page.getByRole('button', { name: /télécharger mes données/i }).click(),
     ])
 
-    expect(telechargement.suggestedFilename()).toMatch(/^relais-mes-donnees-[0-9-]+[.]json$/)
+    expect(telechargement.suggestedFilename()).toMatch(/^relais-mes-donnees-[0-9-]+[.]zip$/)
 
-    const donnees = JSON.parse(await readFile(await telechargement.path(), 'utf8'))
+    // Une archive ZIP, qui contient les données en JSON. Son contenu détaillé
+    // — le compte, les fichiers déposés octet pour octet, aucune empreinte de
+    // secret — est vérifié côté serveur (tests/Integration/DataExportTest.php).
+    const octets = await readFile(await telechargement.path())
 
-    expect(donnees.compte.email).toBe('demo@saas.local')
-    expect(Array.isArray(donnees.espaces)).toBe(true)
-
-    // Les CLÉS, et non le texte : une table Backend de l'équipe peut très bien
-    // décrire une colonne « password_hash ». C'est son schéma, pas un secret.
-    // Ce qui ne doit jamais sortir, c'est une empreinte elle-même.
-    const cles = []
-    const valeurs = []
-    const parcourir = (noeud) => {
-      if (Array.isArray(noeud)) return noeud.forEach(parcourir)
-      if (noeud && typeof noeud === 'object') {
-        for (const [cle, valeur] of Object.entries(noeud)) {
-          cles.push(cle)
-          parcourir(valeur)
-        }
-      } else if (typeof noeud === 'string') {
-        valeurs.push(noeud)
-      }
-    }
-
-    parcourir(donnees)
-
-    expect(cles).not.toContain('password_hash')
-    expect(cles).not.toContain('token_hash')
-    expect(valeurs.filter((valeur) => /^[$]2[aby][$][0-9]{2}[$]/.test(valeur))).toEqual([])
+    expect(octets.subarray(0, 4).toString('latin1')).toBe('PK' + String.fromCharCode(3, 4))
+    expect(octets.includes(Buffer.from('donnees.json'))).toBe(true)
   })
 })
